@@ -8,6 +8,7 @@ local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local ships = require('scripts.ships')
 local social = require('scripts.social')
+local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
@@ -37,6 +38,7 @@ local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
+local STAMINA_NAME = 'un_stamina'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
 local SUICIDE_PREFIX = 'un_suicide_'
@@ -210,6 +212,11 @@ local function format_countdown(ticks)
     return string.format('%02d:%02d:%02d', hours, minutes, remainder)
 end
 
+local function property_lifetime_caption(property)
+    if property.permanent then return {'un.property-permanent'} end
+    return format_countdown(properties.left_ticks(property))
+end
+
 local function set_frame_state(frame, page, property_revision)
     local tags = frame.tags
     tags.page = page
@@ -298,7 +305,7 @@ local function render_property_table(player, frame, content)
         list.add{
             type = 'label',
             name = property_remaining_name(property.id),
-            caption = format_countdown(properties.left_ticks(property)),
+            caption = property_lifetime_caption(property),
         }
         list.add{
             type = 'label',
@@ -358,14 +365,15 @@ local function update_property_build_page(player, content)
     if not requirement then return end
     local pack_name = {'item-name.' .. requirement.pack}
     cost_label.caption = {
-        'un.property-build-cost',
+        'un.property-build-experience',
         '[img=item/' .. requirement.pack .. ']',
         pack_name,
         format_integer(requirement.experience_cost),
     }
     available_label.caption = {
-        'un.property-build-available',
+        'un.property-build-experience',
         '[img=item/' .. requirement.pack .. ']',
+        pack_name,
         format_integer(experience.amount(player.index, requirement.pack)),
     }
     button.enabled = can_build
@@ -410,7 +418,6 @@ local function render_property_build_page(player, frame, content)
         lifetime_items[#lifetime_items + 1] = {
             'un.property-build-lifetime-option',
             option.hours,
-            option.cost,
         }
     end
     form.add{
@@ -426,7 +433,6 @@ local function render_property_build_page(player, frame, content)
             'un.property-build-size-option',
             option.width,
             option.height,
-            option.cost,
         }
     end
     form.add{
@@ -458,6 +464,8 @@ local function render_ubi_section(content)
     }
     balance.add{type = 'label', caption = {'un.credit-label'}}
     balance.add{type = 'label', name = BALANCE_NAME}
+    balance.add{type = 'label', caption = {'un.stamina-label'}}
+    balance.add{type = 'label', name = STAMINA_NAME}
 
     local progress = content.add{
         type = 'progressbar',
@@ -483,7 +491,11 @@ local function render_suicide_section(content)
             type = 'button',
             name = SUICIDE_PREFIX .. planet_name,
             caption = {'un.suicide', planet_label(planet_name)},
-            tooltip = {'un.suicide-tooltip', planet_label(planet_name)},
+            tooltip = {
+                'un.suicide-tooltip',
+                planet_label(planet_name),
+                config.suicide_stamina_cost,
+            },
             tags = {action = 'suicide', planet = planet_name},
         }
         suicide.style.height = 40
@@ -705,9 +717,10 @@ local function render_admin_page(player, frame, content)
     for _, property in ipairs(properties.list()) do
         property_table.add{type = 'label', caption = tostring(property.id)}
         property_table.add{type = 'label', caption = properties.surface_display_name(property)}
-        property_table.add{type = 'label', caption = format_countdown(
-            properties.left_ticks(property)
-        )}
+        property_table.add{
+            type = 'label',
+            caption = property_lifetime_caption(property),
+        }
     end
 
     scroll.add{type = 'line'}
@@ -786,10 +799,7 @@ local function render_help_page(frame, content, mode)
 
     if mode == 'brief' then
         add_help_line(details, {'un.help-brief-start'})
-        add_help_line(details, {
-            'un.help-brief-property',
-            config.property_build_experience_per_point,
-        })
+        add_help_line(details, {'un.help-brief-property'})
         add_help_line(details, {'un.help-brief-travel'})
     elseif mode == 'advanced' then
         add_help_line(details, {'un.help-detail-property-heading'}, true)
@@ -835,7 +845,6 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(details, {
             'un.help-detail-property-price',
-            config.property_lease_types.long.hours,
             config.property_price_cap,
             settings.get('property_price_factor'),
         })
@@ -1028,7 +1037,7 @@ end
 local function update_property_row(player, property_table, property)
     local remaining = property_table[property_remaining_name(property.id)]
     if remaining and remaining.valid then
-        remaining.caption = format_countdown(properties.left_ticks(property))
+        remaining.caption = property_lifetime_caption(property)
     end
     local price = property_table[property_price_name(property.id)]
     if price and price.valid then
@@ -1103,6 +1112,15 @@ local function update_frame(player)
             and balance_table[BALANCE_NAME]
         if balance and balance.valid then
             balance.caption = format_integer(economy.get_balance(player.index))
+        end
+        local stamina_label = balance_table and balance_table.valid
+            and balance_table[STAMINA_NAME]
+        if stamina_label and stamina_label.valid then
+            stamina_label.caption = {
+                'un.stamina-amount',
+                format_integer(stamina.get(player.index)),
+                format_integer(config.stamina_max),
+            }
         end
 
         local claimable = economy.get_claimable_ubi(player.index)
@@ -1424,12 +1442,28 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name:sub(1, #SUICIDE_PREFIX) == SUICIDE_PREFIX then
         local planet_name = element.tags.planet
         if element.tags.action == 'suicide-confirm' then
-            close_frame(player)
+            if stamina.get(player.index) < config.suicide_stamina_cost then
+                player.print({'un.suicide-stamina-insufficient'})
+                return
+            end
             local ok = surfaces.suicide(player, planet_name)
-            if not ok then player.print({'un.suicide-unavailable'}) end
+            if ok then
+                stamina.spend(player.index, config.suicide_stamina_cost)
+                close_frame(player)
+            else
+                player.print({'un.suicide-unavailable'})
+            end
         else
-            element.caption = {'un.suicide-confirm', planet_label(planet_name)}
-            element.tooltip = {'un.suicide-confirm', planet_label(planet_name)}
+            element.caption = {
+                'un.suicide-confirm',
+                planet_label(planet_name),
+                config.suicide_stamina_cost,
+            }
+            element.tooltip = {
+                'un.suicide-confirm',
+                planet_label(planet_name),
+                config.suicide_stamina_cost,
+            }
             element.tags = {
                 action = 'suicide-confirm',
                 planet = planet_name,

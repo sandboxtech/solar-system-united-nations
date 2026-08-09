@@ -1,7 +1,5 @@
 local M = {}
 
-M.schema_version = 21
-
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
 M.ticks_per_hour = 60 * M.ticks_per_minute
@@ -38,11 +36,6 @@ M.player_cleanup_admins = false
 
 M.property_price_cap = 1000000000
 M.property_price_factor = 2
-M.property_lease_order = {'short', 'long'}
-M.property_lease_types = {
-    short = {hours = 2},
-    long = {hours = 20},
-}
 
 M.initial_credit = 1000
 M.ubi_credit_per_second = 1
@@ -112,9 +105,9 @@ M.property_build_pack_by_planet = {
     aquilo = 'cryogenic-science-pack',
 }
 M.property_lifetime_options = {
-    {hours = 30, cost = 1},
-    {hours = 120, cost = 3},
-    {hours = 480, cost = 5},
+    {hours = 30, cost = 1, decay_hours = 3},
+    {hours = 120, cost = 3, decay_hours = 12},
+    {hours = 480, cost = 5, decay_hours = 48},
 }
 M.property_size_options = {
     {width = 64, height = 32, cost = 1},
@@ -122,9 +115,16 @@ M.property_size_options = {
     {width = 256, height = 128, cost = 5},
 }
 M.property_lifecycle_ticks = M.ticks_per_minute
+M.property_permanent_defaults = {
+    {count = 3, width = 64, height = 32, decay_hours = 3},
+    {count = 1, width = 128, height = 64, decay_hours = 12},
+}
+
+M.stamina_max = 100000
+M.stamina_per_second = 1
+M.suicide_stamina_cost = 1000
 
 M.ship_life_hours = 12
-M.ship_legacy_life_hours = 50
 M.ship_credit_cost = 1000
 M.ship_width_per_level = 2
 M.ship_base_width = 16

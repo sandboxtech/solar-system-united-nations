@@ -210,13 +210,6 @@ local function create(spec)
         price = math.floor(tonumber(spec.price) or 0)
     end
     local tax = tonumber(spec.tax) or settings.get('property_tax_percent') / 100
-    local lease_type = spec.lease_type or 'long'
-    if not config.property_lease_types[lease_type] then
-        lease_type = config.property_lease_order[
-            math.random(1, #config.property_lease_order)
-        ]
-    end
-    local lease = config.property_lease_types[lease_type]
     local solar = config.property_solar_multiplier
     local width = tonumber(spec.width)
     local height = tonumber(spec.height)
@@ -231,10 +224,13 @@ local function create(spec)
         return nil, 'invalid-size'
     end
     if not build_planets[spec.sample_planet] then return nil, 'invalid-planet' end
+    local permanent = spec.permanent == true
     local lifetime_hours = tonumber(spec.lifetime_hours)
-    if not lifetime_hours or lifetime_hours <= 0 then
+    if not permanent and (not lifetime_hours or lifetime_hours <= 0) then
         return nil, 'invalid-lifetime'
     end
+    local decay_hours = tonumber(spec.decay_hours)
+    if not decay_hours or decay_hours <= 0 then return nil, 'invalid-decay' end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
     local id = next_available_property_id()
@@ -256,8 +252,7 @@ local function create(spec)
         owner_index = spec.owner_index,
         base_price = price,
         price_at_tick = game.tick,
-        lease_type = lease_type,
-        decay_ticks = lease.hours * config.ticks_per_hour,
+        decay_ticks = decay_hours * config.ticks_per_hour,
         tax = tax,
         width = width,
         height = height,
@@ -267,8 +262,11 @@ local function create(spec)
         sample_position = sample_position,
         linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
-        expires_tick = game.tick + lifetime_hours * config.ticks_per_hour,
+        expires_tick = permanent and nil
+            or game.tick + lifetime_hours * config.ticks_per_hour,
         lifetime_hours = lifetime_hours,
+        permanent = permanent,
+        system_key = spec.system_key,
     }
     storage.properties[id] = property
     sync_surface_visibility(property)
@@ -285,22 +283,37 @@ end
 
 function M.ensure()
     state.ensure()
-    if storage.property_tax_version ~= 1 then
-        for _, property in ipairs(M.list()) do
-            property.tax = settings.get('property_tax_percent') / 100
+    if not storage.permanent_properties_created then
+        local complete = true
+        for _, planet_name in ipairs(config.public_planets) do
+            for tier_index, spec in ipairs(config.property_permanent_defaults) do
+                for slot = 1, spec.count do
+                    local key = table.concat({planet_name, tier_index, slot}, ':')
+                    local existing = false
+                    for _, property in pairs(storage.properties) do
+                        if property.system_key == key then existing = true; break end
+                    end
+                    if not existing then
+                        local property, err = create{
+                            sample_planet = planet_name,
+                            width = spec.width,
+                            height = spec.height,
+                            decay_hours = spec.decay_hours,
+                            permanent = true,
+                            system_key = key,
+                        }
+                        if not property then
+                            complete = false
+                            log('[un] failed to create permanent property '
+                                .. key .. ': ' .. tostring(err))
+                        end
+                    end
+                end
+            end
         end
-        storage.property_tax_version = 1
-        bump_revision()
+        if complete then storage.permanent_properties_created = true end
     end
-    -- Configuration loading is also the one-shot repair path for properties
-    -- created before all homes used the fixed central four-chest layout.
     for _, property in ipairs(M.list()) do
-        if not config.property_lease_types[property.lease_type] then
-            property.lease_type = property.id % 2 == 1 and 'short' or 'long'
-        end
-        property.decay_ticks = config.property_lease_types[
-            property.lease_type
-        ].hours * config.ticks_per_hour
         sync_surface_visibility(property)
         ensure_linked_chests(property)
         ensure_property_name_rendering(
@@ -401,9 +414,9 @@ function M.build(player, planet_name, lifetime_index, size_index)
         owner_index = player.index,
         sample_planet = planet_name,
         lifetime_hours = requirement.lifetime.hours,
+        decay_hours = requirement.lifetime.decay_hours,
         width = requirement.size.width,
         height = requirement.size.height,
-        lease_type = 'long',
     })
     if not ok or not property then
         experience.record(player.index, {{
@@ -435,15 +448,6 @@ function M.current_price(property, tick)
     if raw >= config.property_price_cap then return config.property_price_cap end
     if raw <= 1 then return 1 end
     return math.ceil(raw)
-end
-
-function M.lease_hours(property)
-    local lease = config.property_lease_types[property.lease_type]
-    return lease and lease.hours or 0
-end
-
-function M.lease_name(property)
-    return {'un.property-lease-' .. tostring(property.lease_type)}
 end
 
 function M.transaction_tax_rate(property)
@@ -728,7 +732,13 @@ local function evacuate_expired_property(property, surface)
                 if player.vehicle and player.vehicle.valid then
                     player.driving = false
                 end
-                surfaces.teleport_near(player, hospice, {0, 0}, true)
+                local moved = surfaces.teleport_near(
+                    player,
+                    hospice,
+                    {0, 0},
+                    true
+                )
+                if not moved then player.teleport({0, 2}, hospice) end
             end)
         end
         for _, character in pairs(player.get_associated_characters()) do

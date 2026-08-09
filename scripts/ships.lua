@@ -39,6 +39,7 @@ local function reconcile()
                 owner_index = nil,
                 created_tick = game.tick,
                 built_tick = is_ready(platform) and game.tick or nil,
+                life_ticks = config.ship_life_hours * config.ticks_per_hour,
             }
         end
     end
@@ -58,8 +59,7 @@ local function apply_bounds(platform, owner_index)
 end
 
 function M.life_ticks(record)
-    return record and record.life_ticks
-        or config.ship_legacy_life_hours * config.ticks_per_hour
+    return record.life_ticks
 end
 
 function M.left_ticks(record)
