@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 1
+M.schema_version = 3
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -13,6 +13,12 @@ M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
 M.property_decay_ticks = 2 * M.ticks_per_hour
 M.property_max_future_ticks = 30 * M.ticks_per_hour
 M.property_price_cap = 1000000000
+
+M.initial_credit = 0
+M.ubi_credit_per_second = 1
+M.ubi_max_seconds = 100000
+M.ledger_record_limit = 2000
+M.gui_refresh_ticks = M.ticks_per_second
 
 -- Stage 0 uses an isolated surface and reserved link IDs. Player link IDs start
 -- at their positive player index, so these high IDs will not collide in normal
