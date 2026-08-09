@@ -424,7 +424,7 @@ end
 function M.enter_availability(player, property)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
-    if player.admin then return true end
+    if player.admin and settings.get('admin_property_access') then return true end
     if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
     if not surfaces.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
@@ -497,7 +497,7 @@ function M.enter(player, property_id)
     if not (surface and surface.valid) then return false, 'surface-missing' end
     ensure_linked_chests(property)
     local ok, err
-    if player.admin then
+    if player.admin and settings.get('admin_property_access') then
         ok, err = surfaces.teleport_near(player, surface, {0, 0}, false)
     else
         ok, err = surfaces.teleport(player, surface)

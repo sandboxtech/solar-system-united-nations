@@ -1,11 +1,11 @@
 {
   "name": "solar-system-united-nations",
   "version": "0.2.0",
-  "title": "太阳系联合国",
+  "title": "United Nations of Sol",
   "author": "虚无群友",
   "contact": "Q群293280221",
   "homepage": "https://github.com/sandboxtech/solar-system-united-nations",
-  "description": "在五颗周期重建的公共星球上开发，在联合国难民营与私人房产之间经营自己的太空生活。\n\n· 低保按游戏时间积累，离线也有效，最多保存 30 小时。\n· 在 [planet=nauvis] 手动放置木箱建立个人关联库存；投入科技瓶可换取金币并累计经验。\n· 用金币购买、续期和命名自然地形房产；可只向双向好友开放，也可向所有玩家开放。\n· 房产供给随活跃人数、空置率和价格缓慢调整。\n· 总等级决定新飞船宽度与寿命，并降低自己的房产续期费率。\n· 飞船页显示全服玩家飞船及其剩余寿命。\n· 五颗公共星球错峰预警、撤离、清理并换种重建，科技进度保留。\n\n支持简体中文与英文。交流群 293280221。\n\nSolar System United Nations is a Space Age multiplayer scenario built around lazily accrued offline coin UBI, science-pack income and experience, personal linked inventories, tradable natural-terrain properties, level-scaled personal ships, and staggered public-planet resets that preserve technology. Total level determines new ship width and life while reducing the owner's renewal rate. The ship page lists every player's ship and remaining lifetime. Properties can be shared with mutual friends or opened to everyone. The interface supports Simplified Chinese and English.",
+  "description": "在五颗周期重建的公共星球上开发，在联合国难民营与私人房产之间经营自己的太空生活。\n\n· 低保按游戏时间积累，离线也有效，最多保存 30 小时。\n· 在 [planet=nauvis] 手动放置木箱建立个人关联库存；投入科技瓶可换取金币并累计经验。\n· 交易短租与长租自然地形房产；房价持续回落，卖方等级可降低交易税率。\n· 房产可向双向好友或所有玩家开放，供给随活跃人数、空置率和价格缓慢调整。\n· 玩家可直接转账；总等级决定新飞船宽度与寿命。\n· 五颗公共星球错峰预警、撤离、清理并换种重建，科技进度保留。\n\n支持简体中文与英文。交流群 293280221。\n\nUnited Nations of Sol is a Space Age multiplayer scenario built around lazy offline coin UBI, science-pack income and experience, personal linked inventories, tradable short- and long-term natural-terrain properties, level-scaled ships, direct player transfers, and staggered public-planet resets that preserve technology. Seller level reduces property transaction tax. Properties can be shared with mutual friends or opened to everyone. The interface supports Simplified Chinese and English.",
   "dependencies": [
     "base >= 2.0.0",
     "elevated-rails >= 2.0.0",

@@ -72,6 +72,7 @@ local ADMIN_NUMBER_SETTINGS = {
     {'ship_life_hours', 'un.admin-setting-ship-life'},
     {'cleanup_idle_hours', 'un.admin-setting-cleanup-hours'},
     {'property_tax_percent', 'un.admin-setting-property-tax'},
+    {'property_price_factor', 'un.admin-setting-property-factor'},
 }
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
@@ -166,15 +167,8 @@ local function disabled_tooltip(action, err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
-    if err == 'renew-limit' then return {'un.property-error-renew-limit'} end
-    if action == 'buy' and err == 'already-owner' then
-        return {'un.property-buy-disabled-owner'}
-    end
     if action == 'enter' and err == 'not-owner' then
         return {'un.property-enter-disabled-private'}
-    end
-    if action == 'renew' and err == 'not-owner' then
-        return {'un.property-renew-disabled-owner'}
     end
     return {'un.property-error-unavailable'}
 end
@@ -266,12 +260,13 @@ local function render_property_table(player, frame, content)
     local list = content.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
-        column_count = 5,
+        column_count = 6,
     }
     list.add{type = 'label', caption = {'un.property-column-name'}}
     list.add{type = 'label', caption = {'un.property-column-owner'}}
+    list.add{type = 'label', caption = {'un.property-column-lease'}}
     list.add{type = 'label', caption = {'un.property-column-price'}}
-    list.add{type = 'label', caption = {'un.property-column-buy-renew'}}
+    list.add{type = 'label', caption = {'un.property-buy'}}
     list.add{type = 'label', caption = {'un.property-enter'}}
 
     for _, property in ipairs(property_list) do
@@ -285,32 +280,23 @@ local function render_property_table(player, frame, content)
             type = 'label',
             caption = owner or {'un.property-vacant'},
         }
+        list.add{type = 'label', caption = properties.lease_name(property)}
         list.add{
             type = 'label',
             name = property_price_name(property.id),
             caption = {'un.coin-amount',
                 format_integer(properties.current_price(property))},
         }
-        local owns = property.owner_index == player.index
-        local can_buy, buy_error
-        if owns then
-            can_buy, buy_error = properties.renew_availability(player, property)
-        else
-            can_buy, buy_error = properties.buy_availability(player, property)
-        end
+        local can_buy, buy_error = properties.buy_availability(player, property)
         list.add{
             type = 'button',
             name = property_buy_name(property.id),
-            caption = owns and {
-                'un.property-renew',
-                format_integer(properties.renew_fee(property)),
-            } or {'un.property-buy'},
-            tooltip = can_buy and (owns and {'un.property-renew-tooltip'}
-                or {'un.property-buy'})
-                or disabled_tooltip(owns and 'renew' or 'buy', buy_error),
+            caption = {'un.property-buy'},
+            tooltip = can_buy and {'un.property-buy'}
+                or disabled_tooltip('buy', buy_error),
             enabled = can_buy,
             tags = {
-                action = owns and 'property-renew' or 'property-buy',
+                action = 'property-buy',
                 property_id = property.id,
             },
         }
@@ -353,12 +339,12 @@ end
 
 local function render_suicide_section(content)
     local suicide = content.add{
-        type = 'sprite-button',
+        type = 'button',
         name = SUICIDE_NAME,
-        sprite = 'utility/danger_icon',
+        caption = {'un.suicide'},
         tooltip = {'un.suicide'},
     }
-    suicide.style.width = 40
+    suicide.style.horizontally_stretchable = true
     suicide.style.height = 40
 end
 
@@ -524,7 +510,8 @@ local function render_admin_page(player, frame, content)
             numeric = true,
             allow_decimal = key == 'ship_life_hours'
                 or key == 'cleanup_idle_hours'
-                or key == 'property_tax_percent',
+                or key == 'property_tax_percent'
+                or key == 'property_price_factor',
             allow_negative = false,
             lose_focus_on_confirm = true,
         }
@@ -553,6 +540,14 @@ local function render_admin_page(player, frame, content)
         switch_state = settings.get('planet_resets_enabled') and 'right' or 'left',
         allow_none_state = false,
         tags = {action = 'admin-setting-switch', setting = 'planet_resets_enabled'},
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-property-access'},
+        switch_state = settings.get('admin_property_access') and 'right' or 'left',
+        allow_none_state = false,
+        tags = {action = 'admin-setting-switch', setting = 'admin_property_access'},
     }
 
     scroll.add{type = 'line'}
@@ -701,7 +696,12 @@ local function render_help_page(frame, content, mode)
 
         add_help_line(details, {'un.help-detail-cooperation-heading'}, true)
         add_help_line(details, {'un.help-detail-friends', settings.get('friend_limit')})
-        add_help_line(details, {'un.help-detail-transfer'})
+        add_help_line(details, {
+            'un.help-detail-transfer',
+            config.transfer_min_amount,
+            config.transfer_fee_rate * 100,
+            config.transfer_min_fee,
+        })
 
         add_help_line(details, {'un.help-detail-ship-heading'}, true)
         add_help_line(details, {
@@ -720,14 +720,14 @@ local function render_help_page(frame, content, mode)
         add_help_line(details, {'un.help-detail-formulas-heading'}, true)
         add_help_line(details, {
             'un.help-detail-property-price',
-            config.property_decay_ticks / config.ticks_per_hour,
+            config.property_lease_types.short.hours,
+            config.property_lease_types.long.hours,
             config.property_price_cap,
+            settings.get('property_price_factor'),
         })
         add_help_line(details, {
             'un.help-detail-property-trade',
             settings.get('property_tax_percent'),
-            config.property_decay_ticks / config.ticks_per_hour,
-            config.property_max_future_ticks / config.ticks_per_hour,
         })
         add_help_line(details, {
             'un.help-detail-property-supply',
@@ -873,7 +873,6 @@ end
 
 local function property_error(err)
     if err == 'insufficient-credit' then return {'un.property-error-credit'} end
-    if err == 'renew-limit' then return {'un.property-error-renew-limit'} end
     if err == 'price-increased' then return {'un.property-error-price-changed'} end
     if err == 'not-owner' or err == 'already-owner' then
         return {'un.property-error-ownership'}
@@ -915,26 +914,16 @@ local function update_property_row(player, property_table, property)
             format_integer(properties.current_price(property))}
     end
 
-    local owns = property.owner_index == player.index
-    local can_buy, buy_error
-    if owns then
-        can_buy, buy_error = properties.renew_availability(player, property)
-    else
-        can_buy, buy_error = properties.buy_availability(player, property)
-    end
+    local can_buy, buy_error = properties.buy_availability(player, property)
     local buy = property_table[property_buy_name(property.id)]
     if buy and buy.valid then
         buy.enabled = can_buy
-        buy.tooltip = can_buy and (owns and {'un.property-renew-tooltip'}
-            or {'un.property-buy'})
-            or disabled_tooltip(owns and 'renew' or 'buy', buy_error)
+        buy.tooltip = can_buy and {'un.property-buy'}
+            or disabled_tooltip('buy', buy_error)
         if buy.tags.action ~= 'property-confirm-buy' then
-            buy.caption = owns and {
-                'un.property-renew',
-                format_integer(properties.renew_fee(property)),
-            } or {'un.property-buy'}
+            buy.caption = {'un.property-buy'}
             buy.tags = {
-                action = owns and 'property-renew' or 'property-buy',
+                action = 'property-buy',
                 property_id = property.id,
             }
         end
@@ -1314,7 +1303,7 @@ events.on(defines.events.on_gui_click, function(event)
             local ok = surfaces.suicide(player)
             if not ok then player.print({'un.suicide-unavailable'}) end
         else
-            element.sprite = 'utility/confirm_slot'
+            element.caption = {'un.suicide-confirm'}
             element.tooltip = {'un.suicide-confirm'}
             element.tags = {action = 'suicide-confirm'}
         end
@@ -1429,13 +1418,6 @@ events.on(defines.events.on_gui_click, function(event)
             update_frame(player)
         elseif tags.action == 'property-confirm-buy' then
             local ok, err = properties.buy(player, tags.property_id, tags.quoted_price)
-            if not ok and not property_disappeared(err) then
-                player.print(property_error(err))
-            end
-            render_property_table(player, frame, content)
-            update_frame(player)
-        elseif tags.action == 'property-renew' then
-            local ok, err = properties.renew(player, tags.property_id)
             if not ok and not property_disappeared(err) then
                 player.print(property_error(err))
             end

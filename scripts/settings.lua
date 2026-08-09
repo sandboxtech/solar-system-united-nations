@@ -19,6 +19,7 @@ local DEFINITIONS = {
     },
     property_supply_enabled = {default = true, boolean = true},
     planet_resets_enabled = {default = true, boolean = true},
+    admin_property_access = {default = false, boolean = true},
 }
 
 local function values()
