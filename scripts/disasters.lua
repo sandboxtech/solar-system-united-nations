@@ -2,6 +2,7 @@ local config = require('config')
 local events = require('scripts.events')
 local linked_inventory = require('scripts.linked_inventory')
 local scheduler = require('scripts.scheduler')
+local settings = require('scripts.settings')
 local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
 
@@ -50,7 +51,8 @@ local function ensure_record(name)
     if record.state == nil then record.state = 'open' end
     if record.round == nil then record.round = 0 end
     if record.warned == nil then record.warned = {} end
-    if record.next_tick == nil and record.state == 'open' then
+    if record.next_tick == nil and record.state == 'open'
+            and settings.get('planet_resets_enabled') then
         record.next_tick = game.tick + period(name)
     end
     if surface and surface.valid then
@@ -191,7 +193,13 @@ local function finish_reset(name, surface, record)
     record.state = 'open'
     record.surface_index = surface.index
     record.clear_started_tick = nil
-    record.next_tick = game.tick + period(name)
+    if settings.get('planet_resets_enabled') then
+        record.next_tick = game.tick + period(name)
+        record.paused_left_ticks = nil
+    else
+        record.next_tick = nil
+        record.paused_left_ticks = period(name)
+    end
     record.warned = {}
     game.print({
         'un.planet-reset-finished',
@@ -217,19 +225,40 @@ function M.list()
             name = name,
             state = record.state,
             round = record.round or 0,
+            paused = record.state == 'open'
+                and not settings.get('planet_resets_enabled'),
             left_ticks = record.state == 'open' and record.next_tick
                 and math.max(0, record.next_tick - game.tick)
-                or nil,
+                or record.paused_left_ticks,
         }
     end
     return result
 end
 
+function M.apply_enabled(enabled)
+    for _, name in ipairs(config.public_planets) do
+        local record = storage.public_planet_resets[name]
+        if not record then record = ensure_record(name) end
+        if enabled then
+            if record.state == 'open' and not record.next_tick then
+                record.next_tick = game.tick
+                    + (record.paused_left_ticks or period(name))
+            end
+            record.paused_left_ticks = nil
+        elseif record.state == 'open' and record.next_tick then
+            record.paused_left_ticks = math.max(0, record.next_tick - game.tick)
+            record.next_tick = nil
+        end
+    end
+end
+
 function M.ensure()
     for _, name in ipairs(config.public_planets) do ensure_record(name) end
+    if not settings.get('planet_resets_enabled') then M.apply_enabled(false) end
 end
 
 local function check_resets()
+    if not settings.get('planet_resets_enabled') then return end
     for _, name in ipairs(config.public_planets) do
         local record, surface = ensure_record(name)
         if record.state == 'open' and record.next_tick then

@@ -1,5 +1,5 @@
-local config = require('config')
 local economy = require('scripts.economy')
+local settings = require('scripts.settings')
 
 local M = {}
 
@@ -47,7 +47,9 @@ function M.add_friend(player_index, target_index)
     if not (target and target.valid) then return false, 'missing' end
     local friends = friend_table(player_index)
     if friends[target_index] then return false, 'already' end
-    if friend_count(friends) >= config.friend_limit then return false, 'limit' end
+    if friend_count(friends) >= settings.get('friend_limit') then
+        return false, 'limit'
+    end
     friends[target_index] = true
     return true, M.are_mutual(player_index, target_index)
 end
@@ -78,72 +80,6 @@ function M.remove_player(player_index)
         if type(account) == 'table' and type(account.friends) == 'table' then
             account.friends[player_index] = nil
         end
-    end
-end
-
-local function friend_command(command)
-    local player = command_player(command)
-    if not player then
-        localised_print({'un.friend-player-only'})
-        return
-    end
-    local parameter = command.parameter or ''
-    local action, name = parameter:match('^%s*(%S+)%s+(.+)%s*$')
-    if not action then action = parameter:match('^%s*(%S+)%s*$') end
-    local friends = friend_table(player.index)
-
-    if action == 'list' then
-        local names = {}
-        for index, enabled in pairs(friends) do
-            if enabled then
-                local friend = game.get_player(index)
-                names[#names + 1] = friend and friend.name or ('#' .. index)
-            end
-        end
-        table.sort(names)
-        player.print({'un.friend-list', #names, table.concat(names, ', ')})
-        return
-    end
-
-    local target = target_player(name)
-    if not target then
-        player.print({'un.player-not-found'})
-        return
-    end
-    if target.index == player.index then
-        player.print({'un.friend-self'})
-        return
-    end
-    if action == 'add' then
-        local ok, result = M.add_friend(player.index, target.index)
-        if result == 'already' then
-            player.print({'un.friend-already', target.name})
-            return
-        end
-        if result == 'limit' then
-            player.print({'un.friend-limit', config.friend_limit})
-            return
-        end
-        if not ok then
-            player.print({'un.friend-usage'})
-            return
-        end
-        player.print({'un.friend-added', target.name})
-        if result == true then
-            player.print({'un.friend-mutual', target.name})
-            if target.connected then
-                target.print({'un.friend-mutual', player.name})
-            end
-        end
-    elseif action == 'remove' then
-        local ok = M.remove_friend(player.index, target.index)
-        if not ok then
-            player.print({'un.friend-not-added', target.name})
-            return
-        end
-        player.print({'un.friend-removed', target.name})
-    else
-        player.print({'un.friend-usage'})
     end
 end
 
@@ -184,7 +120,6 @@ local function transfer_command(command)
     end
 end
 
-commands.add_command('un-friend', {'un.friend-command-help'}, friend_command)
 commands.add_command('un-transfer', {'un.transfer-command-help'}, transfer_command)
 
 return M

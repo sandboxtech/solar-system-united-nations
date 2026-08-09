@@ -3,6 +3,7 @@ local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
 local scheduler = require('scripts.scheduler')
+local settings = require('scripts.settings')
 local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
 
@@ -56,14 +57,15 @@ local function apply_bounds(platform, owner_index)
     if not ok then log('[un] failed to apply ship bounds: ' .. tostring(err)) end
 end
 
-function M.life_ticks()
-    return config.ship_life_hours * config.ticks_per_hour
+function M.life_ticks(record)
+    return record and record.life_ticks
+        or config.ship_life_hours * config.ticks_per_hour
 end
 
 function M.left_ticks(record)
     if not record then return nil end
-    if not record.built_tick then return M.life_ticks() end
-    return record.built_tick + M.life_ticks() - game.tick
+    if not record.built_tick then return M.life_ticks(record) end
+    return record.built_tick + M.life_ticks(record) - game.tick
 end
 
 function M.of(player_index)
@@ -130,9 +132,10 @@ function M.create(player)
     end
     if M.of(player.index) then return nil, 'ship-already-have' end
 
+    local cost = settings.get('ship_cost')
     local ok, err = economy.change(
         player.index,
-        -config.ship_credit_cost,
+        -cost,
         'ship-create'
     )
     if not ok then return nil, err end
@@ -143,20 +146,21 @@ function M.create(player)
         starter_pack = STARTER_PACK,
     }
     if not platform then
-        economy.change(player.index, config.ship_credit_cost, 'ship-create-refund')
+        economy.change(player.index, cost, 'ship-create-refund')
         return nil, 'ship-create-failed'
     end
 
     local record = {
         owner_index = player.index,
         created_tick = game.tick,
+        life_ticks = settings.get('ship_life_hours') * config.ticks_per_hour,
     }
     records()[platform.index] = record
     local applied, apply_err = pcall(function() platform.apply_starter_pack() end)
     if not applied then
         record.scuttled_tick = game.tick
         platform.destroy(1)
-        economy.change(player.index, config.ship_credit_cost, 'ship-create-refund')
+        economy.change(player.index, cost, 'ship-create-refund')
         log('[un] failed to apply ship starter pack: ' .. tostring(apply_err))
         return nil, 'ship-create-failed'
     end

@@ -2,6 +2,7 @@ local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
 local scheduler = require('scripts.scheduler')
+local settings = require('scripts.settings')
 local social = require('scripts.social')
 local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
@@ -12,19 +13,40 @@ local function bump_revision()
     storage.property_revision = (storage.property_revision or 0) + 1
 end
 
+local function clear_name_translation_requests(property_id)
+    for request_id, request in pairs(
+        storage.property_name_translation_requests or {}
+    ) do
+        if request.property_id == property_id then
+            storage.property_name_translation_requests[request_id] = nil
+        end
+    end
+end
+
 local function is_positive_integer(value)
     return type(value) == 'number' and value > 0 and value == math.floor(value)
 end
 
+local function next_available_property_id()
+    local id = 1
+    while storage.properties[id]
+            or game.surfaces[config.property_surface_prefix .. tostring(id)] do
+        id = id + 1
+    end
+    return id
+end
+
 function M.display_name(property)
     if property.custom_name then return property.custom_name end
-    if not property.owner_index then return {'un.property-surface-vacant'} end
+    if not property.owner_index then
+        return {'un.property-surface-vacant', property.id}
+    end
     local owner = game.get_player(property.owner_index)
     local account = storage.players[property.owner_index]
     local owner_name = owner and owner.name
         or account and account.name
         or ('#' .. property.owner_index)
-    return {'un.property-surface-owned', owner_name}
+    return {'un.property-surface-owned', owner_name, property.id}
 end
 
 local function property_name_position(property)
@@ -81,6 +103,7 @@ local function request_property_name_translation(property, player)
         property_id = property.id,
         player_index = player.index,
         owner_token = property.owner_index or 0,
+        created_tick = property.created_tick,
     }
     return true
 end
@@ -170,7 +193,7 @@ function M.create(spec)
     else
         price = math.floor(tonumber(spec.price) or 0)
     end
-    local tax = tonumber(spec.tax) or config.property_default_tax
+    local tax = tonumber(spec.tax) or settings.get('property_tax_percent') / 100
     local solar = config.property_solar_multiplier
     local sides = config.property_side_lengths
     local width = tonumber(spec.width)
@@ -195,7 +218,7 @@ function M.create(spec)
     end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
-    local id = storage.next_property_id
+    local id = next_available_property_id()
     local min_brightness = config.property_min_brightness
     local surface, half_width, half_height, sample_planet, sample_position
         = surfaces.create_property_surface(id, {
@@ -244,7 +267,7 @@ function M.ensure_defaults()
     end
     if storage.property_tax_version ~= 1 then
         for _, property in ipairs(M.list()) do
-            property.tax = config.property_default_tax
+            property.tax = settings.get('property_tax_percent') / 100
         end
         storage.property_tax_version = 1
         bump_revision()
@@ -498,15 +521,6 @@ local function reply(command, message)
     if player then player.print(message) else localised_print(message) end
 end
 
-local function require_admin(command)
-    local player = command_player(command)
-    if player and not player.admin then
-        player.print({'un.admin-only'})
-        return false
-    end
-    return true
-end
-
 local function property_at_player_body(player)
     local surface = player.physical_surface
     if not (surface and surface.valid) then return nil end
@@ -616,6 +630,7 @@ end
 local function retire_property(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then
+        clear_name_translation_requests(property.id)
         storage.properties[property.id] = nil
         bump_revision()
         return true
@@ -628,6 +643,7 @@ end
 
 local function evaluate_supply()
     state.ensure()
+    if not settings.get('property_supply_enabled') then return end
     local list = M.list()
     local total = #list
     local unowned = 0
@@ -673,85 +689,65 @@ local function evaluate_supply()
     end
 end
 
-local function delete_confirmed(command, property)
-    local blocker = deletion_blocker(property)
-    if blocker then
-        reply(command, {'un.property-delete-occupied', blocker})
-        return
+function M.admin_delete(player, property_id)
+    if not (player and player.valid and player.admin) then
+        return false, 'not-admin'
     end
+    local property = M.get(property_id)
+    if not property then return false, 'missing' end
+    local blocker = deletion_blocker(property)
+    if blocker then return false, 'occupied', blocker end
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then
+        clear_name_translation_requests(property.id)
         storage.properties[property.id] = nil
         bump_revision()
-        reply(command, {'un.property-delete-done', property.id})
-        return
+        return true
     end
     property.status = 'deleting'
     storage.deleting_properties[surface.index] = property.id
     if game.delete_surface(surface) then
-        reply(command, {'un.property-delete-queued', property.id})
-    else
-        storage.deleting_properties[surface.index] = nil
-        property.status = 'active'
-        reply(command, {'un.property-delete-failed', property.id})
+        bump_revision()
+        return true
     end
+    storage.deleting_properties[surface.index] = nil
+    property.status = 'active'
+    return false, 'delete-failed'
+end
+
+function M.admin_repair(player)
+    if not (player and player.valid and player.admin) then
+        return false, 'not-admin'
+    end
+    M.ensure_defaults()
+    for _, property in ipairs(M.list()) do ensure_linked_chests(property) end
+    bump_revision()
+    return true, #M.list()
+end
+
+function M.admin_set_tax(player, percent)
+    if not (player and player.valid and player.admin) then
+        return false, 'not-admin'
+    end
+    percent = tonumber(percent)
+    if not percent or percent < 0 or percent > 100 then
+        return false, 'invalid-value'
+    end
+    local tax = percent / 100
+    for _, property in ipairs(M.list()) do property.tax = tax end
+    bump_revision()
+    return true
 end
 
 local function on_command(command)
     state.ensure()
     local parameter = command.parameter or ''
-    local action, first, second, third = parameter:match(
-        '^%s*(%S*)%s*(%S*)%s*(%S*)%s*(%S*)'
-    )
+    local action = parameter:match('^%s*(%S*)')
     if action == 'rename' then
         rename_from_command(command, parameter)
         return
     end
-    if not require_admin(command) then return end
-    if action == '' or action == 'list' then
-        reply(command, {'un.property-command-count', #M.list()})
-    elseif action == 'create' then
-        local property, err = M.create{
-            price = first ~= '' and tonumber(first) or nil,
-            width = second ~= '' and tonumber(second) or nil,
-            height = third ~= '' and tonumber(third) or nil,
-        }
-        if property then
-            reply(command, {'un.property-created', property.id})
-        else
-            reply(command, {'un.property-command-error'})
-        end
-    elseif action == 'delete' then
-        local property = M.get(tonumber(first))
-        if not property then
-            reply(command, {'un.property-missing'})
-            return
-        end
-        local key = command.player_index or 0
-        storage.property_delete_confirm[key] = {
-            property_id = property.id,
-            expires_tick = game.tick + config.ticks_per_minute,
-        }
-        reply(command, {'un.property-delete-preview', property.id})
-    elseif action == 'delete-confirm' then
-        local key = command.player_index or 0
-        local confirmation = storage.property_delete_confirm[key]
-        local id = tonumber(first)
-        storage.property_delete_confirm[key] = nil
-        if not (confirmation and confirmation.property_id == id
-                and confirmation.expires_tick >= game.tick) then
-            reply(command, {'un.property-delete-confirm-required'})
-            return
-        end
-        local property = M.get(id)
-        if property then delete_confirmed(command, property) end
-    elseif action == 'repair' then
-        M.ensure_defaults()
-        for _, property in ipairs(M.list()) do ensure_linked_chests(property) end
-        reply(command, {'un.property-repaired', #M.list()})
-    else
-        reply(command, {'un.property-command-usage'})
-    end
+    reply(command, {'un.property-command-usage'})
 end
 
 commands.add_command('un-property', {'un.property-command-help'}, on_command)
@@ -761,6 +757,7 @@ events.on(defines.events.on_surface_deleted, function(event)
     local property_id = storage.deleting_properties[event.surface_index]
     if not property_id then return end
     storage.deleting_properties[event.surface_index] = nil
+    clear_name_translation_requests(property_id)
     storage.properties[property_id] = nil
     bump_revision()
 end)
@@ -772,6 +769,10 @@ events.on(defines.events.on_string_translated, function(event)
     storage.property_name_translation_requests[event.id] = nil
     local property = M.get(request.property_id)
     if not property then return end
+    if request.created_tick
+            and request.created_tick ~= property.created_tick then
+        return
+    end
     local owner_token = request.owner_token
     if owner_token == nil then owner_token = request.owner_index or 0 end
     if (property.owner_index or 0) ~= owner_token then return end

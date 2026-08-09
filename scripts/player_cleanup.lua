@@ -3,6 +3,7 @@ local events = require('scripts.events')
 local linked_inventory = require('scripts.linked_inventory')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
+local settings = require('scripts.settings')
 local ships = require('scripts.ships')
 local social = require('scripts.social')
 local state = require('scripts.state')
@@ -42,7 +43,7 @@ local function erase_scenario_account(player_index)
 end
 
 local function candidate()
-    local threshold = config.player_cleanup_idle_hours * config.ticks_per_hour
+    local threshold = settings.get('cleanup_idle_hours') * config.ticks_per_hour
     local candidates = {}
     for _, player in pairs(game.players) do
         local account = storage.players[player.index]
@@ -76,7 +77,7 @@ local function check_one()
         game.remove_offline_players({index})
     end)
     if ok then
-        game.print({'un.player-cleaned', name, config.player_cleanup_idle_hours})
+        game.print({'un.player-cleaned', name, settings.get('cleanup_idle_hours')})
     else
         log('[un] failed to remove offline player ' .. name .. ': ' .. tostring(err))
     end

@@ -5,6 +5,7 @@ local events = require('scripts.events')
 local experience = require('scripts.experience')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
+local settings = require('scripts.settings')
 local ships = require('scripts.ships')
 local social = require('scripts.social')
 local surfaces = require('scripts.surfaces')
@@ -30,6 +31,7 @@ local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
 local NAV_PLAYERS_NAME = 'un_nav_players'
+local NAV_ADMIN_NAME = 'un_nav_admin'
 local HELP_BRIEF_NAME = 'un_help_brief'
 local HELP_ADVANCED_NAME = 'un_help_advanced'
 local HELP_FULL_NAME = 'un_help_full'
@@ -55,6 +57,22 @@ local EXPERIENCE_TABLE_NAME = 'un_experience_table'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
 local PLANET_TABLE_NAME = 'un_planet_table'
+local ADMIN_SCROLL_NAME = 'un_admin_scroll'
+local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
+local ADMIN_PLAYER_TABLE_NAME = 'un_admin_player_table'
+local ADMIN_PROPERTY_TABLE_NAME = 'un_admin_property_table'
+local ADMIN_PROPERTY_PRICE_NAME = 'un_admin_property_price'
+local ADMIN_PROPERTY_WIDTH_NAME = 'un_admin_property_width'
+local ADMIN_PROPERTY_HEIGHT_NAME = 'un_admin_property_height'
+
+local ADMIN_NUMBER_SETTINGS = {
+    {'initial_coin', 'un.admin-setting-initial-coin'},
+    {'friend_limit', 'un.admin-setting-friend-limit'},
+    {'ship_cost', 'un.admin-setting-ship-cost'},
+    {'ship_life_hours', 'un.admin-setting-ship-life'},
+    {'cleanup_idle_hours', 'un.admin-setting-cleanup-hours'},
+    {'property_tax_percent', 'un.admin-setting-property-tax'},
+}
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
 -- game.tick only when queried or claimed.
@@ -173,12 +191,16 @@ local function ship_remaining_name(platform_index)
     return 'un_ship_remaining_' .. tostring(platform_index)
 end
 
-local function planet_state_name(name)
-    return 'un_planet_state_' .. name
-end
-
 local function planet_countdown_name(name)
     return 'un_planet_countdown_' .. name
+end
+
+local function admin_setting_input_name(key)
+    return 'un_admin_setting_' .. key
+end
+
+local function admin_balance_input_name(player_index)
+    return 'un_admin_balance_' .. tostring(player_index)
 end
 
 local function planet_label(name)
@@ -349,7 +371,7 @@ local function render_ship_actions(content)
     ship_actions.add{
         type = 'button',
         name = SHIP_CREATE_NAME,
-        caption = {'un.ship-create', format_integer(config.ship_credit_cost)},
+        caption = {'un.ship-create', format_integer(settings.get('ship_cost'))},
     }
     ship_actions.add{
         type = 'button',
@@ -447,20 +469,158 @@ local function render_planets_page(frame, content)
     local list = content.add{
         type = 'table',
         name = PLANET_TABLE_NAME,
-        column_count = 3,
+        column_count = 2,
     }
     list.add{type = 'label', caption = {'un.planet-column-name'}}
-    list.add{type = 'label', caption = {'un.planet-column-state'}}
     list.add{type = 'label', caption = {'un.planet-column-countdown'}}
     for _, item in ipairs(disasters.list()) do
         list.add{type = 'label', caption = planet_label(item.name)}
-        list.add{type = 'label', name = planet_state_name(item.name)}
         list.add{type = 'label', name = planet_countdown_name(item.name)}
     end
     local note = content.add{type = 'label', caption = {'un.planet-page-note'}}
     note.style.single_line = false
     note.style.maximal_width = 640
     set_frame_state(frame, 'planets')
+end
+
+local function count_pairs(value)
+    local count = 0
+    for _ in pairs(value or {}) do count = count + 1 end
+    return count
+end
+
+local function render_admin_page(player, frame, content)
+    if not player.admin then return end
+    local scroll = content.add{type = 'scroll-pane', name = ADMIN_SCROLL_NAME}
+    scroll.style.minimal_width = 760
+    scroll.style.maximal_height = 620
+
+    local summary = scroll.add{type = 'table', column_count = 2}
+    summary.add{type = 'label', caption = {'un.admin-summary-players'}}
+    summary.add{type = 'label', caption = count_pairs(storage.players)}
+    summary.add{type = 'label', caption = {'un.admin-summary-properties'}}
+    summary.add{type = 'label', caption = #properties.list()}
+    summary.add{type = 'label', caption = {'un.admin-summary-ships'}}
+    summary.add{type = 'label', caption = #ships.list()}
+    summary.add{type = 'label', caption = {'un.admin-summary-dropoffs'}}
+    summary.add{type = 'label', caption = count_pairs(storage.dropoffs)}
+    summary.add{type = 'label', caption = {'un.admin-summary-ledger'}}
+    summary.add{type = 'label', caption = count_pairs(storage.ledger.records)}
+
+    scroll.add{type = 'line'}
+    scroll.add{type = 'label', caption = {'un.admin-settings-title'}, style = 'heading_2_label'}
+    local setting_table = scroll.add{
+        type = 'table',
+        name = ADMIN_SETTINGS_TABLE_NAME,
+        column_count = 3,
+    }
+    for _, spec in ipairs(ADMIN_NUMBER_SETTINGS) do
+        local key = spec[1]
+        setting_table.add{type = 'label', caption = {spec[2]}}
+        local input = setting_table.add{
+            type = 'textfield',
+            name = admin_setting_input_name(key),
+            text = tostring(settings.get(key)),
+            numeric = true,
+            allow_decimal = key == 'ship_life_hours'
+                or key == 'cleanup_idle_hours'
+                or key == 'property_tax_percent',
+            allow_negative = false,
+            lose_focus_on_confirm = true,
+        }
+        input.style.width = 150
+        setting_table.add{
+            type = 'button',
+            caption = {'un.admin-apply'},
+            tags = {action = 'admin-setting-apply', setting = key},
+        }
+    end
+
+    local switches = scroll.add{type = 'flow', direction = 'horizontal'}
+    switches.style.vertical_align = 'center'
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-property-supply'},
+        switch_state = settings.get('property_supply_enabled') and 'right' or 'left',
+        allow_none_state = false,
+        tags = {action = 'admin-setting-switch', setting = 'property_supply_enabled'},
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-planet-resets'},
+        switch_state = settings.get('planet_resets_enabled') and 'right' or 'left',
+        allow_none_state = false,
+        tags = {action = 'admin-setting-switch', setting = 'planet_resets_enabled'},
+    }
+
+    scroll.add{type = 'line'}
+    scroll.add{type = 'label', caption = {'un.admin-properties-title'}, style = 'heading_2_label'}
+    local create = scroll.add{type = 'flow', direction = 'horizontal'}
+    create.style.vertical_align = 'center'
+    create.add{type = 'label', caption = {'un.admin-property-price'}}
+    create.add{type = 'textfield', name = ADMIN_PROPERTY_PRICE_NAME, numeric = true}
+    create.add{type = 'label', caption = {'un.admin-property-width'}}
+    create.add{type = 'textfield', name = ADMIN_PROPERTY_WIDTH_NAME, numeric = true}
+    create.add{type = 'label', caption = {'un.admin-property-height'}}
+    create.add{type = 'textfield', name = ADMIN_PROPERTY_HEIGHT_NAME, numeric = true}
+    create.add{
+        type = 'button',
+        caption = {'un.admin-property-create'},
+        tags = {action = 'admin-property-create'},
+    }
+    create.add{
+        type = 'button',
+        caption = {'un.admin-property-repair'},
+        tags = {action = 'admin-property-repair'},
+    }
+    local property_table = scroll.add{
+        type = 'table',
+        name = ADMIN_PROPERTY_TABLE_NAME,
+        column_count = 3,
+    }
+    property_table.add{type = 'label', caption = {'un.admin-property-id'}}
+    property_table.add{type = 'label', caption = {'un.property-column-name'}}
+    property_table.add{type = 'label', caption = {'un.admin-operation'}}
+    for _, property in ipairs(properties.list()) do
+        property_table.add{type = 'label', caption = tostring(property.id)}
+        property_table.add{type = 'label', caption = properties.surface_display_name(property)}
+        property_table.add{
+            type = 'button',
+            caption = {'un.admin-property-delete'},
+            tags = {action = 'admin-property-delete', property_id = property.id},
+        }
+    end
+
+    scroll.add{type = 'line'}
+    scroll.add{type = 'label', caption = {'un.admin-balances-title'}, style = 'heading_2_label'}
+    local player_table = scroll.add{
+        type = 'table',
+        name = ADMIN_PLAYER_TABLE_NAME,
+        column_count = 3,
+    }
+    player_table.add{type = 'label', caption = {'un.player-column-name'}}
+    player_table.add{type = 'label', caption = {'un.credit-label'}}
+    player_table.add{type = 'label', caption = {'un.admin-operation'}}
+    for _, listed_player in pairs(game.players) do
+        player_table.add{type = 'label', caption = listed_player.name}
+        local balance = player_table.add{
+            type = 'textfield',
+            name = admin_balance_input_name(listed_player.index),
+            text = tostring(economy.get_balance(listed_player.index)),
+            numeric = true,
+            allow_decimal = false,
+            allow_negative = false,
+        }
+        balance.style.width = 150
+        player_table.add{
+            type = 'button',
+            caption = {'un.admin-set-balance'},
+            tags = {action = 'admin-balance-set', target_index = listed_player.index},
+        }
+    end
+    set_frame_state(frame, 'admin')
 end
 
 local function add_help_line(parent, caption, heading)
@@ -524,7 +684,7 @@ local function render_help_page(frame, content, mode)
             config.ubi_credit_per_second,
             config.ubi_max_seconds / 3600,
             economy.get_ubi_capacity(),
-            config.initial_credit,
+            settings.get('initial_coin'),
         })
     elseif mode == 'advanced' then
         add_help_line(details, {'un.help-detail-property-heading'}, true)
@@ -540,14 +700,14 @@ local function render_help_page(frame, content, mode)
         add_help_line(details, {'un.help-detail-experience'})
 
         add_help_line(details, {'un.help-detail-cooperation-heading'}, true)
-        add_help_line(details, {'un.help-detail-friends', config.friend_limit})
+        add_help_line(details, {'un.help-detail-friends', settings.get('friend_limit')})
         add_help_line(details, {'un.help-detail-transfer'})
 
         add_help_line(details, {'un.help-detail-ship-heading'}, true)
         add_help_line(details, {
             'un.help-detail-ship',
-            config.ship_credit_cost,
-            config.ship_life_hours,
+            settings.get('ship_cost'),
+            settings.get('ship_life_hours'),
             config.ship_base_width,
             config.ship_width_per_level,
             config.ship_height,
@@ -565,7 +725,7 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(details, {
             'un.help-detail-property-trade',
-            config.property_default_tax * 100,
+            settings.get('property_tax_percent'),
             config.property_decay_ticks / config.ticks_per_hour,
             config.property_max_future_ticks / config.ticks_per_hour,
         })
@@ -590,13 +750,11 @@ local function render_help_page(frame, content, mode)
             config.public_planet_reset_hours.gleba,
             config.public_planet_reset_hours.fulgora,
             config.public_planet_reset_hours.aquilo,
-            config.player_cleanup_idle_hours,
+            settings.get('cleanup_idle_hours'),
         })
         add_help_line(details, {'un.help-detail-commands-heading'}, true)
-        add_help_line(details, {'un.help-detail-command-friend'})
         add_help_line(details, {'un.help-detail-command-transfer'})
         add_help_line(details, {'un.help-detail-command-rename'})
-        add_help_line(details, {'un.help-detail-command-admin'})
     end
     set_frame_state(frame, 'help')
 end
@@ -680,6 +838,7 @@ local function render_page(player, page)
     if not (frame and frame.valid) then return end
     local content = frame[CONTENT_NAME]
     if not (content and content.valid) then return end
+    if page == 'admin' and not player.admin then page = 'help' end
     content.clear()
 
     if page == 'help' then
@@ -694,6 +853,8 @@ local function render_page(player, page)
         render_ships_page(player, frame, content)
     elseif page == 'players' then
         render_players_page(player, frame, content)
+    elseif page == 'admin' then
+        render_admin_page(player, frame, content)
     else
         page = 'help'
         render_help_page(frame, content)
@@ -706,6 +867,8 @@ local function render_page(player, page)
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
+    local admin = navigation[NAV_ADMIN_NAME]
+    if admin and admin.valid then admin.enabled = page ~= 'admin' end
 end
 
 local function property_error(err)
@@ -818,6 +981,11 @@ local function update_frame(player)
     if not (content and content.valid) then return end
     local page = frame.tags.page or 'overview'
 
+    if page == 'admin' and not player.admin then
+        render_page(player, 'help')
+        return
+    end
+
     if page == 'overview' then
         local balance_table = content[BALANCE_TABLE_NAME]
         local balance = balance_table and balance_table.valid
@@ -872,15 +1040,12 @@ local function update_frame(player)
         local list = content[PLANET_TABLE_NAME]
         if list and list.valid then
             for _, item in ipairs(disasters.list()) do
-                local status = list[planet_state_name(item.name)]
                 local countdown = list[planet_countdown_name(item.name)]
-                if status and status.valid then
-                    status.caption = item.state == 'open'
-                        and {'un.planet-state-open'}
-                        or {'un.planet-state-closed'}
-                end
                 if countdown and countdown.valid then
-                    countdown.caption = item.left_ticks
+                    countdown.caption = item.paused
+                        and {'un.planet-countdown-paused',
+                            format_countdown(item.left_ticks)}
+                        or item.left_ticks
                         and format_countdown(item.left_ticks)
                         or {'un.planet-countdown-rebuilding'}
                 end
@@ -1006,6 +1171,9 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
+    if player.admin then
+        navigation.add{type = 'button', name = NAV_ADMIN_NAME, caption = {'un.page-admin'}}
+    end
 
     local tab_gap = frame.add{type = 'empty-widget'}
     tab_gap.style.height = 12
@@ -1050,6 +1218,19 @@ events.on(defines.events.on_player_joined_game, ensure_player)
 events.on(defines.events.on_player_left_game, function(event)
     open_players[event.player_index] = nil
 end)
+
+local function rebuild_for_admin_change(event)
+    local player = game.get_player(event.player_index)
+    if not player then return end
+    local frame = player.gui.screen[FRAME_NAME]
+    if not (frame and frame.valid) then return end
+    local page = frame.tags.page or 'help'
+    if page == 'admin' and not player.admin then page = 'help' end
+    open_frame(player, page)
+end
+
+events.on(defines.events.on_player_promoted, rebuild_for_admin_change)
+events.on(defines.events.on_player_demoted, rebuild_for_admin_change)
 
 events.on(defines.events.on_gui_click, function(event)
     local element = event.element
@@ -1098,6 +1279,11 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_PLAYERS_NAME then
         render_page(player, 'players')
         update_frame(player)
+    elseif element.name == NAV_ADMIN_NAME then
+        if player.admin then
+            render_page(player, 'admin')
+            update_frame(player)
+        end
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
@@ -1137,7 +1323,76 @@ events.on(defines.events.on_gui_click, function(event)
         local frame = player.gui.screen[FRAME_NAME]
         local content = frame and frame.valid and frame[CONTENT_NAME]
         if not (content and content.valid) then return end
-        if tags.action == 'property-buy' then
+        if tags.action and tags.action:match('^admin%-') then
+            if not player.admin then
+                player.print({'un.admin-only'})
+                render_page(player, 'help')
+                return
+            end
+            if tags.action == 'admin-setting-apply' then
+                local input = element.parent[admin_setting_input_name(tags.setting)]
+                local ok = input and input.valid
+                    and settings.set(tags.setting, input.text)
+                if ok and tags.setting == 'property_tax_percent' then
+                    properties.admin_set_tax(player, settings.get(tags.setting))
+                end
+                player.print(ok and {'un.admin-setting-saved'}
+                    or {'un.admin-invalid-value'})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-property-create' then
+                local flow = element.parent
+                local price = flow[ADMIN_PROPERTY_PRICE_NAME].text
+                local width = flow[ADMIN_PROPERTY_WIDTH_NAME].text
+                local height = flow[ADMIN_PROPERTY_HEIGHT_NAME].text
+                local property = properties.create{
+                    price = price ~= '' and tonumber(price) or nil,
+                    width = width ~= '' and tonumber(width) or nil,
+                    height = height ~= '' and tonumber(height) or nil,
+                }
+                player.print(property and {'un.property-created', property.id}
+                    or {'un.property-command-error'})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-property-repair' then
+                local ok, count = properties.admin_repair(player)
+                player.print(ok and {'un.property-repaired', count}
+                    or {'un.admin-operation-failed'})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-property-delete' then
+                element.caption = {'un.admin-property-delete-confirm'}
+                element.tags = {
+                    action = 'admin-property-delete-confirm',
+                    property_id = tags.property_id,
+                }
+            elseif tags.action == 'admin-property-delete-confirm' then
+                local ok, err, blocker = properties.admin_delete(
+                    player,
+                    tags.property_id
+                )
+                if not ok and err == 'occupied' then
+                    player.print({'un.property-delete-occupied', blocker})
+                elseif not ok then
+                    player.print({'un.admin-operation-failed'})
+                end
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-balance-set' then
+                local input = element.parent[
+                    admin_balance_input_name(tags.target_index)
+                ]
+                local ok = input and input.valid and economy.admin_set_balance(
+                    player.index,
+                    tags.target_index,
+                    input.text
+                )
+                player.print(ok and {'un.admin-balance-saved'}
+                    or {'un.admin-invalid-value'})
+                render_page(player, 'admin')
+                update_frame(player)
+            end
+        elseif tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
             if not property then
                 render_property_table(player, frame, content)
@@ -1154,7 +1409,7 @@ events.on(defines.events.on_gui_click, function(event)
             local ok, result = social.add_friend(player.index, tags.target_index)
             local target = game.get_player(tags.target_index)
             if not ok and result == 'limit' then
-                player.print({'un.friend-limit', config.friend_limit})
+                player.print({'un.friend-limit', settings.get('friend_limit')})
             elseif ok and result == true and target then
                 player.print({'un.friend-mutual', target.name})
                 if target.connected then
@@ -1203,6 +1458,26 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
     if not (element and element.valid) then return end
     local player = game.get_player(event.player_index)
     if not player then return end
+    local tags = element.tags
+    if tags.action == 'admin-setting-switch' then
+        if not player.admin then
+            player.print({'un.admin-only'})
+            return
+        end
+        local enabled = element.switch_state == 'right'
+        local ok = settings.set(tags.setting, enabled)
+        if ok and tags.setting == 'planet_resets_enabled' then
+            disasters.apply_enabled(enabled)
+        end
+        player.print(ok and {'un.admin-setting-saved'}
+            or {'un.admin-invalid-value'})
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid then
+            render_page(player, 'admin')
+            update_frame(player)
+        end
+        return
+    end
     if element.name == PROPERTY_ACCESS_NAME then
         if properties.owned_count(player.index) > 0 then
             properties.set_all_open(player.index, element.switch_state == 'right')

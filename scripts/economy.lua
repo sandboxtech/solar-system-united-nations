@@ -1,5 +1,6 @@
 local config = require('config')
 local events = require('scripts.events')
+local settings = require('scripts.settings')
 local state = require('scripts.state')
 
 local M = {}
@@ -46,13 +47,13 @@ function M.ensure_account(player_index)
     local account = storage.players[player_index]
     if type(account) ~= 'table' then
         account = {
-            credit = config.initial_credit,
+            credit = settings.get('initial_coin'),
             created_tick = game.tick,
             last_seen_tick = game.tick,
         }
         storage.players[player_index] = account
     end
-    if account.credit == nil then account.credit = config.initial_credit end
+    if account.credit == nil then account.credit = settings.get('initial_coin') end
     if account.created_tick == nil then
         account.created_tick = math.max(0, game.tick - (player and player.online_time or 0))
     end
@@ -63,6 +64,22 @@ end
 
 function M.get_balance(player_index)
     return M.ensure_account(player_index).credit
+end
+
+function M.admin_set_balance(admin_index, player_index, balance)
+    balance = tonumber(balance)
+    if not is_finite_integer(balance) or balance < 0
+            or balance > 1000000000000 then
+        return false, 'invalid-amount'
+    end
+    local account = M.ensure_account(player_index)
+    local difference = balance - account.credit
+    if difference == 0 then return true, balance end
+    return M.change(
+        player_index,
+        difference,
+        'admin-balance:' .. tostring(admin_index)
+    )
 end
 
 function M.get_ubi_capacity()

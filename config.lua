@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 19
+M.schema_version = 20
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second

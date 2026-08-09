@@ -191,8 +191,6 @@ local function on_command(command)
     end
 end
 
-commands.add_command('un-stage0', {'un.command-stage0-help'}, on_command)
-
 events.on(defines.events.on_surface_cleared, function(event)
     state.ensure()
     if storage.stage0.clear_surface_index ~= event.surface_index then return end
