@@ -79,17 +79,13 @@ local function update_frame(player)
     local progress = frame[UBI_PROGRESS_NAME]
     if progress and progress.valid then
         progress.value = capacity > 0 and claimable / capacity or 0
-        progress.caption = {
-            'un.ubi-progress',
-            format_integer(claimable),
-            format_integer(capacity),
-        }
+        progress.caption = ''
     end
 
     local claim = frame[UBI_CLAIM_NAME]
     if claim and claim.valid then
         claim.enabled = claimable > 0
-        claim.caption = {'un.ubi-claim', format_integer(claimable)}
+        claim.caption = {'un.ubi-claim'}
     end
 end
 
@@ -152,7 +148,7 @@ local function open_frame(player)
     frame.add{
         type = 'button',
         name = UBI_CLAIM_NAME,
-        caption = {'un.ubi-claim', 0},
+        caption = {'un.ubi-claim'},
     }
 
     frame.force_auto_center()
