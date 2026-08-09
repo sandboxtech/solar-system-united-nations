@@ -27,7 +27,9 @@ local NAV_HELP_NAME = 'un_nav_help'
 local NAV_UBI_NAME = 'un_nav_ubi'
 local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLAYERS_NAME = 'un_nav_players'
-local HELP_MODE_NAME = 'un_help_mode'
+local HELP_BRIEF_NAME = 'un_help_brief'
+local HELP_ADVANCED_NAME = 'un_help_advanced'
+local HELP_FULL_NAME = 'un_help_full'
 local HELP_DETAILS_NAME = 'un_help_details'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
@@ -351,22 +353,36 @@ local function add_help_line(parent, caption, heading)
     return label
 end
 
-local function render_help_page(frame, content, detailed)
+local function render_help_page(frame, content, mode)
+    mode = mode or 'brief'
     local title = content.add{
         type = 'label',
-        caption = detailed and {'un.help-detailed-title'} or {'un.help-title'},
+        caption = mode == 'full' and {'un.help-full-title'}
+            or mode == 'advanced' and {'un.help-advanced-title'}
+            or {'un.help-title'},
     }
     title.style.font = 'default-large-bold'
-    content.add{
-        type = 'switch',
-        name = HELP_MODE_NAME,
-        left_label_caption = {'un.help-mode-brief'},
-        right_label_caption = {'un.help-mode-detailed'},
-        switch_state = detailed and 'right' or 'left',
-        allow_none_state = false,
+    local modes = content.add{type = 'flow', direction = 'horizontal'}
+    local brief = modes.add{
+        type = 'button',
+        name = HELP_BRIEF_NAME,
+        caption = {'un.help-mode-brief'},
     }
+    local advanced = modes.add{
+        type = 'button',
+        name = HELP_ADVANCED_NAME,
+        caption = {'un.help-mode-advanced'},
+    }
+    local full = modes.add{
+        type = 'button',
+        name = HELP_FULL_NAME,
+        caption = {'un.help-mode-full'},
+    }
+    brief.enabled = mode ~= 'brief'
+    advanced.enabled = mode ~= 'advanced'
+    full.enabled = mode ~= 'full'
 
-    if not detailed then
+    if mode == 'brief' then
         add_help_line(content, {'un.help-step-linked-chest'})
         add_help_line(content, {'un.help-step-science'})
         add_help_line(content, {'un.help-step-property'})
@@ -403,34 +419,9 @@ local function render_help_page(frame, content, detailed)
 
     add_help_line(details, {'un.help-detail-property-heading'}, true)
     add_help_line(details, {
-        'un.help-detail-property-price',
-        config.property_decay_ticks / config.ticks_per_hour,
-        config.property_price_cap,
-    })
-    add_help_line(details, {
-        'un.help-detail-property-trade',
-        config.property_default_tax * 100,
-        config.property_decay_ticks / config.ticks_per_hour,
-        config.property_max_future_ticks / config.ticks_per_hour,
-    })
-    add_help_line(details, {
         'un.help-detail-property-generation',
         config.property_initial_price_min,
         config.property_initial_price_max,
-    })
-    add_help_line(details, {
-        'un.help-detail-property-supply',
-        config.property_supply_check_ticks / config.ticks_per_hour,
-        config.property_supply_active_window_ticks / config.ticks_per_hour,
-        config.property_supply_minimum,
-        config.property_supply_per_active_player,
-        config.property_supply_confirmation_checks,
-        config.property_supply_change_chance * 100,
-        config.property_supply_stale_ticks / config.ticks_per_hour,
-        config.property_supply_low_vacancy * 100,
-        config.property_supply_high_median_price,
-        config.property_supply_high_vacancy * 100,
-        config.property_supply_low_median_price,
     })
 
     add_help_line(details, {'un.help-detail-cooperation-heading'}, true)
@@ -448,11 +439,39 @@ local function render_help_page(frame, content, detailed)
     })
     add_help_line(details, {'un.help-detail-travel'})
 
-    add_help_line(details, {'un.help-detail-commands-heading'}, true)
-    add_help_line(details, {'un.help-detail-command-friend'})
-    add_help_line(details, {'un.help-detail-command-transfer'})
-    add_help_line(details, {'un.help-detail-command-rename'})
-    add_help_line(details, {'un.help-detail-command-admin'})
+    if mode == 'full' then
+        add_help_line(details, {'un.help-detail-formulas-heading'}, true)
+        add_help_line(details, {
+            'un.help-detail-property-price',
+            config.property_decay_ticks / config.ticks_per_hour,
+            config.property_price_cap,
+        })
+        add_help_line(details, {
+            'un.help-detail-property-trade',
+            config.property_default_tax * 100,
+            config.property_decay_ticks / config.ticks_per_hour,
+            config.property_max_future_ticks / config.ticks_per_hour,
+        })
+        add_help_line(details, {
+            'un.help-detail-property-supply',
+            config.property_supply_check_ticks / config.ticks_per_hour,
+            config.property_supply_active_window_ticks / config.ticks_per_hour,
+            config.property_supply_minimum,
+            config.property_supply_per_active_player,
+            config.property_supply_confirmation_checks,
+            config.property_supply_change_chance * 100,
+            config.property_supply_stale_ticks / config.ticks_per_hour,
+            config.property_supply_low_vacancy * 100,
+            config.property_supply_high_median_price,
+            config.property_supply_high_vacancy * 100,
+            config.property_supply_low_median_price,
+        })
+        add_help_line(details, {'un.help-detail-commands-heading'}, true)
+        add_help_line(details, {'un.help-detail-command-friend'})
+        add_help_line(details, {'un.help-detail-command-transfer'})
+        add_help_line(details, {'un.help-detail-command-rename'})
+        add_help_line(details, {'un.help-detail-command-admin'})
+    end
     set_frame_state(frame, 'help')
 end
 
@@ -867,6 +886,17 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_HELP_NAME then
         render_page(player, 'help')
         update_frame(player)
+    elseif element.name == HELP_BRIEF_NAME
+            or element.name == HELP_ADVANCED_NAME
+            or element.name == HELP_FULL_NAME then
+        local frame = player.gui.screen[FRAME_NAME]
+        local content = frame and frame.valid and frame[CONTENT_NAME]
+        if not (content and content.valid) then return end
+        local mode = element.name == HELP_FULL_NAME and 'full'
+            or element.name == HELP_ADVANCED_NAME and 'advanced' or 'brief'
+        content.clear()
+        render_help_page(frame, content, mode)
+        update_frame(player)
     elseif element.name == NAV_UBI_NAME then
         render_page(player, 'overview')
         update_frame(player)
@@ -985,14 +1015,6 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
         properties.set_all_open(player.index, element.switch_state == 'right')
         return
     end
-    if element.name ~= HELP_MODE_NAME then return end
-    local frame = player.gui.screen[FRAME_NAME]
-    local content = frame and frame.valid and frame[CONTENT_NAME]
-    if not (content and content.valid) then return end
-    local detailed = element.switch_state == 'right'
-    content.clear()
-    render_help_page(frame, content, detailed)
-    update_frame(player)
 end)
 
 events.on(defines.events.on_gui_closed, function(event)
