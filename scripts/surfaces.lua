@@ -19,8 +19,8 @@ local function map_gen_settings(size)
     }
 end
 
-local function ensure_generated(surface)
-    surface.request_to_generate_chunks({0, 0}, 1)
+local function ensure_generated(surface, radius)
+    surface.request_to_generate_chunks({0, 0}, radius or 1)
     surface.force_generate_chunk_requests()
 end
 
@@ -32,7 +32,7 @@ function M.ensure_hospice()
             map_gen_settings(config.hospice_surface_size)
         )
     end
-    ensure_generated(surface)
+    ensure_generated(surface, 1)
     surface.localised_name = {'un.hospice-name'}
     game.forces.player.set_spawn_position({0, 0}, surface)
     return surface
@@ -44,9 +44,14 @@ function M.create_property_surface(property_id, size)
     if not (surface and surface.valid) then
         surface = game.create_surface(name, map_gen_settings(size))
     end
-    ensure_generated(surface)
+    ensure_generated(surface, math.max(1, math.ceil(size / 64)))
     surface.localised_name = {'un.property-default-name', property_id}
     game.forces.player.set_spawn_position({0, 0}, surface)
+    local half_size = size / 2
+    game.forces.player.chart(surface, {
+        {-half_size, -half_size},
+        {half_size, half_size},
+    })
     return surface
 end
 

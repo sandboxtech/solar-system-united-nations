@@ -18,20 +18,41 @@ function M.display_name(property)
     return property.custom_name or {'un.property-default-name', property.id}
 end
 
-local function chest_positions(count)
-    local positions = {}
-    for i = 1, count do
-        positions[#positions + 1] = {
-            x = (i - (count + 1) / 2) * 2 + 0.5,
-            y = config.property_linked_chest_y,
-        }
+local function central_chest_positions()
+    return {
+        {x = -0.5, y = -0.5},
+        {x = 0.5, y = -0.5},
+        {x = -0.5, y = 0.5},
+        {x = 0.5, y = 0.5},
+    }
+end
+
+local function position_key(position)
+    return tostring(position.x) .. ',' .. tostring(position.y)
+end
+
+local function normalize_linked_chest_positions(property, surface)
+    local target = central_chest_positions()
+    local target_keys = {}
+    for _, position in ipairs(target) do
+        target_keys[position_key(position)] = true
     end
-    return positions
+
+    for _, position in ipairs(property.linked_chest_positions or {}) do
+        if not target_keys[position_key(position)] then
+            local chest = surface.find_entity(config.linked_chest_name, position)
+            if chest and chest.valid then chest.destroy() end
+        end
+    end
+
+    property.linked_chest_positions = target
+    property.linked_chest_count = nil
 end
 
 local function ensure_linked_chests(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
+    normalize_linked_chest_positions(property, surface)
     local link_id = property.owner_index or config.property_link_id_unowned
     for _, position in ipairs(property.linked_chest_positions) do
         local chest = surface.find_entity(config.linked_chest_name, position)
@@ -57,16 +78,12 @@ function M.create(spec)
     spec = spec or {}
     local price = math.floor(tonumber(spec.price) or 1000)
     local size = math.floor(tonumber(spec.size) or 64)
-    local linked_chests = math.floor(tonumber(spec.linked_chests) or 1)
     local tax = tonumber(spec.tax) or config.property_default_tax
     if not is_positive_integer(price) or price > config.property_price_cap then
         return nil, 'invalid-price'
     end
     if not is_positive_integer(size) or size % 64 ~= 0 then
         return nil, 'invalid-size'
-    end
-    if not is_positive_integer(linked_chests) or linked_chests > 16 then
-        return nil, 'invalid-chest-count'
     end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
@@ -85,8 +102,7 @@ function M.create(spec)
         decay_ticks = config.property_decay_ticks,
         tax = tax,
         size = size,
-        linked_chest_count = linked_chests,
-        linked_chest_positions = chest_positions(linked_chests),
+        linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
     }
     storage.properties[id] = property
@@ -99,9 +115,13 @@ end
 
 function M.ensure_defaults()
     state.ensure()
-    if storage.default_properties_created then return end
-    for _, spec in ipairs(config.default_properties) do M.create(spec) end
-    storage.default_properties_created = true
+    if not storage.default_properties_created then
+        for _, spec in ipairs(config.default_properties) do M.create(spec) end
+        storage.default_properties_created = true
+    end
+    -- Configuration loading is also the one-shot repair path for properties
+    -- created before all homes used the fixed central four-chest layout.
+    for _, property in ipairs(M.list()) do ensure_linked_chests(property) end
 end
 
 function M.get(property_id)
@@ -260,10 +280,13 @@ local function on_command(command)
     if action == '' or action == 'list' then
         reply(command, {'un.property-command-count', #M.list()})
     elseif action == 'create' then
+        if third ~= '' then
+            reply(command, {'un.property-command-error'})
+            return
+        end
         local property, err = M.create{
             price = first ~= '' and tonumber(first) or nil,
             size = second ~= '' and tonumber(second) or nil,
-            linked_chests = third ~= '' and tonumber(third) or nil,
         }
         if property then
             reply(command, {'un.property-created', property.id})
