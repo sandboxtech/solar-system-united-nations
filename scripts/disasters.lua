@@ -207,6 +207,24 @@ function M.is_open(name)
     return not record or record.state == 'open'
 end
 
+function M.list()
+    state.ensure()
+    local result = {}
+    for _, name in ipairs(config.public_planets) do
+        local record = storage.public_planet_resets[name]
+        if not record then record = ensure_record(name) end
+        result[#result + 1] = {
+            name = name,
+            state = record.state,
+            round = record.round or 0,
+            left_ticks = record.state == 'open' and record.next_tick
+                and math.max(0, record.next_tick - game.tick)
+                or nil,
+        }
+    end
+    return result
+end
+
 function M.ensure()
     for _, name in ipairs(config.public_planets) do ensure_record(name) end
 end

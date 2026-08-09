@@ -394,6 +394,9 @@ function M.buy(player, property_id, quoted_price)
     if property.owner_index == player.index then return false, 'already-owner' end
 
     local price = M.current_price(property)
+    local seller_name = M.owner_name(property)
+    local transaction_name = property.custom_name
+        or {'un.property-default-name', property.id}
     if quoted_price and price > quoted_price then return false, 'price-increased', price end
     local payout = math.floor(price * (1 - property.tax))
     local ok, err = economy.taxed_transfer(
@@ -415,6 +418,22 @@ function M.buy(player, property_id, quoted_price)
         log('[un] property relink failed for property ' .. property.id)
     end
     bump_revision()
+    if seller_name then
+        game.print({
+            'un.property-purchase-player-broadcast',
+            player.name,
+            price,
+            seller_name,
+            transaction_name,
+        })
+    else
+        game.print({
+            'un.property-purchase-vacant-broadcast',
+            player.name,
+            price,
+            transaction_name,
+        })
+    end
     return true, price
 end
 

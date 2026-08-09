@@ -1,4 +1,5 @@
 local config = require('config')
+local disasters = require('scripts.disasters')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
@@ -26,6 +27,7 @@ local NAVIGATION_NAME = 'un_main_navigation'
 local NAV_HELP_NAME = 'un_nav_help'
 local NAV_UBI_NAME = 'un_nav_ubi'
 local NAV_PROPERTY_NAME = 'un_nav_property'
+local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
 local NAV_PLAYERS_NAME = 'un_nav_players'
 local HELP_BRIEF_NAME = 'un_help_brief'
@@ -52,6 +54,7 @@ local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
+local PLANET_TABLE_NAME = 'un_planet_table'
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
 -- game.tick only when queried or claimed.
@@ -168,6 +171,26 @@ end
 
 local function ship_remaining_name(platform_index)
     return 'un_ship_remaining_' .. tostring(platform_index)
+end
+
+local function planet_state_name(name)
+    return 'un_planet_state_' .. name
+end
+
+local function planet_countdown_name(name)
+    return 'un_planet_countdown_' .. name
+end
+
+local function planet_label(name)
+    return {'', '[planet=' .. name .. '] ', {'space-location-name.' .. name}}
+end
+
+local function format_countdown(ticks)
+    local seconds = math.max(0, math.ceil((ticks or 0) / config.ticks_per_second))
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    local remainder = seconds % 60
+    return string.format('%02d:%02d:%02d', hours, minutes, remainder)
 end
 
 local function set_frame_state(frame, page, property_revision)
@@ -420,6 +443,26 @@ local function render_ships_page(player, frame, content)
     frame.tags = tags
 end
 
+local function render_planets_page(frame, content)
+    local list = content.add{
+        type = 'table',
+        name = PLANET_TABLE_NAME,
+        column_count = 3,
+    }
+    list.add{type = 'label', caption = {'un.planet-column-name'}}
+    list.add{type = 'label', caption = {'un.planet-column-state'}}
+    list.add{type = 'label', caption = {'un.planet-column-countdown'}}
+    for _, item in ipairs(disasters.list()) do
+        list.add{type = 'label', caption = planet_label(item.name)}
+        list.add{type = 'label', name = planet_state_name(item.name)}
+        list.add{type = 'label', name = planet_countdown_name(item.name)}
+    end
+    local note = content.add{type = 'label', caption = {'un.planet-page-note'}}
+    note.style.single_line = false
+    note.style.maximal_width = 640
+    set_frame_state(frame, 'planets')
+end
+
 local function add_help_line(parent, caption, heading)
     local label = parent.add{type = 'label', caption = caption}
     label.style.single_line = false
@@ -645,6 +688,8 @@ local function render_page(player, page)
         render_overview_page(player, frame, content)
     elseif page == 'property' then
         render_property_table(player, frame, content)
+    elseif page == 'planets' then
+        render_planets_page(frame, content)
     elseif page == 'ships' then
         render_ships_page(player, frame, content)
     elseif page == 'players' then
@@ -658,6 +703,7 @@ local function render_page(player, page)
     navigation[NAV_HELP_NAME].enabled = page ~= 'help'
     navigation[NAV_UBI_NAME].enabled = page ~= 'overview'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
+    navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
 end
@@ -822,6 +868,24 @@ local function update_frame(player)
                 experience.total_level(player.index),
             }
         end
+    elseif page == 'planets' then
+        local list = content[PLANET_TABLE_NAME]
+        if list and list.valid then
+            for _, item in ipairs(disasters.list()) do
+                local status = list[planet_state_name(item.name)]
+                local countdown = list[planet_countdown_name(item.name)]
+                if status and status.valid then
+                    status.caption = item.state == 'open'
+                        and {'un.planet-state-open'}
+                        or {'un.planet-state-closed'}
+                end
+                if countdown and countdown.valid then
+                    countdown.caption = item.left_ticks
+                        and format_countdown(item.left_ticks)
+                        or {'un.planet-countdown-rebuilding'}
+                end
+            end
+        end
     elseif page == 'ships' then
         local list_data = ships.list()
         local signature = ship_signature(list_data)
@@ -939,6 +1003,7 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_HELP_NAME, caption = {'un.page-help'}}
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
+    navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
 
@@ -1023,6 +1088,9 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == NAV_PROPERTY_NAME then
         render_page(player, 'property')
+        update_frame(player)
+    elseif element.name == NAV_PLANETS_NAME then
+        render_page(player, 'planets')
         update_frame(player)
     elseif element.name == NAV_SHIPS_NAME then
         render_page(player, 'ships')
