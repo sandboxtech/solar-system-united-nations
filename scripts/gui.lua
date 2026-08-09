@@ -5,14 +5,16 @@ local experience = require('scripts.experience')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
 local ships = require('scripts.ships')
+local social = require('scripts.social')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 6
+local HUD_LAYOUT_VERSION = 7
 local HUD_TITLE_NAME = 'un_hud_title'
 local LEGACY_BUTTON_NAME = 'un_main_button'
+local HUD_HELP_NAME = 'un_hud_help'
 local HUD_UBI_NAME = 'un_hud_ubi'
 local HUD_LAST_PROPERTY_NAME = 'un_hud_last_property'
 local HUD_PROPERTY_NAME = 'un_hud_property'
@@ -21,6 +23,7 @@ local FRAME_NAME = 'un_main_frame'
 local CLOSE_NAME = 'un_main_close'
 local CONTENT_NAME = 'un_main_content'
 local NAVIGATION_NAME = 'un_main_navigation'
+local NAV_HELP_NAME = 'un_nav_help'
 local NAV_UBI_NAME = 'un_nav_ubi'
 local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLAYERS_NAME = 'un_nav_players'
@@ -39,6 +42,7 @@ local PROPERTY_ACTIONS_NAME = 'un_property_actions'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
+local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
@@ -63,6 +67,7 @@ function M.ensure_button(player)
     if hud and hud.valid then
         local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
             and hud[HUD_TITLE_NAME]
+            and hud[HUD_HELP_NAME]
             and hud[HUD_UBI_NAME]
             and hud[TRAVEL_PLANET_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
@@ -92,11 +97,12 @@ function M.ensure_button(player)
     title.style.right_margin = 10
 
     local buttons = {
+        {HUD_HELP_NAME, 'utility/questionmark', {'un.hud-help-tooltip'}},
         {HUD_UBI_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
         {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
         {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
         {TRAVEL_PLANET_NAME, 'space-location/nauvis', {'un.travel-planet'}},
-        {HUD_LAST_PROPERTY_NAME, 'utility/enter', {'un.hud-last-property-tooltip'}},
+        {HUD_LAST_PROPERTY_NAME, 'virtual-signal/signal-map-marker', {'un.hud-last-property-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
@@ -195,11 +201,12 @@ local function render_property_table(player, frame, content)
                 caption = {'un.property-buy'},
                 tags = {action = 'property-buy', property_id = property.id},
             }
-            if player.admin then
+            if player.admin or social.are_mutual(player.index, property.owner_index) then
                 local enter = list.add{
                     type = 'sprite-button',
                     sprite = 'utility/enter',
-                    tooltip = {'un.property-enter-admin'},
+                    tooltip = player.admin and {'un.property-enter-admin'}
+                        or {'un.property-enter-friend'},
                     tags = {action = 'property-enter', property_id = property.id},
                 }
                 enter.style.width = 32
@@ -293,6 +300,16 @@ local function render_overview_page(frame, content)
     set_frame_state(frame, 'overview')
 end
 
+local function render_help_page(frame, content)
+    local title = content.add{type = 'label', caption = {'un.help-title'}}
+    title.style.font = 'default-large-bold'
+    content.add{type = 'label', caption = {'un.help-step-linked-chest'}}
+    content.add{type = 'label', caption = {'un.help-step-science'}}
+    content.add{type = 'label', caption = {'un.help-step-property'}}
+    content.add{type = 'label', caption = {'un.help-ubi'}}
+    set_frame_state(frame, 'help')
+end
+
 local function player_signature()
     local parts = {}
     for _, player in pairs(game.players) do
@@ -311,17 +328,28 @@ local function format_hours(ticks)
     return string.format('%.1f', math.max(0, ticks) / config.ticks_per_hour)
 end
 
-local function render_players_page(frame, content)
+local function render_players_page(viewer, frame, content)
+    local actions = content.add{
+        type = 'flow',
+        name = PLAYER_ACTIONS_NAME,
+        direction = 'horizontal',
+    }
+    actions.add{
+        type = 'button',
+        caption = {'un.friend-remove-offline'},
+        tags = {action = 'friend-remove-offline'},
+    }
     local list = content.add{
         type = 'table',
         name = PLAYER_TABLE_NAME,
-        column_count = 5,
+        column_count = 6,
     }
     list.add{type = 'label', caption = {'un.player-column-status'}}
     list.add{type = 'label', caption = {'un.player-column-name'}}
     list.add{type = 'label', caption = {'un.player-column-online-hours'}}
     list.add{type = 'label', caption = {'un.player-column-offline-hours'}}
     list.add{type = 'label', caption = {'un.player-column-locale'}}
+    list.add{type = 'label', caption = {'un.player-column-friend'}}
 
     local players = {}
     for _, player in pairs(game.players) do players[#players + 1] = player end
@@ -336,6 +364,19 @@ local function render_players_page(frame, content)
         list.add{type = 'label', name = player_element_name('online', player.index)}
         list.add{type = 'label', name = player_element_name('offline', player.index)}
         list.add{type = 'label', name = player_element_name('locale', player.index)}
+        if player.index == viewer.index then
+            list.add{type = 'label', caption = ''}
+        else
+            local added = social.is_friend(viewer.index, player.index)
+            list.add{
+                type = 'button',
+                caption = added and {'un.friend-remove'} or {'un.friend-add'},
+                tags = {
+                    action = added and 'friend-remove' or 'friend-add',
+                    target_index = player.index,
+                },
+            }
+        end
     end
     set_frame_state(frame, 'players')
     local tags = frame.tags
@@ -350,16 +391,21 @@ local function render_page(player, page)
     if not (content and content.valid) then return end
     content.clear()
 
-    if page == 'property' then
+    if page == 'help' then
+        render_help_page(frame, content)
+    elseif page == 'overview' then
+        render_overview_page(frame, content)
+    elseif page == 'property' then
         render_property_table(player, frame, content)
     elseif page == 'players' then
-        render_players_page(frame, content)
+        render_players_page(player, frame, content)
     else
-        page = 'overview'
-        render_overview_page(frame, content)
+        page = 'help'
+        render_help_page(frame, content)
     end
 
     local navigation = frame[NAVIGATION_NAME]
+    navigation[NAV_HELP_NAME].enabled = page ~= 'help'
     navigation[NAV_UBI_NAME].enabled = page ~= 'overview'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
@@ -494,7 +540,7 @@ local function update_frame(player)
     elseif page == 'players' then
         if frame.tags.player_signature ~= player_signature() then
             content.clear()
-            render_players_page(frame, content)
+            render_players_page(player, frame, content)
         end
         local list = content[PLAYER_TABLE_NAME]
         if list and list.valid then
@@ -572,6 +618,7 @@ local function open_frame(player, initial_page)
         name = NAVIGATION_NAME,
         direction = 'horizontal',
     }
+    navigation.add{type = 'button', name = NAV_HELP_NAME, caption = {'un.page-help'}}
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
@@ -583,7 +630,7 @@ local function open_frame(player, initial_page)
     }
     content.style.horizontally_stretchable = true
 
-    render_page(player, initial_page or 'overview')
+    render_page(player, initial_page or 'help')
     frame.force_auto_center()
     player.opened = frame
     open_players[player.index] = true
@@ -621,7 +668,9 @@ events.on(defines.events.on_gui_click, function(event)
     if not (element and element.valid) then return end
     local player = game.get_player(event.player_index)
     if not player then return end
-    if element.name == HUD_UBI_NAME then
+    if element.name == HUD_HELP_NAME then
+        open_frame(player, 'help')
+    elseif element.name == HUD_UBI_NAME then
         open_frame(player, 'overview')
     elseif element.name == HUD_LAST_PROPERTY_NAME then
         local ok, err = properties.enter_last_owned(player)
@@ -632,6 +681,9 @@ events.on(defines.events.on_gui_click, function(event)
         open_frame(player, 'players')
     elseif element.name == CLOSE_NAME then
         close_frame(player)
+    elseif element.name == NAV_HELP_NAME then
+        render_page(player, 'help')
+        update_frame(player)
     elseif element.name == NAV_UBI_NAME then
         render_page(player, 'overview')
         update_frame(player)
@@ -693,6 +745,28 @@ events.on(defines.events.on_gui_click, function(event)
                 property_id = property.id,
                 quoted_price = quote,
             }
+        elseif tags.action == 'friend-add' then
+            local ok, result = social.add_friend(player.index, tags.target_index)
+            local target = game.get_player(tags.target_index)
+            if not ok and result == 'limit' then
+                player.print({'un.friend-limit', config.friend_limit})
+            elseif ok and result == true and target then
+                player.print({'un.friend-mutual', target.name})
+                if target.connected then
+                    target.print({'un.friend-mutual', player.name})
+                end
+            end
+            render_page(player, 'players')
+            update_frame(player)
+        elseif tags.action == 'friend-remove' then
+            social.remove_friend(player.index, tags.target_index)
+            render_page(player, 'players')
+            update_frame(player)
+        elseif tags.action == 'friend-remove-offline' then
+            local removed = social.remove_offline_friends(player.index)
+            player.print({'un.friend-removed-offline', removed})
+            render_page(player, 'players')
+            update_frame(player)
         elseif tags.action == 'property-confirm-buy' then
             local ok, err = properties.buy(player, tags.property_id, tags.quoted_price)
             if not ok and not property_disappeared(err) then

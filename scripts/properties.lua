@@ -1,6 +1,8 @@
 local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
+local scheduler = require('scripts.scheduler')
+local social = require('scripts.social')
 local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
 
@@ -358,7 +360,9 @@ end
 function M.enter(player, property_id)
     local property = M.get(property_id)
     if not property then return false, 'missing' end
-    if property.owner_index ~= player.index and not player.admin then
+    if property.owner_index ~= player.index
+            and not player.admin
+            and not social.are_mutual(player.index, property.owner_index) then
         return false, 'not-owner'
     end
     local surface = game.surfaces[property.surface_name]
@@ -463,6 +467,115 @@ local function deletion_blocker(property)
         end
     end
     return nil
+end
+
+local function active_player_count()
+    local count = 0
+    for player_index, account in pairs(storage.players) do
+        local player = game.get_player(player_index)
+        local last_seen = player and player.connected and game.tick
+            or account.last_seen_tick or account.created_tick or 0
+        if game.tick - last_seen <= config.property_supply_active_window_ticks then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function median_price(list)
+    local prices = {}
+    for _, property in ipairs(list) do
+        prices[#prices + 1] = M.current_price(property)
+    end
+    table.sort(prices)
+    local count = #prices
+    if count == 0 then return 0 end
+    if count % 2 == 1 then return prices[(count + 1) / 2] end
+    return (prices[count / 2] + prices[count / 2 + 1]) / 2
+end
+
+local function choose_retirement_candidate(list)
+    local candidates = {}
+    for _, property in ipairs(list) do
+        local surface = game.surfaces[property.surface_name]
+        local last_trade = property.purchased_tick or property.created_tick or game.tick
+        if not property.owner_index
+                and surface and surface.valid
+                and not deletion_blocker(property)
+                and game.tick - last_trade >= config.property_supply_stale_ticks then
+            candidates[#candidates + 1] = property
+        end
+    end
+    table.sort(candidates, function(a, b)
+        local a_tick = a.purchased_tick or a.created_tick or 0
+        local b_tick = b.purchased_tick or b.created_tick or 0
+        if a_tick ~= b_tick then return a_tick < b_tick end
+        return a.id < b.id
+    end)
+    return candidates[1]
+end
+
+local function retire_property(property)
+    local surface = game.surfaces[property.surface_name]
+    if not (surface and surface.valid) then
+        storage.properties[property.id] = nil
+        bump_revision()
+        return true
+    end
+    storage.deleting_properties[surface.index] = property.id
+    if game.delete_surface(surface) then return true end
+    storage.deleting_properties[surface.index] = nil
+    return false
+end
+
+local function evaluate_supply()
+    state.ensure()
+    local list = M.list()
+    local total = #list
+    local unowned = 0
+    for _, property in ipairs(list) do
+        if not property.owner_index then unowned = unowned + 1 end
+    end
+    local active = active_player_count()
+    local target = math.max(
+        config.property_supply_minimum,
+        active * config.property_supply_per_active_player
+    )
+    local vacancy = total > 0 and unowned / total or 0
+    local median = median_price(list)
+    local expand = total < target
+        or (active > 0 and vacancy < config.property_supply_low_vacancy)
+        or (active > 0 and median > config.property_supply_high_median_price)
+    local candidate = choose_retirement_candidate(list)
+    local contract = total > target
+        and vacancy > config.property_supply_high_vacancy
+        and median < config.property_supply_low_median_price
+        and candidate ~= nil
+    local supply = storage.property_supply
+
+    if expand and not contract then
+        supply.expand_checks = (supply.expand_checks or 0) + 1
+        supply.contract_checks = 0
+        if supply.expand_checks >= config.property_supply_confirmation_checks
+                and math.random() < config.property_supply_change_chance then
+            local solar_levels = {0.1, 1, 10}
+            local property = M.create{
+                solar = solar_levels[math.random(1, #solar_levels)],
+            }
+            if property then supply.expand_checks = 0 end
+        end
+    elseif contract then
+        supply.contract_checks = (supply.contract_checks or 0) + 1
+        supply.expand_checks = 0
+        if supply.contract_checks >= config.property_supply_confirmation_checks
+                and math.random() < config.property_supply_change_chance
+                and retire_property(candidate) then
+            supply.contract_checks = 0
+        end
+    else
+        supply.expand_checks = 0
+        supply.contract_checks = 0
+    end
 end
 
 local function delete_confirmed(command, property)
@@ -590,5 +703,7 @@ end
 
 events.on(defines.events.on_player_joined_game, refresh_owned_name_renderings)
 events.on(defines.events.on_player_locale_changed, refresh_owned_name_renderings)
+
+scheduler.every(config.property_supply_check_ticks, evaluate_supply)
 
 return M

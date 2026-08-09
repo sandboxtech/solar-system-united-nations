@@ -5,6 +5,7 @@ require('scripts.economy')
 require('scripts.linked_inventory')
 require('scripts.properties')
 require('scripts.restrictions')
+require('scripts.social')
 require('scripts.ships')
 require('scripts.gui')
 

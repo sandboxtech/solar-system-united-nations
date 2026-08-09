@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 13
+M.schema_version = 14
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -19,6 +19,7 @@ M.ubi_credit_per_second = 1
 M.ubi_max_seconds = 100000
 M.ledger_record_limit = 2000
 M.gui_refresh_ticks = M.ticks_per_second
+M.friend_limit = 10
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute
@@ -79,6 +80,17 @@ M.default_properties = {
     {solar = 1, sample_planet = 'gleba'},
     {solar = 10, sample_planet = 'nauvis'},
 }
+M.property_supply_check_ticks = M.ticks_per_hour
+M.property_supply_active_window_ticks = 30 * M.ticks_per_hour
+M.property_supply_stale_ticks = 30 * M.ticks_per_hour
+M.property_supply_confirmation_checks = 3
+M.property_supply_change_chance = 0.10
+M.property_supply_minimum = 3
+M.property_supply_per_active_player = 2
+M.property_supply_low_vacancy = 0.20
+M.property_supply_high_vacancy = 0.50
+M.property_supply_high_median_price = 100000
+M.property_supply_low_median_price = 500
 
 M.ship_life_hours = 50
 M.ship_credit_cost = 1000

@@ -201,5 +201,9 @@ end
 
 events.on(defines.events.on_player_created, ensure_player)
 events.on(defines.events.on_player_joined_game, ensure_player)
+events.on(defines.events.on_player_left_game, function(event)
+    local account = M.ensure_account(event.player_index)
+    account.last_seen_tick = game.tick
+end)
 
 return M
