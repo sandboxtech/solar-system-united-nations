@@ -135,9 +135,19 @@ end
 local function ensure_linked_chests(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
-    surface.localised_name = M.display_name(property)
-    surface.always_day = true
-    surface.solar_power_multiplier = property.solar or 1
+    local owner_name = nil
+    if property.owner_index then
+        local owner = game.get_player(property.owner_index)
+        local account = storage.players[property.owner_index]
+        owner_name = owner and owner.name
+            or account and account.name
+            or ('#' .. property.owner_index)
+    end
+    surface.localised_name = owner_name
+        and {'un.property-surface-owned', owner_name}
+        or {'un.property-surface-vacant'}
+    property.solar = config.property_solar_multiplier
+    surfaces.sync_property_environment(surface)
     normalize_linked_chest_positions(property, surface)
     local link_id = property.owner_index or config.property_link_id_unowned
     for _, position in ipairs(property.linked_chest_positions) do
@@ -172,7 +182,7 @@ function M.create(spec)
         price = math.floor(tonumber(spec.price) or 0)
     end
     local tax = tonumber(spec.tax) or config.property_default_tax
-    local solar = tonumber(spec.solar) or 1
+    local solar = config.property_solar_multiplier
     local sides = config.property_side_lengths
     local width = tonumber(spec.width)
         or sides[math.random(1, #sides)]
@@ -195,7 +205,6 @@ function M.create(spec)
             or height > config.property_max_size then
         return nil, 'invalid-size'
     end
-    if solar < 0 then return nil, 'invalid-solar' end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
     local id = storage.next_property_id
@@ -203,7 +212,6 @@ function M.create(spec)
         = surfaces.create_property_surface(id, {
         width = width,
         height = height,
-        solar = solar,
         sample_planet = spec.sample_planet,
     })
     if not surface then return nil, 'surface-create-failed' end
@@ -318,6 +326,14 @@ function M.set_all_open(player_index, enabled)
     account.all_properties_open = value
     bump_revision()
     return true
+end
+
+function M.owned_count(player_index)
+    local count = 0
+    for _, property in ipairs(M.list()) do
+        if property.owner_index == player_index then count = count + 1 end
+    end
+    return count
 end
 
 function M.release_owner(player_index)
@@ -522,8 +538,7 @@ local function rename_from_command(command, parameter)
     property.custom_name = name
     property.rendered_name = name
     property.rendered_name_locale = nil
-    local surface = game.surfaces[property.surface_name]
-    if surface and surface.valid then surface.localised_name = name end
+    ensure_linked_chests(property)
     ensure_property_name_rendering(property, name)
     bump_revision()
     player.print({'un.property-renamed', property.id, name})
@@ -629,10 +644,7 @@ local function evaluate_supply()
         supply.contract_checks = 0
         if supply.expand_checks >= config.property_supply_confirmation_checks
                 and math.random() < config.property_supply_change_chance then
-            local solar_levels = {0.1, 1, 10}
-            local property = M.create{
-                solar = solar_levels[math.random(1, #solar_levels)],
-            }
+            local property = M.create()
             if property then supply.expand_checks = 0 end
         end
     elseif contract then

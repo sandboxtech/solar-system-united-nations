@@ -183,6 +183,7 @@ local function finish_reset(name, surface, record)
     if name == 'nauvis' and record.evolution then
         game.forces.enemy.set_evolution_factor(record.evolution, surface)
     end
+    if name == 'nauvis' then surfaces.sync_all_property_environments() end
     game.forces.player.set_spawn_position({0, 0}, surface)
     surface.request_to_generate_chunks({0, 0}, 1)
     surface.force_generate_chunk_requests()

@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 16
+M.schema_version = 17
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -85,6 +85,7 @@ M.hospice_surface_name = 'un-hospice'
 M.hospice_surface_size = 64
 M.property_surface_prefix = 'un-property-'
 M.property_default_tax = 0.10
+M.property_solar_multiplier = 0.10
 M.property_link_id_unowned = 0
 M.property_max_size = 128
 M.property_sample_planets = {'nauvis', 'gleba'}
@@ -92,15 +93,15 @@ M.property_side_lengths = {32, 64, 128}
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 2000
 M.default_properties = {
-    {solar = 0.1, sample_planet = 'nauvis'},
-    {solar = 1, sample_planet = 'gleba'},
-    {solar = 10, sample_planet = 'nauvis'},
-    {solar = 0.1, sample_planet = 'gleba'},
-    {solar = 1, sample_planet = 'nauvis'},
-    {solar = 10, sample_planet = 'gleba'},
-    {solar = 0.1, sample_planet = 'nauvis'},
-    {solar = 1, sample_planet = 'gleba'},
-    {solar = 10, sample_planet = 'nauvis'},
+    {sample_planet = 'nauvis'},
+    {sample_planet = 'gleba'},
+    {sample_planet = 'nauvis'},
+    {sample_planet = 'gleba'},
+    {sample_planet = 'nauvis'},
+    {sample_planet = 'gleba'},
+    {sample_planet = 'nauvis'},
+    {sample_planet = 'gleba'},
+    {sample_planet = 'nauvis'},
 }
 M.property_supply_check_ticks = M.ticks_per_hour
 M.property_supply_active_window_ticks = 30 * M.ticks_per_hour

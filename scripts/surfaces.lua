@@ -178,6 +178,28 @@ function M.ensure_hospice()
     return surface
 end
 
+function M.sync_property_environment(surface)
+    if not (surface and surface.valid) then return false end
+    local nauvis = game.surfaces.nauvis
+    if not (nauvis and nauvis.valid) then return false end
+    surface.daytime_parameters = nauvis.daytime_parameters
+    surface.ticks_per_day = nauvis.ticks_per_day
+    surface.daytime = nauvis.daytime
+    surface.always_day = nauvis.always_day
+    surface.freeze_daytime = nauvis.freeze_daytime
+    surface.solar_power_multiplier = config.property_solar_multiplier
+    return true
+end
+
+function M.sync_all_property_environments()
+    for name, surface in pairs(game.surfaces) do
+        if name:sub(1, #config.property_surface_prefix)
+                == config.property_surface_prefix then
+            M.sync_property_environment(surface)
+        end
+    end
+end
+
 function M.create_property_surface(property_id, spec)
     local width = spec.width
     local height = spec.height
@@ -197,8 +219,7 @@ function M.create_property_surface(property_id, spec)
         spec.sample_planet
     )
     if not sample_planet then return nil, nil, nil, nil, nil end
-    surface.always_day = true
-    surface.solar_power_multiplier = spec.solar
+    M.sync_property_environment(surface)
     surface.localised_name = spec.name or {'un.property-default-name', property_id}
     game.forces.player.set_spawn_position({0, 0}, surface)
     game.forces.player.chart(surface, {

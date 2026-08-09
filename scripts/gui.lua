@@ -32,6 +32,7 @@ local HELP_ADVANCED_NAME = 'un_help_advanced'
 local HELP_FULL_NAME = 'un_help_full'
 local HELP_DETAILS_NAME = 'un_help_details'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
+local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
@@ -170,11 +171,32 @@ local function set_frame_state(frame, page, property_revision)
     }
 end
 
+local function render_property_access_section(player, content)
+    local flow = content.add{
+        type = 'flow',
+        name = PROPERTY_ACCESS_SECTION_NAME,
+        direction = 'horizontal',
+    }
+    flow.style.vertical_align = 'center'
+    flow.add{type = 'label', caption = {'un.property-access-label'}}
+    flow.add{
+        type = 'switch',
+        name = PROPERTY_ACCESS_NAME,
+        left_label_caption = {'un.property-access-private'},
+        right_label_caption = {'un.property-access-public'},
+        switch_state = properties.all_open(player.index) and 'right' or 'left',
+        allow_none_state = false,
+    }
+end
+
 local function render_property_table(player, frame, content)
     local old_actions = content[PROPERTY_ACTIONS_NAME]
     if old_actions and old_actions.valid then old_actions.destroy() end
+    local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
+    if old_access and old_access.valid then old_access.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
+    local property_list = properties.list()
     local actions = content.add{
         type = 'flow',
         name = PROPERTY_ACTIONS_NAME,
@@ -185,6 +207,11 @@ local function render_property_table(player, frame, content)
         name = TRAVEL_HOSPICE_NAME,
         caption = {'un.travel-hospice'},
     }
+    local owned = 0
+    for _, property in ipairs(property_list) do
+        if property.owner_index == player.index then owned = owned + 1 end
+    end
+    if owned > 0 then render_property_access_section(player, content) end
     local list = content.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
@@ -196,7 +223,7 @@ local function render_property_table(player, frame, content)
     list.add{type = 'label', caption = {'un.property-column-buy-renew'}}
     list.add{type = 'label', caption = {'un.property-enter'}}
 
-    for _, property in ipairs(properties.list()) do
+    for _, property in ipairs(property_list) do
         list.add{
             type = 'label',
             caption = properties.display_name(property),
@@ -272,20 +299,6 @@ local function render_ubi_section(content)
     claim.style.horizontally_stretchable = true
 end
 
-local function render_property_access_section(player, content)
-    local flow = content.add{type = 'flow', direction = 'horizontal'}
-    flow.style.vertical_align = 'center'
-    flow.add{type = 'label', caption = {'un.property-access-label'}}
-    flow.add{
-        type = 'switch',
-        name = PROPERTY_ACCESS_NAME,
-        left_label_caption = {'un.property-access-private'},
-        right_label_caption = {'un.property-access-public'},
-        switch_state = properties.all_open(player.index) and 'right' or 'left',
-        allow_none_state = false,
-    }
-end
-
 local function render_ship_section(content)
     content.add{type = 'label', name = SHIP_STATUS_NAME}
     local ship_actions = content.add{
@@ -337,8 +350,6 @@ end
 
 local function render_overview_page(player, frame, content)
     render_ubi_section(content)
-    content.add{type = 'line'}
-    render_property_access_section(player, content)
     content.add{type = 'line'}
     render_ship_section(content)
     content.add{type = 'line'}
@@ -837,6 +848,10 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
 
+    local tab_gap = frame.add{type = 'empty-widget'}
+    tab_gap.style.height = 12
+    tab_gap.drag_target = frame
+
     local content = frame.add{
         type = 'flow',
         name = CONTENT_NAME,
@@ -1024,7 +1039,15 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
     local player = game.get_player(event.player_index)
     if not player then return end
     if element.name == PROPERTY_ACCESS_NAME then
-        properties.set_all_open(player.index, element.switch_state == 'right')
+        if properties.owned_count(player.index) > 0 then
+            properties.set_all_open(player.index, element.switch_state == 'right')
+        else
+            local frame = player.gui.screen[FRAME_NAME]
+            local content = frame and frame.valid and frame[CONTENT_NAME]
+            if content and content.valid then
+                render_property_table(player, frame, content)
+            end
+        end
         return
     end
 end)
