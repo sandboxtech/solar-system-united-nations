@@ -102,7 +102,7 @@ function M.ensure_button(player)
     title.style.right_margin = 10
 
     local buttons = {
-        {HUD_HELP_NAME, 'utility/questionmark', {'un.hud-help-tooltip'}},
+        {HUD_HELP_NAME, 'virtual-signal/signal-info', {'un.hud-help-tooltip'}},
         {HUD_UBI_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
         {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
         {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
