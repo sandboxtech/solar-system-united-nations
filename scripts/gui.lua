@@ -11,13 +11,19 @@ local M = {}
 local BUTTON_NAME = 'un_main_button'
 local FRAME_NAME = 'un_main_frame'
 local CLOSE_NAME = 'un_main_close'
-local BALANCE_NAME = 'un_overview_balance'
-local UBI_PROGRESS_NAME = 'un_overview_ubi_progress'
-local UBI_CLAIM_NAME = 'un_overview_ubi_claim'
-local SURFACE_NAME = 'un_overview_surface'
-local DROPOFF_NAME = 'un_overview_dropoff'
-local TABLE_NAME = 'un_overview_table'
-local TRAVEL_NAME = 'un_overview_travel'
+local CONTENT_NAME = 'un_main_content'
+local NAVIGATION_NAME = 'un_main_navigation'
+local NAV_UBI_NAME = 'un_nav_ubi'
+local NAV_TRAVEL_NAME = 'un_nav_travel'
+local NAV_PROPERTY_NAME = 'un_nav_property'
+local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
+local BALANCE_NAME = 'un_ubi_balance'
+local UBI_PROGRESS_NAME = 'un_ubi_progress'
+local UBI_CLAIM_NAME = 'un_ubi_claim'
+local LOCATION_TABLE_NAME = 'un_dropoff_location_table'
+local DROPOFF_LOCATION_NAME = 'un_dropoff_location'
+local TRAVEL_PLANET_NAME = 'un_travel_planet'
+local TRAVEL_HOSPICE_NAME = 'un_travel_hospice'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
@@ -31,6 +37,10 @@ local function format_integer(value)
     local reversed = digits:reverse():gsub('(%d%d%d)', '%1,')
     local grouped = reversed:reverse():gsub('^,', '')
     return sign .. grouped
+end
+
+local function format_coordinate(value)
+    return string.format('%.1f', value)
 end
 
 function M.ensure_button(player)
@@ -56,10 +66,17 @@ local function property_price_name(property_id)
     return 'un_property_price_' .. tostring(property_id)
 end
 
-local function render_property_table(player, frame)
-    local old = frame[PROPERTY_TABLE_NAME]
+local function set_frame_state(frame, page, property_revision)
+    frame.tags = {
+        page = page,
+        property_revision = property_revision or -1,
+    }
+end
+
+local function render_property_table(player, frame, content)
+    local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
-    local list = frame.add{
+    local list = content.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
         column_count = 5,
@@ -105,7 +122,77 @@ local function render_property_table(player, frame)
             list.add{type = 'label', caption = ''}
         end
     end
-    frame.tags = {property_revision = storage.property_revision or 0}
+    set_frame_state(frame, 'property', storage.property_revision or 0)
+end
+
+local function render_ubi_page(frame, content)
+    local balance = content.add{
+        type = 'table',
+        name = BALANCE_TABLE_NAME,
+        column_count = 2,
+    }
+    balance.add{type = 'label', caption = {'un.credit-label'}}
+    balance.add{type = 'label', name = BALANCE_NAME}
+
+    local progress = content.add{
+        type = 'progressbar',
+        name = UBI_PROGRESS_NAME,
+        value = 0,
+    }
+    progress.style.horizontally_stretchable = true
+    local claim = content.add{
+        type = 'button',
+        name = UBI_CLAIM_NAME,
+        caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
+    }
+    claim.style.horizontally_stretchable = true
+    set_frame_state(frame, 'ubi')
+end
+
+local function render_travel_page(frame, content)
+    local location = content.add{
+        type = 'table',
+        name = LOCATION_TABLE_NAME,
+        column_count = 2,
+    }
+    location.add{type = 'label', caption = {'un.dropoff-location-label'}}
+    location.add{type = 'label', name = DROPOFF_LOCATION_NAME}
+
+    local planet = content.add{
+        type = 'button',
+        name = TRAVEL_PLANET_NAME,
+        caption = {'un.travel-planet'},
+    }
+    planet.style.horizontally_stretchable = true
+    local hospice = content.add{
+        type = 'button',
+        name = TRAVEL_HOSPICE_NAME,
+        caption = {'un.travel-hospice'},
+    }
+    hospice.style.horizontally_stretchable = true
+    set_frame_state(frame, 'travel')
+end
+
+local function render_page(player, page)
+    local frame = player.gui.screen[FRAME_NAME]
+    if not (frame and frame.valid) then return end
+    local content = frame[CONTENT_NAME]
+    if not (content and content.valid) then return end
+    content.clear()
+
+    if page == 'travel' then
+        render_travel_page(frame, content)
+    elseif page == 'property' then
+        render_property_table(player, frame, content)
+    else
+        page = 'ubi'
+        render_ubi_page(frame, content)
+    end
+
+    local navigation = frame[NAVIGATION_NAME]
+    navigation[NAV_UBI_NAME].enabled = page ~= 'ubi'
+    navigation[NAV_TRAVEL_NAME].enabled = page ~= 'travel'
+    navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
 end
 
 local function property_error(err)
@@ -116,6 +203,7 @@ local function property_error(err)
         return {'un.property-error-ownership'}
     end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
+    if err == 'position-missing' then return {'un.travel-no-position'} end
     return {'un.property-error-unavailable'}
 end
 
@@ -125,62 +213,62 @@ local function update_frame(player)
         open_players[player.index] = nil
         return
     end
+    local content = frame[CONTENT_NAME]
+    if not (content and content.valid) then return end
+    local page = frame.tags.page or 'ubi'
 
-    local table_element = frame[TABLE_NAME]
-    if not (table_element and table_element.valid) then return end
+    if page == 'ubi' then
+        local balance_table = content[BALANCE_TABLE_NAME]
+        local balance = balance_table and balance_table.valid
+            and balance_table[BALANCE_NAME]
+        if balance and balance.valid then
+            balance.caption = format_integer(economy.get_balance(player.index))
+        end
 
-    local balance = table_element[BALANCE_NAME]
-    if balance and balance.valid then
-        balance.caption = format_integer(economy.get_balance(player.index))
-    end
-
-    local claimable = economy.get_claimable_ubi(player.index)
-    local capacity = economy.get_ubi_capacity()
-
-    local surface_label = table_element[SURFACE_NAME]
-    if surface_label and surface_label.valid then
-        local surface = player.physical_surface
-        surface_label.caption = surface and surface.valid
-            and surface.localised_name or {'un.unknown'}
-    end
-
-    local dropoff = table_element[DROPOFF_NAME]
-    if dropoff and dropoff.valid then
-        dropoff.caption = linked_inventory.has_active_dropoff(player.index)
-            and {'un.dropoff-active'} or {'un.dropoff-missing'}
-    end
-
-    local progress = frame[UBI_PROGRESS_NAME]
-    if progress and progress.valid then
-        progress.value = capacity > 0 and claimable / capacity or 0
-        progress.caption = ''
-    end
-
-    local claim = frame[UBI_CLAIM_NAME]
-    if claim and claim.valid then
-        claim.enabled = claimable > 0
-        claim.caption = {
-            'un.ubi-claim',
-            format_integer(claimable),
-            format_integer(capacity),
-        }
-    end
-
-    local travel = frame[TRAVEL_NAME]
-    if travel and travel.valid then
-        travel.caption = player.physical_surface.name == config.hospice_surface_name
-            and {'un.travel-nauvis'} or {'un.travel-hospice'}
-    end
-
-    if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
-        render_property_table(player, frame)
-    else
-        local property_table = frame[PROPERTY_TABLE_NAME]
-        if property_table and property_table.valid then
-            for _, property in ipairs(properties.list()) do
-                local price = property_table[property_price_name(property.id)]
-                if price and price.valid then
-                    price.caption = format_integer(properties.current_price(property))
+        local claimable = economy.get_claimable_ubi(player.index)
+        local capacity = economy.get_ubi_capacity()
+        local progress = content[UBI_PROGRESS_NAME]
+        if progress and progress.valid then
+            progress.value = capacity > 0 and claimable / capacity or 0
+            progress.caption = ''
+        end
+        local claim = content[UBI_CLAIM_NAME]
+        if claim and claim.valid then
+            claim.enabled = claimable > 0
+            claim.caption = {
+                'un.ubi-claim',
+                format_integer(claimable),
+                format_integer(capacity),
+            }
+        end
+    elseif page == 'travel' then
+        local location_table = content[LOCATION_TABLE_NAME]
+        local location = location_table and location_table.valid
+            and location_table[DROPOFF_LOCATION_NAME]
+        if location and location.valid then
+            local dropoff = linked_inventory.get_active_dropoff(player.index)
+            if dropoff then
+                location.caption = {
+                    'un.dropoff-location',
+                    dropoff.surface.localised_name,
+                    format_coordinate(dropoff.position.x),
+                    format_coordinate(dropoff.position.y),
+                }
+            else
+                location.caption = {'un.dropoff-missing'}
+            end
+        end
+    elseif page == 'property' then
+        if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
+            render_property_table(player, frame, content)
+        else
+            local property_table = content[PROPERTY_TABLE_NAME]
+            if property_table and property_table.valid then
+                for _, property in ipairs(properties.list()) do
+                    local price = property_table[property_price_name(property.id)]
+                    if price and price.valid then
+                        price.caption = format_integer(properties.current_price(property))
+                    end
                 end
             end
         end
@@ -220,49 +308,23 @@ local function open_frame(player)
         tooltip = {'un.close'},
     }
 
-    frame.add{
-        type = 'label',
-        caption = {'un.overview-title'},
-        style = 'heading_2_label',
+    local navigation = frame.add{
+        type = 'flow',
+        name = NAVIGATION_NAME,
+        direction = 'horizontal',
     }
-    local table_element = frame.add{
-        type = 'table',
-        name = TABLE_NAME,
-        column_count = 2,
-    }
-    table_element.add{type = 'label', caption = {'un.credit-label'}}
-    table_element.add{type = 'label', name = BALANCE_NAME}
-    table_element.add{type = 'label', caption = {'un.surface-label'}}
-    table_element.add{type = 'label', name = SURFACE_NAME}
-    table_element.add{type = 'label', caption = {'un.dropoff-label'}}
-    table_element.add{type = 'label', name = DROPOFF_NAME}
+    navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-ubi'}}
+    navigation.add{type = 'button', name = NAV_TRAVEL_NAME, caption = {'un.page-travel'}}
+    navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
 
-    local progress = frame.add{
-        type = 'progressbar',
-        name = UBI_PROGRESS_NAME,
-        value = 0,
+    local content = frame.add{
+        type = 'flow',
+        name = CONTENT_NAME,
+        direction = 'vertical',
     }
-    progress.style.horizontally_stretchable = true
-    local claim = frame.add{
-        type = 'button',
-        name = UBI_CLAIM_NAME,
-        caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
-    }
-    claim.style.horizontally_stretchable = true
+    content.style.horizontally_stretchable = true
 
-    local travel = frame.add{
-        type = 'button',
-        name = TRAVEL_NAME,
-        caption = {'un.travel-hospice'},
-    }
-    travel.style.horizontally_stretchable = true
-    frame.add{
-        type = 'label',
-        caption = {'un.property-title'},
-        style = 'heading_2_label',
-    }
-    render_property_table(player, frame)
-
+    render_page(player, 'ubi')
     frame.force_auto_center()
     player.opened = frame
     open_players[player.index] = true
@@ -280,8 +342,7 @@ function M.ensure_all()
     for _, player in pairs(game.players) do
         economy.ensure_account(player.index)
         M.ensure_button(player)
-        -- Rebuild an open Stage 1 window so old saves cannot retain the removed
-        -- automatic-UBI controls after a configuration change.
+        -- Rebuild open windows when the scenario GUI structure changes.
         local frame = player.gui.screen[FRAME_NAME]
         if frame and frame.valid then
             close_frame(player)
@@ -307,24 +368,34 @@ events.on(defines.events.on_gui_click, function(event)
         if frame and frame.valid then close_frame(player) else open_frame(player) end
     elseif element.name == CLOSE_NAME then
         close_frame(player)
+    elseif element.name == NAV_UBI_NAME then
+        render_page(player, 'ubi')
+        update_frame(player)
+    elseif element.name == NAV_TRAVEL_NAME then
+        render_page(player, 'travel')
+        update_frame(player)
+    elseif element.name == NAV_PROPERTY_NAME then
+        render_page(player, 'property')
+        update_frame(player)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
-    elseif element.name == TRAVEL_NAME then
-        local ok, err
-        if player.physical_surface.name == config.hospice_surface_name then
-            ok, err = surfaces.to_nauvis(player)
-        else
-            ok, err = surfaces.to_hospice(player)
-        end
+    elseif element.name == TRAVEL_PLANET_NAME then
+        local ok, err = surfaces.to_planet(player)
+        if ok then close_frame(player) else player.print(property_error(err)) end
+    elseif element.name == TRAVEL_HOSPICE_NAME then
+        local ok, err = surfaces.to_hospice(player)
         if ok then close_frame(player) else player.print(property_error(err)) end
     else
         local tags = element.tags
+        local frame = player.gui.screen[FRAME_NAME]
+        local content = frame and frame.valid and frame[CONTENT_NAME]
+        if not (content and content.valid) then return end
         if tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
             if not property then
                 player.print({'un.property-missing'})
-                render_property_table(player, player.gui.screen[FRAME_NAME])
+                render_property_table(player, frame, content)
                 return
             end
             local quote = properties.current_price(property)
@@ -337,12 +408,12 @@ events.on(defines.events.on_gui_click, function(event)
         elseif tags.action == 'property-confirm-buy' then
             local ok, err = properties.buy(player, tags.property_id, tags.quoted_price)
             if not ok then player.print(property_error(err)) end
-            render_property_table(player, player.gui.screen[FRAME_NAME])
+            render_property_table(player, frame, content)
             update_frame(player)
         elseif tags.action == 'property-renew' then
             local ok, err = properties.renew(player, tags.property_id)
             if not ok then player.print(property_error(err)) end
-            render_property_table(player, player.gui.screen[FRAME_NAME])
+            render_property_table(player, frame, content)
             update_frame(player)
         elseif tags.action == 'property-enter' then
             local ok, err = properties.enter(player, tags.property_id)
