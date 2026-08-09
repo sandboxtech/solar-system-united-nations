@@ -1,13 +1,11 @@
 local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
+local experience = require('scripts.experience')
 local scheduler = require('scripts.scheduler')
 local state = require('scripts.state')
 
 local M = {}
-
-local public_planets = {}
-for _, name in ipairs(config.public_planets) do public_planets[name] = true end
 
 local function same_position(record, surface_name, position)
     return record
@@ -38,6 +36,7 @@ local function resolve_record(player_index)
     state.ensure()
     local record = storage.dropoffs[player_index]
     if not record then return nil end
+    if record.surface ~= 'nauvis' then return nil end
     local surface = game.surfaces[record.surface]
     if not (surface and surface.valid) then return nil end
     local chest = surface.find_entity(
@@ -79,7 +78,7 @@ local function on_player_built(event)
     if not player then return end
 
     if entity.name ~= config.wooden_chest_name then return end
-    if not public_planets[entity.surface.name] then return end
+    if entity.surface.name ~= 'nauvis' then return end
 
     state.ensure()
     evict_previous(player, entity.surface.name, entity.position)
@@ -223,6 +222,7 @@ function M.convert_player(player)
         items = total_items,
         credit = total_credit,
     }
+    experience.record(player.index, removed)
     return total_items, total_credit
 end
 

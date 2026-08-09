@@ -4,6 +4,8 @@ require('scripts.diagnostics')
 require('scripts.economy')
 require('scripts.linked_inventory')
 require('scripts.properties')
+require('scripts.restrictions')
+require('scripts.ships')
 require('scripts.gui')
 
 local bootstrap = require('scripts.bootstrap')

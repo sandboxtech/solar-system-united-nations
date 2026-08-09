@@ -11,6 +11,7 @@ function M.ensure()
     if storage.property_delete_confirm == nil then storage.property_delete_confirm = {} end
     if storage.property_revision == nil then storage.property_revision = 0 end
     if storage.dropoffs == nil then storage.dropoffs = {} end
+    if storage.ships == nil then storage.ships = {} end
     if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then
         storage.ledger = {first_id = 1, next_id = 1, records = {}}

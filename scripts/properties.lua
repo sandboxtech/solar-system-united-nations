@@ -18,6 +18,23 @@ function M.display_name(property)
     return property.custom_name or {'un.property-default-name', property.id}
 end
 
+function M.feature_description(property)
+    local width = property.width or property.size or 0
+    local height = property.height or property.size or 0
+    local shape = property.shape == 'long'
+        and {'un.property-shape-long'} or {'un.property-shape-square'}
+    local water = property.water
+        and {'un.property-water-yes'} or {'un.property-water-no'}
+    return {
+        'un.property-features',
+        width,
+        height,
+        shape,
+        water,
+        math.floor((property.solar or 1) * 100 + 0.5),
+    }
+end
+
 local function central_chest_positions()
     return {
         {x = -0.5, y = -0.5},
@@ -77,19 +94,29 @@ function M.create(spec)
     state.ensure()
     spec = spec or {}
     local price = math.floor(tonumber(spec.price) or 1000)
-    local size = math.floor(tonumber(spec.size) or 64)
+    local n = tonumber(spec.n) or 16
     local tax = tonumber(spec.tax) or config.property_default_tax
+    local shape = spec.shape or 'square'
+    local solar = tonumber(spec.solar) or 1
     if not is_positive_integer(price) or price > config.property_price_cap then
         return nil, 'invalid-price'
     end
-    if not is_positive_integer(size) or size % 64 ~= 0 then
+    if not is_positive_integer(n) or n < 4 then
         return nil, 'invalid-size'
     end
+    if shape ~= 'square' and shape ~= 'long' then return nil, 'invalid-shape' end
+    if solar < 0 then return nil, 'invalid-solar' end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
     local id = storage.next_property_id
     storage.next_property_id = id + 1
-    local surface = surfaces.create_property_surface(id, size)
+    local surface, half_width, half_height = surfaces.create_property_surface(id, {
+        n = n,
+        shape = shape,
+        water = spec.water == true,
+        solar = solar,
+        name = spec.name,
+    })
     local property = {
         id = id,
         custom_name = spec.name,
@@ -101,7 +128,12 @@ function M.create(spec)
         price_at_tick = game.tick,
         decay_ticks = config.property_decay_ticks,
         tax = tax,
-        size = size,
+        n = n,
+        width = 2 * half_width,
+        height = 2 * half_height,
+        shape = shape,
+        water = spec.water == true,
+        solar = solar,
         linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
     }
@@ -118,6 +150,13 @@ function M.ensure_defaults()
     if not storage.default_properties_created then
         for _, spec in ipairs(config.default_properties) do M.create(spec) end
         storage.default_properties_created = true
+    end
+    if storage.property_tax_version ~= 1 then
+        for _, property in ipairs(M.list()) do
+            property.tax = config.property_default_tax
+        end
+        storage.property_tax_version = 1
+        bump_revision()
     end
     -- Configuration loading is also the one-shot repair path for properties
     -- created before all homes used the fixed central four-chest layout.
@@ -211,10 +250,15 @@ end
 function M.enter(player, property_id)
     local property = M.get(property_id)
     if not property then return false, 'missing' end
-    if property.owner_index ~= player.index then return false, 'not-owner' end
+    if property.owner_index ~= player.index and not player.admin then
+        return false, 'not-owner'
+    end
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
     ensure_linked_chests(property)
+    if player.admin then
+        return surfaces.teleport_near(player, surface, {0, 0}, false)
+    end
     return surfaces.teleport(player, surface)
 end
 
@@ -286,7 +330,7 @@ local function on_command(command)
         end
         local property, err = M.create{
             price = first ~= '' and tonumber(first) or nil,
-            size = second ~= '' and tonumber(second) or nil,
+            n = second ~= '' and tonumber(second) or nil,
         }
         if property then
             reply(command, {'un.property-created', property.id})

@@ -1,9 +1,11 @@
 local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
+local experience = require('scripts.experience')
 local linked_inventory = require('scripts.linked_inventory')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
+local ships = require('scripts.ships')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
@@ -16,6 +18,7 @@ local NAVIGATION_NAME = 'un_main_navigation'
 local NAV_UBI_NAME = 'un_nav_ubi'
 local NAV_TRAVEL_NAME = 'un_nav_travel'
 local NAV_PROPERTY_NAME = 'un_nav_property'
+local NAV_EXPERIENCE_NAME = 'un_nav_experience'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
@@ -24,7 +27,15 @@ local LOCATION_TABLE_NAME = 'un_dropoff_location_table'
 local DROPOFF_LOCATION_NAME = 'un_dropoff_location'
 local TRAVEL_PLANET_NAME = 'un_travel_planet'
 local TRAVEL_HOSPICE_NAME = 'un_travel_hospice'
+local SUICIDE_NAME = 'un_suicide'
+local SHIP_STATUS_NAME = 'un_ship_status'
+local SHIP_ACTIONS_NAME = 'un_ship_actions'
+local SHIP_CREATE_NAME = 'un_ship_create'
+local SHIP_ENTER_NAME = 'un_ship_enter'
+local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local PROPERTY_TABLE_NAME = 'un_property_table'
+local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
+local EXPERIENCE_TABLE_NAME = 'un_experience_table'
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
 -- game.tick only when queried or claimed.
@@ -66,6 +77,14 @@ local function property_price_name(property_id)
     return 'un_property_price_' .. tostring(property_id)
 end
 
+local function experience_progress_name(index)
+    return 'un_experience_progress_' .. tostring(index)
+end
+
+local function experience_amount_name(index)
+    return 'un_experience_amount_' .. tostring(index)
+end
+
 local function set_frame_state(frame, page, property_revision)
     frame.tags = {
         page = page,
@@ -88,7 +107,11 @@ local function render_property_table(player, frame, content)
     list.add{type = 'label', caption = ''}
 
     for _, property in ipairs(properties.list()) do
-        list.add{type = 'label', caption = properties.display_name(property)}
+        list.add{
+            type = 'label',
+            caption = properties.display_name(property),
+            tooltip = properties.feature_description(property),
+        }
         local owner = properties.owner_name(property)
         list.add{
             type = 'label',
@@ -119,7 +142,15 @@ local function render_property_table(player, frame, content)
                 caption = {'un.property-buy'},
                 tags = {action = 'property-buy', property_id = property.id},
             }
-            list.add{type = 'label', caption = ''}
+            if player.admin then
+                list.add{
+                    type = 'button',
+                    caption = {'un.property-enter-admin'},
+                    tags = {action = 'property-enter', property_id = property.id},
+                }
+            else
+                list.add{type = 'label', caption = ''}
+            end
         end
     end
     set_frame_state(frame, 'property', storage.property_revision or 0)
@@ -170,7 +201,58 @@ local function render_travel_page(frame, content)
         caption = {'un.travel-hospice'},
     }
     hospice.style.horizontally_stretchable = true
+
+    content.add{type = 'line'}
+    content.add{type = 'label', name = SHIP_STATUS_NAME}
+    local ship_actions = content.add{
+        type = 'flow',
+        name = SHIP_ACTIONS_NAME,
+        direction = 'horizontal',
+    }
+    ship_actions.add{
+        type = 'button',
+        name = SHIP_CREATE_NAME,
+        caption = {'un.ship-create', format_integer(config.ship_credit_cost)},
+    }
+    ship_actions.add{
+        type = 'button',
+        name = SHIP_ENTER_NAME,
+        caption = {'un.ship-enter'},
+    }
+    ship_actions.add{
+        type = 'button',
+        name = SHIP_SCUTTLE_NAME,
+        caption = {'un.ship-scuttle'},
+    }
+
+    local suicide = content.add{
+        type = 'button',
+        name = SUICIDE_NAME,
+        caption = {'un.suicide'},
+    }
+    suicide.style.horizontally_stretchable = true
     set_frame_state(frame, 'travel')
+end
+
+local function render_experience_page(player, frame, content)
+    content.add{type = 'label', caption = {'un.experience-help'}}
+    local grid = content.add{
+        type = 'table',
+        name = EXPERIENCE_TABLE_NAME,
+        column_count = 3,
+    }
+    for index, name in ipairs(config.science_pack_order) do
+        grid.add{type = 'sprite', sprite = 'item/' .. name}
+        local progress = grid.add{
+            type = 'progressbar',
+            name = experience_progress_name(index),
+            value = 0,
+        }
+        progress.style.width = 120
+        grid.add{type = 'label', name = experience_amount_name(index)}
+    end
+    content.add{type = 'label', name = EXPERIENCE_SUMMARY_NAME}
+    set_frame_state(frame, 'experience')
 end
 
 local function render_page(player, page)
@@ -184,6 +266,8 @@ local function render_page(player, page)
         render_travel_page(frame, content)
     elseif page == 'property' then
         render_property_table(player, frame, content)
+    elseif page == 'experience' then
+        render_experience_page(player, frame, content)
     else
         page = 'ubi'
         render_ubi_page(frame, content)
@@ -193,6 +277,7 @@ local function render_page(player, page)
     navigation[NAV_UBI_NAME].enabled = page ~= 'ubi'
     navigation[NAV_TRAVEL_NAME].enabled = page ~= 'travel'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
+    navigation[NAV_EXPERIENCE_NAME].enabled = page ~= 'experience'
 end
 
 local function property_error(err)
@@ -204,6 +289,11 @@ local function property_error(err)
     end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'position-missing' then return {'un.travel-no-position'} end
+    if err == 'travel-restricted' then return {'un.travel-restricted'} end
+    if err == 'ship-already-have' then return {'un.ship-already-have'} end
+    if err == 'ship-missing' then return {'un.ship-missing'} end
+    if err == 'ship-not-ready' then return {'un.ship-not-ready'} end
+    if err == 'ship-create-failed' then return {'un.ship-create-failed'} end
     return {'un.property-error-unavailable'}
 end
 
@@ -258,6 +348,25 @@ local function update_frame(player)
                 location.caption = {'un.dropoff-missing'}
             end
         end
+        local platform, record = ships.of(player.index)
+        local status = content[SHIP_STATUS_NAME]
+        local ship_actions = content[SHIP_ACTIONS_NAME]
+        local create = ship_actions[SHIP_CREATE_NAME]
+        local enter = ship_actions[SHIP_ENTER_NAME]
+        local scuttle = ship_actions[SHIP_SCUTTLE_NAME]
+        if platform then
+            local hours = math.ceil(math.max(0, ships.left_ticks(record))
+                / config.ticks_per_hour)
+            status.caption = {'un.ship-status', platform.name, hours}
+            create.enabled = false
+            enter.enabled = platform.surface ~= nil
+            scuttle.enabled = true
+        else
+            status.caption = {'un.ship-none'}
+            create.enabled = true
+            enter.enabled = false
+            scuttle.enabled = false
+        end
     elseif page == 'property' then
         if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
             render_property_table(player, frame, content)
@@ -271,6 +380,34 @@ local function update_frame(player)
                     end
                 end
             end
+        end
+    elseif page == 'experience' then
+        local data = experience.get(player.index)
+        local grid = content[EXPERIENCE_TABLE_NAME]
+        for index, name in ipairs(config.science_pack_order) do
+            local amount = data[name] or 0
+            local threshold = experience.next_threshold(amount)
+            local progress = grid[experience_progress_name(index)]
+            local label = grid[experience_amount_name(index)]
+            if progress and progress.valid then
+                progress.value = math.max(0, math.min(1, amount / threshold))
+            end
+            if label and label.valid then
+                label.caption = {
+                    'un.experience-amount',
+                    format_integer(amount),
+                    format_integer(threshold),
+                    experience.contribution(amount),
+                }
+            end
+        end
+        local summary = content[EXPERIENCE_SUMMARY_NAME]
+        if summary and summary.valid then
+            summary.caption = {
+                'un.experience-summary',
+                format_integer(experience.total_consumed(player.index)),
+                experience.total_level(player.index),
+            }
         end
     end
 end
@@ -316,6 +453,7 @@ local function open_frame(player)
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-ubi'}}
     navigation.add{type = 'button', name = NAV_TRAVEL_NAME, caption = {'un.page-travel'}}
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
+    navigation.add{type = 'button', name = NAV_EXPERIENCE_NAME, caption = {'un.page-experience'}}
 
     local content = frame.add{
         type = 'flow',
@@ -377,6 +515,9 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_PROPERTY_NAME then
         render_page(player, 'property')
         update_frame(player)
+    elseif element.name == NAV_EXPERIENCE_NAME then
+        render_page(player, 'experience')
+        update_frame(player)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
@@ -386,6 +527,33 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == TRAVEL_HOSPICE_NAME then
         local ok, err = surfaces.to_hospice(player)
         if ok then close_frame(player) else player.print(property_error(err)) end
+    elseif element.name == SHIP_CREATE_NAME then
+        local platform, err = ships.create(player)
+        if not platform then player.print(property_error(err)) end
+        render_page(player, 'travel')
+        update_frame(player)
+    elseif element.name == SHIP_ENTER_NAME then
+        local ok, err = ships.enter(player)
+        if ok then close_frame(player) else player.print(property_error(err)) end
+    elseif element.name == SHIP_SCUTTLE_NAME then
+        if element.tags.action == 'ship-scuttle-confirm' then
+            local ok, err = ships.scuttle(player)
+            if not ok then player.print(property_error(err)) end
+            render_page(player, 'travel')
+            update_frame(player)
+        else
+            element.caption = {'un.ship-scuttle-confirm'}
+            element.tags = {action = 'ship-scuttle-confirm'}
+        end
+    elseif element.name == SUICIDE_NAME then
+        if element.tags.action == 'suicide-confirm' then
+            close_frame(player)
+            local ok = surfaces.suicide(player)
+            if not ok then player.print({'un.suicide-unavailable'}) end
+        else
+            element.caption = {'un.suicide-confirm'}
+            element.tags = {action = 'suicide-confirm'}
+        end
     else
         local tags = element.tags
         local frame = player.gui.screen[FRAME_NAME]

@@ -1,0 +1,201 @@
+local config = require('config')
+local economy = require('scripts.economy')
+local events = require('scripts.events')
+local experience = require('scripts.experience')
+local scheduler = require('scripts.scheduler')
+local state = require('scripts.state')
+local surfaces = require('scripts.surfaces')
+
+local M = {}
+local STARTER_PACK = 'space-platform-starter-pack'
+
+local function records()
+    state.ensure()
+    return storage.ships
+end
+
+local function platform_of(index)
+    local platform = game.forces.player.platforms[index]
+    if platform and platform.valid then return platform end
+    return nil
+end
+
+local function is_scheduled(platform)
+    return platform and platform.valid and platform.scheduled_for_deletion > 0
+end
+
+local function is_ready(platform)
+    if not (platform and platform.valid) then return false end
+    local surface = platform.surface
+    return surface and surface.valid or false
+end
+
+local function reconcile()
+    local registered = records()
+    for index, platform in pairs(game.forces.player.platforms) do
+        if platform and platform.valid and not registered[index] then
+            registered[index] = {
+                owner_index = nil,
+                created_tick = game.tick,
+                built_tick = is_ready(platform) and game.tick or nil,
+            }
+        end
+    end
+end
+
+local function apply_bounds(platform, owner_index)
+    if not is_ready(platform) then return end
+    local ok, err = pcall(function()
+        local settings = platform.surface.map_gen_settings
+        local level = owner_index and experience.total_level(owner_index) or 0
+        settings.width = config.ship_width_per_level
+            * (level + config.ship_width_bonus)
+        settings.height = config.ship_height
+        platform.surface.map_gen_settings = settings
+    end)
+    if not ok then log('[un] failed to apply ship bounds: ' .. tostring(err)) end
+end
+
+function M.life_ticks()
+    return config.ship_life_hours * config.ticks_per_hour
+end
+
+function M.left_ticks(record)
+    if not record then return nil end
+    if not record.built_tick then return M.life_ticks() end
+    return record.built_tick + M.life_ticks() - game.tick
+end
+
+function M.of(player_index)
+    reconcile()
+    local best_platform = nil
+    local best_record = nil
+    local best_index = nil
+    for index, record in pairs(records()) do
+        if record.owner_index == player_index then
+            local platform = platform_of(index)
+            if not platform then
+                records()[index] = nil
+            elseif not (record.scuttled_tick or is_scheduled(platform))
+                    and (not best_index or index < best_index) then
+                best_platform = platform
+                best_record = record
+                best_index = index
+            end
+        end
+    end
+    return best_platform, best_record
+end
+
+function M.enforce_lock()
+    local force = game.forces.player
+    if config.ship_lock_native_creation then
+        if force.is_space_platforms_unlocked() then force.lock_space_platforms() end
+    elseif not force.is_space_platforms_unlocked() then
+        force.unlock_space_platforms()
+    end
+end
+
+function M.create(player)
+    if not (player and player.valid) then return nil, 'ship-create-failed' end
+    local source = player.physical_surface
+    if not (source and source.valid and source.name == 'nauvis') then
+        return nil, 'travel-restricted'
+    end
+    if M.of(player.index) then return nil, 'ship-already-have' end
+
+    local ok, err = economy.change(
+        player.index,
+        -config.ship_credit_cost,
+        'ship-create'
+    )
+    if not ok then return nil, err end
+
+    local platform = game.forces.player.create_space_platform{
+        name = player.name,
+        planet = config.ship_home_planet,
+        starter_pack = STARTER_PACK,
+    }
+    if not platform then
+        economy.change(player.index, config.ship_credit_cost, 'ship-create-refund')
+        return nil, 'ship-create-failed'
+    end
+
+    local record = {
+        owner_index = player.index,
+        created_tick = game.tick,
+    }
+    records()[platform.index] = record
+    local applied, apply_err = pcall(function() platform.apply_starter_pack() end)
+    if not applied then
+        record.scuttled_tick = game.tick
+        platform.destroy(1)
+        economy.change(player.index, config.ship_credit_cost, 'ship-create-refund')
+        log('[un] failed to apply ship starter pack: ' .. tostring(apply_err))
+        return nil, 'ship-create-failed'
+    end
+
+    if is_ready(platform) then record.built_tick = game.tick end
+    apply_bounds(platform, player.index)
+    return platform
+end
+
+function M.enter(player)
+    local platform = M.of(player.index)
+    if not platform then return false, 'ship-missing' end
+    if not is_ready(platform) then return false, 'ship-not-ready' end
+    return surfaces.teleport(player, platform.surface)
+end
+
+function M.scuttle(player)
+    local platform, record = M.of(player.index)
+    if not platform then return false, 'ship-missing' end
+    record.scuttled_tick = game.tick
+    platform.destroy(1)
+    return true
+end
+
+function M.ensure()
+    reconcile()
+    M.enforce_lock()
+end
+
+local function on_platform_surface(surface)
+    if not (surface and surface.valid) then return end
+    local platform = surface.platform
+    if not (platform and platform.valid) then return end
+    local record = records()[platform.index]
+    if not record then
+        record = {owner_index = nil, created_tick = game.tick}
+        records()[platform.index] = record
+    end
+    record.built_tick = record.built_tick or game.tick
+    apply_bounds(platform, record.owner_index)
+end
+
+events.on(defines.events.on_surface_created, function(event)
+    on_platform_surface(game.surfaces[event.surface_index])
+end)
+
+events.on(defines.events.on_research_finished, function()
+    M.enforce_lock()
+end)
+
+scheduler.every(config.ship_lifecycle_ticks, function()
+    reconcile()
+    M.enforce_lock()
+    for index, record in pairs(records()) do
+        local platform = platform_of(index)
+        if not platform then
+            records()[index] = nil
+        elseif record.built_tick and M.left_ticks(record) <= 0
+                and not (record.scuttled_tick or is_scheduled(platform)) then
+            record.scuttled_tick = game.tick
+            platform.destroy(1)
+            local owner = record.owner_index and game.get_player(record.owner_index)
+            game.print({'un.ship-expired', owner and owner.name or platform.name})
+        end
+    end
+end)
+
+return M
