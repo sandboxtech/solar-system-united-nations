@@ -593,6 +593,46 @@ local function make_frame_draggable(element, frame)
     end
 end
 
+local function update_property_row(player, property_table, property)
+    local price = property_table[property_price_name(property.id)]
+    if price and price.valid then
+        price.caption = format_integer(properties.current_price(property))
+    end
+
+    local owns = property.owner_index == player.index
+    local can_buy, buy_error
+    if owns then
+        can_buy, buy_error = properties.renew_availability(player, property)
+    else
+        can_buy, buy_error = properties.buy_availability(player, property)
+    end
+    local buy = property_table[property_buy_name(property.id)]
+    if buy and buy.valid then
+        buy.enabled = can_buy
+        buy.tooltip = can_buy and (owns and {'un.property-renew-tooltip'}
+            or {'un.property-buy'})
+            or disabled_tooltip(owns and 'renew' or 'buy', buy_error)
+        if buy.tags.action ~= 'property-confirm-buy' then
+            buy.caption = owns and {
+                'un.property-renew',
+                format_integer(properties.renew_fee(property)),
+            } or {'un.property-buy'}
+            buy.tags = {
+                action = owns and 'property-renew' or 'property-buy',
+                property_id = property.id,
+            }
+        end
+    end
+
+    local can_enter, enter_error = properties.enter_availability(player, property)
+    local enter = property_table[property_enter_name(property.id)]
+    if enter and enter.valid then
+        enter.enabled = can_enter
+        enter.tooltip = can_enter and {'un.property-enter'}
+            or disabled_tooltip('enter', enter_error)
+    end
+end
+
 local function update_frame(player)
     local frame = player.gui.screen[FRAME_NAME]
     if not (frame and frame.valid) then
@@ -676,10 +716,7 @@ local function update_frame(player)
             local property_table = content[PROPERTY_TABLE_NAME]
             if property_table and property_table.valid then
                 for _, property in ipairs(properties.list()) do
-                    local price = property_table[property_price_name(property.id)]
-                    if price and price.valid then
-                        price.caption = format_integer(properties.current_price(property))
-                    end
+                    update_property_row(player, property_table, property)
                 end
             end
         end
@@ -941,11 +978,14 @@ end)
 
 events.on(defines.events.on_gui_switch_state_changed, function(event)
     local element = event.element
-    if not (element and element.valid and element.name == HELP_MODE_NAME) then
-        return
-    end
+    if not (element and element.valid) then return end
     local player = game.get_player(event.player_index)
     if not player then return end
+    if element.name == PROPERTY_ACCESS_NAME then
+        properties.set_all_open(player.index, element.switch_state == 'right')
+        return
+    end
+    if element.name ~= HELP_MODE_NAME then return end
     local frame = player.gui.screen[FRAME_NAME]
     local content = frame and frame.valid and frame[CONTENT_NAME]
     if not (content and content.valid) then return end

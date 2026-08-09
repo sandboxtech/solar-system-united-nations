@@ -395,7 +395,7 @@ function M.buy(player, property_id, quoted_price)
 end
 
 function M.renew_fee(property)
-    return math.max(1, math.ceil(property.base_price * property.tax))
+    return math.max(1, math.ceil(M.current_price(property) * property.tax))
 end
 
 function M.renew(player, property_id)
