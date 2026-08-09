@@ -80,6 +80,16 @@ M.science_pack_order = {
 
 M.hospice_surface_prefix = 'un-hospice-'
 M.hospice_surface_size = 64
+M.hospice_core_size = 32
+M.hospice_liquid_border_width = 2
+M.hospice_tile_layout_version = 3
+M.hospice_tiles = {
+    nauvis = {land = 'grass-1', liquid = 'water'},
+    vulcanus = {land = 'volcanic-ash-soil', liquid = 'lava'},
+    gleba = {land = 'highland-yellow-rock', liquid = 'wetland-blue-slime'},
+    fulgora = {land = 'fulgoran-dunes', liquid = 'oil-ocean-deep'},
+    aquilo = {land = 'dust-lumpy', liquid = 'ammoniacal-ocean'},
+}
 M.property_surface_prefix = 'un-property-'
 M.property_default_tax = 0.10
 M.property_solar_multiplier = 0.10

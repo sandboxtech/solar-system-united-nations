@@ -300,6 +300,7 @@ local function render_property_table(player, frame, content)
         type = 'table',
         name = PROPERTY_TABLE_NAME,
         column_count = 6,
+        style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.property-column-name'}}
     list.add{type = 'label', caption = {'un.property-column-owner'}}
@@ -427,6 +428,7 @@ local function render_property_build_page(player, frame, content)
         type = 'table',
         name = PROPERTY_BUILD_FORM_NAME,
         column_count = 2,
+        style = 'bordered_table',
     }
     form.add{type = 'label', caption = {'un.property-build-planet'}}
     local planet_items = {}
@@ -497,6 +499,7 @@ local function render_ubi_section(content)
         type = 'table',
         name = BALANCE_TABLE_NAME,
         column_count = 2,
+        style = 'bordered_table',
     }
     balance.add{type = 'label', caption = {'un.credit-label'}}
     balance.add{type = 'label', name = BALANCE_NAME}
@@ -565,6 +568,7 @@ local function render_experience_section(content)
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
         column_count = 3,
+        style = 'bordered_table',
     }
     for index, name in ipairs(config.science_pack_order) do
         grid.add{type = 'sprite', sprite = 'item/' .. name}
@@ -610,6 +614,7 @@ local function render_ships_page(player, frame, content)
         type = 'table',
         name = SHIP_TABLE_NAME,
         column_count = 3,
+        style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.ship-column-owner'}}
     list.add{type = 'label', caption = {'un.ship-column-name'}}
@@ -646,6 +651,7 @@ local function render_planets_page(frame, content)
         type = 'table',
         name = PLANET_TABLE_NAME,
         column_count = 3,
+        style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.planet-column-name'}}
     list.add{type = 'label', caption = {'un.planet-column-countdown'}}
@@ -679,7 +685,11 @@ local function render_admin_page(player, frame, content)
     scroll.style.minimal_width = 760
     scroll.style.maximal_height = 620
 
-    local summary = scroll.add{type = 'table', column_count = 2}
+    local summary = scroll.add{
+        type = 'table',
+        column_count = 2,
+        style = 'bordered_table',
+    }
     summary.add{type = 'label', caption = {'un.admin-summary-players'}}
     summary.add{type = 'label', caption = count_pairs(storage.players)}
     summary.add{type = 'label', caption = {'un.admin-summary-properties'}}
@@ -697,6 +707,7 @@ local function render_admin_page(player, frame, content)
         type = 'table',
         name = ADMIN_SETTINGS_TABLE_NAME,
         column_count = 3,
+        style = 'bordered_table',
     }
     for _, spec in ipairs(ADMIN_NUMBER_SETTINGS) do
         local key = spec[1]
@@ -754,6 +765,7 @@ local function render_admin_page(player, frame, content)
         type = 'table',
         name = ADMIN_PROPERTY_TABLE_NAME,
         column_count = 3,
+        style = 'bordered_table',
     }
     property_table.add{type = 'label', caption = {'un.admin-property-id'}}
     property_table.add{type = 'label', caption = {'un.property-column-name'}}
@@ -773,6 +785,7 @@ local function render_admin_page(player, frame, content)
         type = 'table',
         name = ADMIN_PLAYER_TABLE_NAME,
         column_count = 3,
+        style = 'bordered_table',
     }
     player_table.add{type = 'label', caption = {'un.player-column-name'}}
     player_table.add{type = 'label', caption = {'un.credit-label'}}
@@ -800,7 +813,8 @@ end
 local function add_help_line(parent, caption, heading)
     local label = parent.add{type = 'label', caption = caption}
     label.style.single_line = false
-    label.style.maximal_width = 690
+    label.style.maximal_width = 640
+    label.style.bottom_margin = 10
     if heading then label.style.font = 'default-bold' end
     return label
 end
@@ -872,7 +886,7 @@ local function render_help_page(frame, content, mode)
             config.ubi_credit_per_second,
             config.ubi_max_seconds / 3600,
             config.ubi_max_seconds * config.ubi_credit_per_second,
-            settings.get('initial_credit'),
+            settings.get('initial_coin'),
         })
         add_help_line(beginner, {'un.help-detail-linked-chest'})
         add_help_line(beginner, {
@@ -1010,6 +1024,7 @@ local function render_players_page(viewer, frame, content)
         type = 'table',
         name = PLAYER_TABLE_NAME,
         column_count = 6,
+        style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.player-column-status'}}
     list.add{type = 'label', caption = {'un.player-column-name'}}

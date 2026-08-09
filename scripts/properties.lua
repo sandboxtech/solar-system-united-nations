@@ -43,6 +43,13 @@ end
 function M.display_name(property)
     if property.custom_name then return property.custom_name end
     if not property.owner_index then
+        if property.permanent and property.sample_planet then
+            return {
+                '',
+                '[planet=' .. property.sample_planet .. '] ',
+                {'un.property-surface-vacant', property.id},
+            }
+        end
         return {'un.property-surface-vacant', property.id}
     end
     local owner = game.get_player(property.owner_index)
@@ -233,6 +240,11 @@ local function create(spec)
     if not decay_hours or decay_hours <= 0 then return nil, 'invalid-decay' end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
+    local expires_tick = nil
+    if not permanent then
+        expires_tick = game.tick + lifetime_hours * config.ticks_per_hour
+    end
+
     local id = next_available_property_id()
     local min_brightness = config.property_min_brightness
     local surface, half_width, half_height, sample_planet, sample_position
@@ -262,8 +274,7 @@ local function create(spec)
         sample_position = sample_position,
         linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
-        expires_tick = permanent and nil
-            or game.tick + lifetime_hours * config.ticks_per_hour,
+        expires_tick = expires_tick,
         lifetime_hours = lifetime_hours,
         permanent = permanent,
         system_key = spec.system_key,

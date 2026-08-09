@@ -153,17 +153,31 @@ local function apply_natural_sample(surface, property_id, half_width, half_heigh
     return planet_name, center
 end
 
-local function apply_tutorial_grid(surface, half_size)
+local function apply_hospice_tiles(surface, planet_name)
+    local half_size = config.hospice_surface_size / 2
+    local core_half = config.hospice_core_size / 2
+    local border = config.hospice_liquid_border_width
+    local planet_tiles = config.hospice_tiles[planet_name]
     local tiles = {}
     for y = -half_size, half_size - 1 do
         for x = -half_size, half_size - 1 do
+            local in_liquid_border = x < -half_size + border
+                or x >= half_size - border
+                or y < -half_size + border
+                or y >= half_size - border
+            local tile_name = in_core(x, y, core_half)
+                and TUTORIAL_GRID_NAME
+                or in_liquid_border and planet_tiles.liquid
+                or planet_tiles.land
             tiles[#tiles + 1] = {
-                name = TUTORIAL_GRID_NAME,
+                name = tile_name,
                 position = {x, y},
             }
         end
     end
-    surface.set_tiles(tiles, false, false, true, false)
+    -- Submit the complete layout in one batch, then let Factorio correct all
+    -- neighbouring tiles so liquids receive their native coast transitions.
+    surface.set_tiles(tiles, true, false, true, false)
 end
 
 function M.hospice_surface_name(planet_name)
@@ -208,9 +222,11 @@ function M.ensure_hospice(planet_name)
         surface.map_gen_settings = settings
     end
     ensure_generated(surface, 1)
-    if storage.hospice_grid_versions[planet_name] ~= 1 then
-        apply_tutorial_grid(surface, config.hospice_surface_size / 2)
-        storage.hospice_grid_versions[planet_name] = 1
+    if storage.hospice_grid_versions[planet_name]
+            ~= config.hospice_tile_layout_version then
+        apply_hospice_tiles(surface, planet_name)
+        storage.hospice_grid_versions[planet_name] =
+            config.hospice_tile_layout_version
     end
     surface.localised_name = {
         'un.hospice-name-planet',
