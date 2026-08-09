@@ -48,6 +48,19 @@ local function ensure_property_name_rendering(property, text)
     return true
 end
 
+local function property_rendering_fallback(property)
+    if type(property.custom_name) == 'string' then return property.custom_name end
+    return '#' .. tostring(property.id)
+end
+
+local function first_connected_player()
+    local selected = nil
+    for _, player in pairs(game.connected_players) do
+        if not selected or player.index < selected.index then selected = player end
+    end
+    return selected
+end
+
 local function request_property_name_translation(property, player)
     if type(property.custom_name) == 'string' then
         return ensure_property_name_rendering(property, property.custom_name)
@@ -57,7 +70,8 @@ local function request_property_name_translation(property, player)
     if not request_id then return false end
     storage.property_name_translation_requests[request_id] = {
         property_id = property.id,
-        owner_index = player.index,
+        player_index = player.index,
+        owner_token = property.owner_index or 0,
     }
     return true
 end
@@ -205,7 +219,9 @@ function M.create(spec)
         created_tick = game.tick,
     }
     storage.properties[id] = property
-    ensure_property_name_rendering(property, M.display_name(property))
+    ensure_property_name_rendering(property, property_rendering_fallback(property))
+    local translator = first_connected_player()
+    if translator then request_property_name_translation(property, translator) end
     if not ensure_linked_chests(property) then
         log('[un] failed to create property linked chests for property ' .. id)
     end
@@ -232,13 +248,16 @@ function M.ensure_defaults()
         ensure_linked_chests(property)
         ensure_property_name_rendering(
             property,
-            property.rendered_name or M.display_name(property)
+            property.rendered_name or property_rendering_fallback(property)
         )
         if property.owner_index then
             request_property_name_translation(
                 property,
                 game.get_player(property.owner_index)
             )
+        elseif not property.rendered_name then
+            local translator = first_connected_player()
+            if translator then request_property_name_translation(property, translator) end
         end
     end
 end
@@ -536,9 +555,13 @@ events.on(defines.events.on_string_translated, function(event)
     if not request then return end
     storage.property_name_translation_requests[event.id] = nil
     local property = M.get(request.property_id)
-    if not property or property.owner_index ~= request.owner_index then return end
+    if not property then return end
+    local owner_token = request.owner_token
+    if owner_token == nil then owner_token = request.owner_index or 0 end
+    if (property.owner_index or 0) ~= owner_token then return end
     if type(property.custom_name) == 'string' then return end
-    if event.player_index ~= request.owner_index or not event.translated then return end
+    local player_index = request.player_index or request.owner_index
+    if event.player_index ~= player_index or not event.translated then return end
     property.rendered_name = event.result
     local player = game.get_player(event.player_index)
     property.rendered_name_locale = player and player.locale or nil
@@ -550,6 +573,8 @@ local function refresh_owned_name_renderings(event)
     if not (player and player.connected) then return end
     for _, property in ipairs(M.list()) do
         if property.owner_index == player.index then
+            request_property_name_translation(property, player)
+        elseif not property.owner_index and not property.rendered_name then
             request_property_name_translation(property, player)
         end
     end

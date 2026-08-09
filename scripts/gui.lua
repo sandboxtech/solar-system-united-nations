@@ -10,23 +10,19 @@ local surfaces = require('scripts.surfaces')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 4
+local HUD_LAYOUT_VERSION = 5
 local HUD_TITLE_NAME = 'un_hud_title'
 local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_UBI_NAME = 'un_hud_ubi'
-local HUD_TRAVEL_NAME = 'un_hud_travel'
 local HUD_LAST_PROPERTY_NAME = 'un_hud_last_property'
 local HUD_PROPERTY_NAME = 'un_hud_property'
-local HUD_EXPERIENCE_NAME = 'un_hud_experience'
 local HUD_PLAYERS_NAME = 'un_hud_players'
 local FRAME_NAME = 'un_main_frame'
 local CLOSE_NAME = 'un_main_close'
 local CONTENT_NAME = 'un_main_content'
 local NAVIGATION_NAME = 'un_main_navigation'
 local NAV_UBI_NAME = 'un_nav_ubi'
-local NAV_TRAVEL_NAME = 'un_nav_travel'
 local NAV_PROPERTY_NAME = 'un_nav_property'
-local NAV_EXPERIENCE_NAME = 'un_nav_experience'
 local NAV_PLAYERS_NAME = 'un_nav_players'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
@@ -67,13 +63,10 @@ function M.ensure_button(player)
         local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
             and hud[HUD_TITLE_NAME]
             and hud[HUD_UBI_NAME]
-            and hud[HUD_TRAVEL_NAME]
             and hud[TRAVEL_PLANET_NAME]
             and hud[TRAVEL_HOSPICE_NAME]
-            and hud[SUICIDE_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
             and hud[HUD_PROPERTY_NAME]
-            and hud[HUD_EXPERIENCE_NAME]
             and hud[HUD_PLAYERS_NAME]
         if complete then return hud end
         hud.destroy()
@@ -100,14 +93,11 @@ function M.ensure_button(player)
 
     local buttons = {
         {HUD_UBI_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
+        {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
+        {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
         {TRAVEL_PLANET_NAME, 'space-location/nauvis', {'un.travel-planet'}},
         {TRAVEL_HOSPICE_NAME, 'utility/gps_map_icon', {'un.travel-hospice'}},
-        {SUICIDE_NAME, 'utility/danger_icon', {'un.suicide'}},
-        {HUD_TRAVEL_NAME, 'item/space-platform-starter-pack', {'un.hud-ship-tooltip'}},
         {HUD_LAST_PROPERTY_NAME, 'utility/enter', {'un.hud-last-property-tooltip'}},
-        {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
-        {HUD_EXPERIENCE_NAME, 'item/automation-science-pack', {'un.hud-experience-tooltip'}},
-        {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
@@ -211,7 +201,7 @@ local function render_property_table(player, frame, content)
     set_frame_state(frame, 'property', storage.property_revision or 0)
 end
 
-local function render_ubi_page(frame, content)
+local function render_ubi_section(content)
     local balance = content.add{
         type = 'table',
         name = BALANCE_TABLE_NAME,
@@ -232,10 +222,9 @@ local function render_ubi_page(frame, content)
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
     }
     claim.style.horizontally_stretchable = true
-    set_frame_state(frame, 'ubi')
 end
 
-local function render_ship_page(frame, content)
+local function render_ship_section(content)
     content.add{type = 'label', name = SHIP_STATUS_NAME}
     local ship_actions = content.add{
         type = 'flow',
@@ -252,11 +241,17 @@ local function render_ship_page(frame, content)
         name = SHIP_SCUTTLE_NAME,
         caption = {'un.ship-scuttle'},
     }
-
-    set_frame_state(frame, 'ship')
+    local suicide = ship_actions.add{
+        type = 'sprite-button',
+        name = SUICIDE_NAME,
+        sprite = 'utility/danger_icon',
+        tooltip = {'un.suicide'},
+    }
+    suicide.style.width = 40
+    suicide.style.height = 40
 end
 
-local function render_experience_page(player, frame, content)
+local function render_experience_section(content)
     content.add{type = 'label', caption = {'un.experience-help-1'}}
     content.add{type = 'label', caption = {'un.experience-help-2'}}
     content.add{type = 'label', caption = {'un.experience-help-3'}}
@@ -276,7 +271,15 @@ local function render_experience_page(player, frame, content)
         grid.add{type = 'label', name = experience_amount_name(index)}
     end
     content.add{type = 'label', name = EXPERIENCE_SUMMARY_NAME}
-    set_frame_state(frame, 'experience')
+end
+
+local function render_overview_page(frame, content)
+    render_ubi_section(content)
+    content.add{type = 'line'}
+    render_ship_section(content)
+    content.add{type = 'line'}
+    render_experience_section(content)
+    set_frame_state(frame, 'overview')
 end
 
 local function player_signature()
@@ -336,24 +339,18 @@ local function render_page(player, page)
     if not (content and content.valid) then return end
     content.clear()
 
-    if page == 'ship' then
-        render_ship_page(frame, content)
-    elseif page == 'property' then
+    if page == 'property' then
         render_property_table(player, frame, content)
-    elseif page == 'experience' then
-        render_experience_page(player, frame, content)
     elseif page == 'players' then
         render_players_page(frame, content)
     else
-        page = 'ubi'
-        render_ubi_page(frame, content)
+        page = 'overview'
+        render_overview_page(frame, content)
     end
 
     local navigation = frame[NAVIGATION_NAME]
-    navigation[NAV_UBI_NAME].enabled = page ~= 'ubi'
-    navigation[NAV_TRAVEL_NAME].enabled = page ~= 'ship'
+    navigation[NAV_UBI_NAME].enabled = page ~= 'overview'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
-    navigation[NAV_EXPERIENCE_NAME].enabled = page ~= 'experience'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
 end
 
@@ -400,9 +397,9 @@ local function update_frame(player)
     end
     local content = frame[CONTENT_NAME]
     if not (content and content.valid) then return end
-    local page = frame.tags.page or 'ubi'
+    local page = frame.tags.page or 'overview'
 
-    if page == 'ubi' then
+    if page == 'overview' then
         local balance_table = content[BALANCE_TABLE_NAME]
         local balance = balance_table and balance_table.valid
             and balance_table[BALANCE_NAME]
@@ -426,7 +423,6 @@ local function update_frame(player)
                 format_integer(capacity),
             }
         end
-    elseif page == 'ship' then
         local platform, record = ships.of(player.index)
         local status = content[SHIP_STATUS_NAME]
         local ship_actions = content[SHIP_ACTIONS_NAME]
@@ -443,21 +439,6 @@ local function update_frame(player)
             create.enabled = true
             scuttle.enabled = false
         end
-    elseif page == 'property' then
-        if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
-            render_property_table(player, frame, content)
-        else
-            local property_table = content[PROPERTY_TABLE_NAME]
-            if property_table and property_table.valid then
-                for _, property in ipairs(properties.list()) do
-                    local price = property_table[property_price_name(property.id)]
-                    if price and price.valid then
-                        price.caption = format_integer(properties.current_price(property))
-                    end
-                end
-            end
-        end
-    elseif page == 'experience' then
         local data = experience.get(player.index)
         local grid = content[EXPERIENCE_TABLE_NAME]
         for index, name in ipairs(config.science_pack_order) do
@@ -483,6 +464,20 @@ local function update_frame(player)
                 'un.experience-summary',
                 experience.total_level(player.index),
             }
+        end
+    elseif page == 'property' then
+        if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
+            render_property_table(player, frame, content)
+        else
+            local property_table = content[PROPERTY_TABLE_NAME]
+            if property_table and property_table.valid then
+                for _, property in ipairs(properties.list()) do
+                    local price = property_table[property_price_name(property.id)]
+                    if price and price.valid then
+                        price.caption = format_integer(properties.current_price(property))
+                    end
+                end
+            end
         end
     elseif page == 'players' then
         if frame.tags.player_signature ~= player_signature() then
@@ -565,10 +560,8 @@ local function open_frame(player, initial_page)
         name = NAVIGATION_NAME,
         direction = 'horizontal',
     }
-    navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-ubi'}}
-    navigation.add{type = 'button', name = NAV_TRAVEL_NAME, caption = {'un.page-ship'}}
+    navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
-    navigation.add{type = 'button', name = NAV_EXPERIENCE_NAME, caption = {'un.page-experience'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
 
     local content = frame.add{
@@ -578,7 +571,7 @@ local function open_frame(player, initial_page)
     }
     content.style.horizontally_stretchable = true
 
-    render_page(player, initial_page or 'ubi')
+    render_page(player, initial_page or 'overview')
     frame.force_auto_center()
     player.opened = frame
     open_players[player.index] = true
@@ -617,31 +610,21 @@ events.on(defines.events.on_gui_click, function(event)
     local player = game.get_player(event.player_index)
     if not player then return end
     if element.name == HUD_UBI_NAME then
-        open_frame(player, 'ubi')
-    elseif element.name == HUD_TRAVEL_NAME then
-        open_frame(player, 'ship')
+        open_frame(player, 'overview')
     elseif element.name == HUD_LAST_PROPERTY_NAME then
         local ok, err = properties.enter_last_owned(player)
         if not ok then player.print(property_error(err)) end
     elseif element.name == HUD_PROPERTY_NAME then
         open_frame(player, 'property')
-    elseif element.name == HUD_EXPERIENCE_NAME then
-        open_frame(player, 'experience')
     elseif element.name == HUD_PLAYERS_NAME then
         open_frame(player, 'players')
     elseif element.name == CLOSE_NAME then
         close_frame(player)
     elseif element.name == NAV_UBI_NAME then
-        render_page(player, 'ubi')
-        update_frame(player)
-    elseif element.name == NAV_TRAVEL_NAME then
-        render_page(player, 'ship')
+        render_page(player, 'overview')
         update_frame(player)
     elseif element.name == NAV_PROPERTY_NAME then
         render_page(player, 'property')
-        update_frame(player)
-    elseif element.name == NAV_EXPERIENCE_NAME then
-        render_page(player, 'experience')
         update_frame(player)
     elseif element.name == NAV_PLAYERS_NAME then
         render_page(player, 'players')
@@ -658,13 +641,13 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == SHIP_CREATE_NAME then
         local platform, err = ships.create(player)
         if not platform then player.print(property_error(err)) end
-        render_page(player, 'ship')
+        render_page(player, 'overview')
         update_frame(player)
     elseif element.name == SHIP_SCUTTLE_NAME then
         if element.tags.action == 'ship-scuttle-confirm' then
             local ok, err = ships.scuttle(player)
             if not ok then player.print(property_error(err)) end
-            render_page(player, 'ship')
+            render_page(player, 'overview')
             update_frame(player)
         else
             element.caption = {'un.ship-scuttle-confirm'}
