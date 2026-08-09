@@ -6,6 +6,7 @@ local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local social = require('scripts.social')
 local state = require('scripts.state')
+local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
@@ -257,7 +258,7 @@ local function sync_surface_visibility(property)
     local surface = game.surfaces[property.surface_name]
     local force = game.forces.player
     if not (surface and surface.valid and force and force.valid) then return false end
-    force.set_surface_hidden(surface, property.owner_index ~= nil)
+    force.set_surface_hidden(surface, true)
     return true
 end
 
@@ -433,8 +434,20 @@ function M.left_ticks(property)
     return math.max(0, property.expires_tick - game.tick)
 end
 
+function M.build_lifetime_options()
+    local result = {}
+    for index, option in ipairs(config.property_lifetime_options) do
+        result[index] = {
+            hours = settings.get('property_lifetime_' .. index .. '_hours'),
+            cost = option.cost,
+            decay_hours = settings.get('property_decay_' .. index .. '_hours'),
+        }
+    end
+    return result
+end
+
 function M.build_requirements(planet_name, lifetime_index, size_index)
-    local lifetime = config.property_lifetime_options[tonumber(lifetime_index)]
+    local lifetime = M.build_lifetime_options()[tonumber(lifetime_index)]
     local size = config.property_size_options[tonumber(size_index)]
     local pack = config.property_build_pack_by_planet[planet_name]
     if not (build_planets[planet_name] and lifetime and size and pack) then
@@ -447,9 +460,7 @@ function M.build_requirements(planet_name, lifetime_index, size_index)
         size = size,
         experience_cost = config.property_build_experience_per_point
             * lifetime.cost * size.cost,
-        coin_cost = config.property_build_experience_per_point
-            * lifetime.cost * size.cost
-            * config.property_build_coin_per_experience,
+        stamina_cost = config.property_build_stamina_cost,
     }
 end
 
@@ -478,8 +489,8 @@ function M.build_availability(player, planet_name, lifetime_index, size_index)
             < requirement.experience_cost then
         return false, 'insufficient-experience', requirement
     end
-    if economy.get_balance(player.index) < requirement.coin_cost then
-        return false, 'insufficient-credit', requirement
+    if stamina.get(player.index) < requirement.stamina_cost then
+        return false, 'insufficient-stamina', requirement
     end
     return true, nil, requirement
 end
@@ -499,23 +510,21 @@ function M.build(player, planet_name, lifetime_index, size_index)
     ) then
         return nil, 'insufficient-experience', requirement
     end
-    local paid = economy.change(
-        player.index,
-        -requirement.coin_cost,
-        'property-build'
-    )
-    if not paid then
+    if not stamina.spend(player.index, requirement.stamina_cost) then
         experience.record(player.index, {{
             name = requirement.pack,
             count = requirement.experience_cost,
         }})
-        return nil, 'insufficient-credit', requirement
+        return nil, 'insufficient-stamina', requirement
     end
     local ok, property, create_err = pcall(create, {
         owner_index = player.index,
         sample_planet = planet_name,
-        price = requirement.experience_cost
-            * config.property_build_price_per_experience,
+        price = math.min(
+            config.property_price_cap,
+            math.ceil(requirement.experience_cost
+                * settings.get('property_build_price_multiplier'))
+        ),
         lifetime_hours = requirement.lifetime.hours,
         decay_hours = requirement.lifetime.decay_hours,
         width = requirement.size.width,
@@ -526,11 +535,7 @@ function M.build(player, planet_name, lifetime_index, size_index)
             name = requirement.pack,
             count = requirement.experience_cost,
         }})
-        economy.change(
-            player.index,
-            requirement.coin_cost,
-            'property-build-refund'
-        )
+        stamina.refund(player.index, requirement.stamina_cost)
         if not ok then
             log('[un] property construction failed: ' .. tostring(property))
             create_err = 'surface-create-failed'
@@ -546,6 +551,7 @@ function M.build(player, planet_name, lifetime_index, size_index)
         {'', '[planet=' .. planet_name .. '] ',
             {'space-location-name.' .. planet_name}},
         requirement.experience_cost,
+        requirement.stamina_cost,
     })
     return property, nil, requirement
 end

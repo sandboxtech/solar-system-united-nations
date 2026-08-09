@@ -6,7 +6,6 @@ local M = {}
 local DEFINITIONS = {
     initial_coin = {default = config.initial_credit, min = 0, max = 1000000000000, integer = true},
     friend_limit = {default = config.friend_limit, min = 0, max = 100, integer = true},
-    ship_cost = {default = config.ship_credit_cost, min = 1, max = 1000000000000, integer = true},
     ship_life_hours = {default = config.ship_life_hours, min = 1, max = 10000},
     cleanup_idle_hours = {default = config.player_cleanup_idle_hours, min = 1, max = 100000},
     property_tax_percent = {default = config.property_default_tax * 100, min = 0, max = 100},
@@ -37,6 +36,41 @@ local DEFINITIONS = {
         min = 0,
         max = 10000,
         integer = true,
+    },
+    property_build_price_multiplier = {
+        default = config.property_build_price_per_experience,
+        min = 0.001,
+        max = 1000000,
+    },
+    property_lifetime_1_hours = {
+        default = config.property_lifetime_options[1].hours,
+        min = 0.1,
+        max = 100000,
+    },
+    property_lifetime_2_hours = {
+        default = config.property_lifetime_options[2].hours,
+        min = 0.1,
+        max = 100000,
+    },
+    property_lifetime_3_hours = {
+        default = config.property_lifetime_options[3].hours,
+        min = 0.1,
+        max = 100000,
+    },
+    property_decay_1_hours = {
+        default = config.property_lifetime_options[1].decay_hours,
+        min = 0.1,
+        max = 100000,
+    },
+    property_decay_2_hours = {
+        default = config.property_lifetime_options[2].decay_hours,
+        min = 0.1,
+        max = 100000,
+    },
+    property_decay_3_hours = {
+        default = config.property_lifetime_options[3].decay_hours,
+        min = 0.1,
+        max = 100000,
     },
     tech_leak_interval_hours = {
         default = config.tech_leak_interval_hours,

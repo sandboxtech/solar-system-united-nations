@@ -1,6 +1,6 @@
 local config = require('config')
-local economy = require('scripts.economy')
 local events = require('scripts.events')
+local stamina = require('scripts.stamina')
 
 local M = {}
 
@@ -68,8 +68,8 @@ function M.can_buy(player)
         return false, 'unavailable'
     end
     if not equipment_valid() then return false, 'invalid-kit' end
-    if economy.get_balance(player.index) < config.starter_kit_cost then
-        return false, 'insufficient-credit'
+    if stamina.get(player.index) < config.starter_kit_stamina_cost then
+        return false, 'insufficient-stamina'
     end
     return true
 end
@@ -77,12 +77,9 @@ end
 function M.buy(player)
     local available, err = M.can_buy(player)
     if not available then return false, err end
-    local paid, pay_err = economy.change(
-        player.index,
-        -config.starter_kit_cost,
-        'starter-kit'
-    )
-    if not paid then return false, pay_err end
+    if not stamina.spend(player.index, config.starter_kit_stamina_cost) then
+        return false, 'insufficient-stamina'
+    end
     deliver_kit(player)
     return true
 end

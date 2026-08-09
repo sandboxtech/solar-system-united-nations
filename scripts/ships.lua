@@ -1,10 +1,10 @@
 local config = require('config')
-local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local state = require('scripts.state')
+local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
@@ -124,34 +124,37 @@ function M.enforce_lock()
     end
 end
 
-function M.create(player)
+function M.create(player, planet_name)
     if not (player and player.valid) then return nil, 'ship-create-failed' end
-    local source = player.physical_surface
-    if not (source and source.valid and source.name == 'nauvis') then
-        return nil, 'ship-home-restricted'
+    local valid_planet = false
+    for _, name in ipairs(config.public_planets) do
+        if name == planet_name then valid_planet = true; break end
     end
+    if not valid_planet then return nil, 'ship-invalid-planet' end
     if M.of(player.index) then return nil, 'ship-already-have' end
 
-    local cost = settings.get('ship_cost')
-    local ok, err = economy.change(
-        player.index,
-        -cost,
-        'ship-create'
-    )
-    if not ok then return nil, err end
+    if not stamina.spend(player.index, config.ship_stamina_cost) then
+        return nil, 'insufficient-stamina'
+    end
 
-    local platform = game.forces.player.create_space_platform{
-        name = player.name,
-        planet = config.ship_home_planet,
-        starter_pack = STARTER_PACK,
-    }
-    if not platform then
-        economy.change(player.index, cost, 'ship-create-refund')
+    local created, platform = pcall(function()
+        return game.forces.player.create_space_platform{
+            name = player.name,
+            planet = planet_name,
+            starter_pack = STARTER_PACK,
+        }
+    end)
+    if not created or not platform then
+        stamina.refund(player.index, config.ship_stamina_cost)
+        if not created then
+            log('[un] failed to create ship: ' .. tostring(platform))
+        end
         return nil, 'ship-create-failed'
     end
 
     local record = {
         owner_index = player.index,
+        planet_name = planet_name,
         created_tick = game.tick,
         life_ticks = (settings.get('ship_life_hours')
             + experience.total_level(player.index)) * config.ticks_per_hour,
@@ -161,7 +164,7 @@ function M.create(player)
     if not applied then
         record.scuttled_tick = game.tick
         platform.destroy(1)
-        economy.change(player.index, cost, 'ship-create-refund')
+        stamina.refund(player.index, config.ship_stamina_cost)
         log('[un] failed to apply ship starter pack: ' .. tostring(apply_err))
         return nil, 'ship-create-failed'
     end

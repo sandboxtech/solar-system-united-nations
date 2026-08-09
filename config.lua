@@ -53,7 +53,7 @@ M.starter_resources = {
     {name = 'stone', count = 100},
     {name = 'wood', count = 100},
 }
-M.starter_kit_cost = 1000
+M.starter_kit_stamina_cost = 10000
 M.starter_kit_armor = 'modular-armor'
 M.starter_kit_equipment = {
     {name = 'personal-roboport-equipment', count = 1},
@@ -120,7 +120,7 @@ M.property_sample_planets = M.public_planets
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 2000
 M.property_build_experience_per_point = 1000
-M.property_build_coin_per_experience = 1
+M.property_build_stamina_cost = 10000
 M.property_build_price_per_experience = 10
 M.property_build_cooldown_hours = 20
 M.property_build_pack_by_planet = {
@@ -148,10 +148,10 @@ M.property_permanent_defaults = {
 
 M.stamina_max = 100000
 M.stamina_per_second = 1
-M.suicide_stamina_cost = 1000
+M.suicide_stamina_cost = 100
 
 M.ship_life_hours = 12
-M.ship_credit_cost = 1000
+M.ship_stamina_cost = 10000
 M.ship_width_per_level = 2
 M.ship_base_width = 16
 M.ship_height = 512

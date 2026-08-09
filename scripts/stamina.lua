@@ -47,4 +47,14 @@ function M.spend(player_index, amount)
     return true
 end
 
+function M.refund(player_index, amount)
+    if type(amount) ~= 'number' or amount < 0 or amount ~= math.floor(amount) then
+        return false
+    end
+    local account = advance(player_index)
+    account.stamina = math.min(config.stamina_max, account.stamina + amount)
+    account.stamina_tick = game.tick
+    return true
+end
+
 return M

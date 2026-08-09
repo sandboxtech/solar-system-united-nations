@@ -47,6 +47,7 @@ local STARTER_KIT_NAME = 'un_starter_kit'
 local SUICIDE_PREFIX = 'un_suicide_'
 local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
+local SHIP_PLANET_NAME = 'un_ship_planet'
 local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local SHIP_TABLE_NAME = 'un_ship_table'
@@ -60,8 +61,8 @@ local PROPERTY_BUILD_LIFETIME_NAME = 'un_property_build_lifetime'
 local PROPERTY_BUILD_SIZE_NAME = 'un_property_build_size'
 local PROPERTY_BUILD_COST_NAME = 'un_property_build_cost'
 local PROPERTY_BUILD_AVAILABLE_NAME = 'un_property_build_available'
-local PROPERTY_BUILD_COIN_COST_NAME = 'un_property_build_coin_cost'
-local PROPERTY_BUILD_COIN_AVAILABLE_NAME = 'un_property_build_coin_available'
+local PROPERTY_BUILD_STAMINA_COST_NAME = 'un_property_build_stamina_cost'
+local PROPERTY_BUILD_STAMINA_AVAILABLE_NAME = 'un_property_build_stamina_available'
 local PROPERTY_BUILD_COOLDOWN_NAME = 'un_property_build_cooldown'
 local PROPERTY_BUILD_BUTTON_NAME = 'un_property_build_button'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
@@ -78,7 +79,6 @@ local ADMIN_PROPERTY_TABLE_NAME = 'un_admin_property_table'
 local ADMIN_NUMBER_SETTINGS = {
     {'initial_coin', 'un.admin-setting-initial-coin'},
     {'friend_limit', 'un.admin-setting-friend-limit'},
-    {'ship_cost', 'un.admin-setting-ship-cost'},
     {'ship_life_hours', 'un.admin-setting-ship-life'},
     {'cleanup_idle_hours', 'un.admin-setting-cleanup-hours'},
     {'property_tax_percent', 'un.admin-setting-property-tax'},
@@ -87,6 +87,13 @@ local ADMIN_NUMBER_SETTINGS = {
     {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
     {'asteroid_spawning_rate', 'un.admin-setting-asteroid-rate'},
     {'property_limit_per_planet', 'un.admin-setting-property-limit'},
+    {'property_build_price_multiplier', 'un.admin-setting-property-build-price'},
+    {'property_lifetime_1_hours', 'un.admin-setting-property-lifetime-1'},
+    {'property_lifetime_2_hours', 'un.admin-setting-property-lifetime-2'},
+    {'property_lifetime_3_hours', 'un.admin-setting-property-lifetime-3'},
+    {'property_decay_1_hours', 'un.admin-setting-property-decay-1'},
+    {'property_decay_2_hours', 'un.admin-setting-property-decay-2'},
+    {'property_decay_3_hours', 'un.admin-setting-property-decay-3'},
     {'tech_leak_interval_hours', 'un.admin-setting-tech-leak-interval'},
     {'tech_leak_max_percent', 'un.admin-setting-tech-leak-strength'},
 }
@@ -392,7 +399,7 @@ local function render_property_table(player, frame, content)
     local list = content.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
-        column_count = 6,
+        column_count = 8,
         style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.property-column-name'}}
@@ -468,12 +475,12 @@ local function update_property_build_page(player, content)
     local size = form[PROPERTY_BUILD_SIZE_NAME]
     local cost_label = form[PROPERTY_BUILD_COST_NAME]
     local available_label = form[PROPERTY_BUILD_AVAILABLE_NAME]
-    local coin_cost_label = form[PROPERTY_BUILD_COIN_COST_NAME]
-    local coin_available_label = form[PROPERTY_BUILD_COIN_AVAILABLE_NAME]
+    local stamina_cost_label = form[PROPERTY_BUILD_STAMINA_COST_NAME]
+    local stamina_available_label = form[PROPERTY_BUILD_STAMINA_AVAILABLE_NAME]
     local cooldown_label = form[PROPERTY_BUILD_COOLDOWN_NAME]
     local button = form[PROPERTY_BUILD_BUTTON_NAME]
     if not (planet_name and lifetime and size and cost_label
-            and available_label and coin_cost_label and coin_available_label
+            and available_label and stamina_cost_label and stamina_available_label
             and cooldown_label and button) then return end
     local can_build, err, requirement = properties.build_availability(
         player,
@@ -495,10 +502,8 @@ local function update_property_build_page(player, content)
         pack_name,
         format_integer(experience.amount(player.index, requirement.pack)),
     }
-    coin_cost_label.caption = {'un.coin-amount',
-        format_integer(requirement.coin_cost)}
-    coin_available_label.caption = {'un.coin-amount',
-        format_integer(economy.get_balance(player.index))}
+    stamina_cost_label.caption = format_integer(requirement.stamina_cost)
+    stamina_available_label.caption = format_integer(stamina.get(player.index))
     local cooldown = properties.build_cooldown_left_ticks(player.index)
     cooldown_label.caption = cooldown > 0
         and format_countdown(cooldown) or {'un.property-build-ready'}
@@ -507,7 +512,7 @@ local function update_property_build_page(player, content)
         or err == 'build-cooldown' and {'un.property-build-cooldown-active'}
         or err == 'property-limit' and {'un.property-build-limit'}
         or err == 'planet-closed' and {'un.travel-planet-closed'}
-        or err == 'insufficient-credit' and {'un.property-error-credit'}
+        or err == 'insufficient-stamina' and {'un.stamina-insufficient'}
         or {'un.property-build-insufficient-experience'}
     if button.tags.action ~= 'property-build-confirm' then
         button.caption = {'un.property-build'}
@@ -518,7 +523,7 @@ end
 local function render_property_build_page(player, frame, content)
     local intro = content.add{
         type = 'label',
-        caption = {'un.property-build-intro'},
+        caption = {'un.property-build-intro', config.property_build_stamina_cost},
     }
     intro.style.single_line = false
     intro.style.maximal_width = 680
@@ -544,7 +549,7 @@ local function render_property_build_page(player, frame, content)
     }
     form.add{type = 'label', caption = {'un.property-build-lifetime'}}
     local lifetime_items = {}
-    for _, option in ipairs(config.property_lifetime_options) do
+    for _, option in ipairs(properties.build_lifetime_options()) do
         lifetime_items[#lifetime_items + 1] = {
             'un.property-build-lifetime-option',
             option.hours,
@@ -575,10 +580,10 @@ local function render_property_build_page(player, frame, content)
     form.add{type = 'label', name = PROPERTY_BUILD_COST_NAME}
     form.add{type = 'label', caption = {'un.property-build-owned'}}
     form.add{type = 'label', name = PROPERTY_BUILD_AVAILABLE_NAME}
-    form.add{type = 'label', caption = {'un.property-build-coin-required'}}
-    form.add{type = 'label', name = PROPERTY_BUILD_COIN_COST_NAME}
-    form.add{type = 'label', caption = {'un.property-build-coin-owned'}}
-    form.add{type = 'label', name = PROPERTY_BUILD_COIN_AVAILABLE_NAME}
+    form.add{type = 'label', caption = {'un.property-build-stamina-required'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_STAMINA_COST_NAME}
+    form.add{type = 'label', caption = {'un.property-build-stamina-owned'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_STAMINA_AVAILABLE_NAME}
     form.add{type = 'label', caption = {'un.property-build-cooldown'}}
     form.add{type = 'label', name = PROPERTY_BUILD_COOLDOWN_NAME}
     form.add{type = 'label', caption = ''}
@@ -624,7 +629,7 @@ local function render_ubi_section(content)
             'un.starter-kit-buy',
             config.starter_kit_equipment[2].count,
             config.starter_kit_items[1].count,
-            config.starter_kit_cost,
+            config.starter_kit_stamina_cost,
         },
         tooltip = {'un.starter-kit-tooltip'},
         tags = {action = 'starter-kit-buy'},
@@ -659,10 +664,20 @@ local function render_ship_actions(content)
         name = SHIP_ACTIONS_NAME,
         direction = 'horizontal',
     }
+    local planet_items = {}
+    for _, planet_name in ipairs(config.public_planets) do
+        planet_items[#planet_items + 1] = planet_label(planet_name)
+    end
+    ship_actions.add{
+        type = 'drop-down',
+        name = SHIP_PLANET_NAME,
+        items = planet_items,
+        selected_index = 1,
+    }
     ship_actions.add{
         type = 'button',
         name = SHIP_CREATE_NAME,
-        caption = {'un.ship-create', format_integer(settings.get('ship_cost'))},
+        caption = {'un.ship-create', format_integer(config.ship_stamina_cost)},
     }
     ship_actions.add{
         type = 'button',
@@ -679,7 +694,7 @@ local function render_experience_section(content)
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
-        column_count = 3,
+        column_count = 4,
         style = 'bordered_table',
     }
     for index, name in ipairs(config.science_pack_order) do
@@ -730,9 +745,11 @@ local function render_ships_page(player, frame, content)
     }
     list.add{type = 'label', caption = {'un.ship-column-owner'}}
     list.add{type = 'label', caption = {'un.ship-column-name'}}
+    list.add{type = 'label', caption = {'un.ship-column-orbit'}}
     list.add{type = 'label', caption = {'un.ship-column-remaining'}}
     if #list_data == 0 then
         list.add{type = 'label', caption = {'un.ship-list-empty'}}
+        list.add{type = 'label', caption = ''}
         list.add{type = 'label', caption = ''}
         list.add{type = 'label', caption = ''}
     else
@@ -746,6 +763,11 @@ local function render_ships_page(player, frame, content)
                     or ('#' .. item.owner_index),
             }
             list.add{type = 'label', caption = item.platform.name}
+            list.add{
+                type = 'label',
+                caption = planet_label(item.record.planet_name
+                    or config.ship_home_planet),
+            }
             list.add{
                 type = 'label',
                 name = ship_remaining_name(item.index),
@@ -844,7 +866,12 @@ local function render_admin_page(player, frame, content)
                 or key == 'property_price_factor'
                 or key == 'technology_price_multiplier'
                 or key == 'spoil_time_modifier'
-                or key == 'asteroid_spawning_rate',
+                or key == 'asteroid_spawning_rate'
+                or key == 'tech_leak_interval_hours'
+                or key == 'tech_leak_max_percent'
+                or key == 'property_build_price_multiplier'
+                or key:match('^property_lifetime_') ~= nil
+                or key:match('^property_decay_') ~= nil,
             allow_negative = false,
             lose_focus_on_confirm = true,
         }
@@ -856,7 +883,7 @@ local function render_admin_page(player, frame, content)
         }
     end
 
-    local switches = scroll.add{type = 'flow', direction = 'horizontal'}
+    local switches = scroll.add{type = 'flow', direction = 'vertical'}
     switches.style.vertical_align = 'center'
     switches.add{
         type = 'switch',
@@ -865,6 +892,14 @@ local function render_admin_page(player, frame, content)
         switch_state = settings.get('planet_resets_enabled') and 'right' or 'left',
         allow_none_state = false,
         tags = {action = 'admin-setting-switch', setting = 'planet_resets_enabled'},
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-tech-leak-enabled'},
+        switch_state = settings.get('tech_leak_enabled') and 'right' or 'left',
+        allow_none_state = false,
+        tags = {action = 'admin-setting-switch', setting = 'tech_leak_enabled'},
     }
     switches.add{
         type = 'switch',
@@ -996,10 +1031,16 @@ local function render_help_page(frame, content, mode)
         add_help_line(income, {'un.help-brief-start'})
         add_help_gap(details)
         local property = add_help_card(details, {'un.help-card-property'})
-        add_help_line(property, {'un.help-brief-property'})
+        add_help_line(property, {
+            'un.help-brief-property',
+            config.property_build_stamina_cost,
+        })
         add_help_gap(details)
         local travel = add_help_card(details, {'un.help-card-travel'})
         add_help_line(travel, {'un.help-brief-travel'})
+        add_help_gap(details)
+        local project = add_help_card(details, {'un.help-card-project'})
+        add_help_line(project, {'un.help-brief-project'})
     elseif mode == 'advanced' then
         local beginner = add_help_card(details, {'un.help-section-beginner'})
         add_help_line(beginner, {
@@ -1011,7 +1052,7 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(beginner, {
             'un.help-detail-starter',
-            config.starter_kit_cost,
+            config.starter_kit_stamina_cost,
         })
         add_help_line(beginner, {'un.help-detail-linked-chest'})
         add_help_line(beginner, {
@@ -1025,7 +1066,16 @@ local function render_help_page(frame, content, mode)
             'un.help-detail-property-build',
             config.property_build_experience_per_point,
             config.property_build_cooldown_hours,
-            config.property_build_price_per_experience,
+            settings.get('property_lifetime_1_hours'),
+            settings.get('property_lifetime_2_hours'),
+            settings.get('property_lifetime_3_hours'),
+            settings.get('property_decay_1_hours'),
+            settings.get('property_decay_2_hours'),
+            settings.get('property_decay_3_hours'),
+            settings.get('property_build_price_multiplier'),
+            config.property_price_cap,
+            settings.get('property_limit_per_planet'),
+            config.property_build_stamina_cost,
         })
         add_help_line(property, {'un.help-detail-property-basic'})
         add_help_gap(details)
@@ -1053,7 +1103,7 @@ local function render_help_page(frame, content, mode)
         local travel = add_help_card(details, {'un.help-detail-ship-heading'})
         add_help_line(travel, {
             'un.help-detail-ship',
-            settings.get('ship_cost'),
+            config.ship_stamina_cost,
             settings.get('ship_life_hours'),
             config.ship_base_width,
             config.ship_width_per_level,
@@ -1066,7 +1116,7 @@ local function render_help_page(frame, content, mode)
         add_help_line(world, {'un.help-detail-resets'})
         add_help_line(world, {
             'un.help-detail-tech-leak',
-            config.tech_leak_interval_ticks / config.ticks_per_hour,
+            settings.get('tech_leak_interval_hours'),
         })
     else
         local formulas = add_help_card(details, {
@@ -1111,7 +1161,7 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(world, {
             'un.help-detail-tech-leak-formula',
-            config.tech_leak_coefficient_max_percent,
+            settings.get('tech_leak_max_percent'),
         })
         add_help_gap(details)
 
@@ -1164,6 +1214,8 @@ local function render_players_page(viewer, frame, content)
     list.add{type = 'label', caption = {'un.player-column-online-hours'}}
     list.add{type = 'label', caption = {'un.player-column-offline-hours'}}
     list.add{type = 'label', caption = {'un.player-column-locale'}}
+    list.add{type = 'label', caption = {'un.player-column-coins'}}
+    list.add{type = 'label', caption = {'un.player-column-total-level'}}
     list.add{type = 'label', caption = {'un.player-column-friend'}}
 
     for _, player in ipairs(sorted_players(viewer.index)) do
@@ -1172,6 +1224,8 @@ local function render_players_page(viewer, frame, content)
         list.add{type = 'label', name = player_element_name('online', player.index)}
         list.add{type = 'label', name = player_element_name('offline', player.index)}
         list.add{type = 'label', name = player_element_name('locale', player.index)}
+        list.add{type = 'label', name = player_element_name('coins', player.index)}
+        list.add{type = 'label', name = player_element_name('level', player.index)}
         if player.index == viewer.index then
             list.add{type = 'label', caption = ''}
         else
@@ -1242,7 +1296,7 @@ local function property_error(err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
-    if err == 'ship-home-restricted' then return {'un.ship-home-restricted'} end
+    if err == 'ship-invalid-planet' then return {'un.ship-invalid-planet'} end
     if err == 'ship-already-have' then return {'un.ship-already-have'} end
     if err == 'ship-missing' then return {'un.ship-missing'} end
     if err == 'ship-not-ready' then return {'un.ship-not-ready'} end
@@ -1256,6 +1310,8 @@ local function property_error(err)
     if err == 'build-cooldown' then
         return {'un.property-build-cooldown-active'}
     end
+    if err == 'insufficient-stamina' then return {'un.stamina-insufficient'} end
+    if err == 'property-limit' then return {'un.property-build-limit'} end
     return {'un.property-error-unavailable'}
 end
 
@@ -1321,16 +1377,21 @@ local function update_ship_actions(player, content)
         return
     end
     local create = ship_actions[SHIP_CREATE_NAME]
+    local planet = ship_actions[SHIP_PLANET_NAME]
     local scuttle = ship_actions[SHIP_SCUTTLE_NAME]
     if platform then
         local hours = math.ceil(math.max(0, ships.left_ticks(record))
             / config.ticks_per_hour)
         status.caption = {'un.ship-status', platform.name, hours}
         create.enabled = false
+        planet.enabled = false
         scuttle.enabled = true
     else
         status.caption = {'un.ship-none'}
-        create.enabled = true
+        create.enabled = stamina.get(player.index) >= config.ship_stamina_cost
+        create.tooltip = create.enabled and {'un.ship-create-tooltip'}
+            or {'un.stamina-insufficient'}
+        planet.enabled = true
         scuttle.enabled = false
     end
 end
@@ -1388,7 +1449,7 @@ local function update_frame(player)
             local can_buy, buy_error = starter.can_buy(player)
             kit.enabled = can_buy
             kit.tooltip = can_buy and {'un.starter-kit-tooltip'}
-                or buy_error == 'insufficient-credit'
+                or buy_error == 'insufficient-stamina'
                     and {'un.starter-kit-insufficient'}
                     or {'un.starter-kit-unavailable'}
             if kit.tags.action ~= 'starter-kit-confirm' then
@@ -1396,7 +1457,7 @@ local function update_frame(player)
                     'un.starter-kit-buy',
                     config.starter_kit_equipment[2].count,
                     config.starter_kit_items[1].count,
-                    config.starter_kit_cost,
+                    config.starter_kit_stamina_cost,
                 }
                 kit.tags = {action = 'starter-kit-buy'}
             end
@@ -1432,10 +1493,11 @@ local function update_frame(player)
     elseif page == 'planets' then
         local leak = content[TECH_LEAK_COUNTDOWN_NAME]
         if leak and leak.valid then
-            leak.caption = {
+            local leak_left = technology_decay.left_ticks()
+            leak.caption = leak_left and {
                 'un.tech-leak-countdown',
-                format_countdown(technology_decay.left_ticks()),
-            }
+                format_countdown(leak_left),
+            } or {'un.tech-leak-paused'}
         end
         local list = content[PLANET_TABLE_NAME]
         if list and list.valid then
@@ -1505,6 +1567,8 @@ local function update_frame(player)
                 local online = list[player_element_name('online', listed_player.index)]
                 local offline = list[player_element_name('offline', listed_player.index)]
                 local locale = list[player_element_name('locale', listed_player.index)]
+                local coins = list[player_element_name('coins', listed_player.index)]
+                local level = list[player_element_name('level', listed_player.index)]
                 if status and status.valid then
                     status.caption = listed_player.connected
                         and {'un.player-online'} or {'un.player-offline'}
@@ -1525,6 +1589,16 @@ local function update_frame(player)
                     offline.caption = format_hours(offline_ticks)
                 end
                 if locale and locale.valid then locale.caption = listed_player.locale end
+                if coins and coins.valid then
+                    coins.caption = format_integer(
+                        economy.get_balance(listed_player.index)
+                    )
+                end
+                if level and level.valid then
+                    level.caption = format_integer(
+                        experience.total_level(listed_player.index)
+                    )
+                end
             end
         end
     end
@@ -1707,7 +1781,7 @@ events.on(defines.events.on_gui_click, function(event)
             local ok, err = starter.buy(player)
             if ok then
                 player.print({'un.starter-kit-purchased'})
-            elseif err == 'insufficient-credit' then
+            elseif err == 'insufficient-stamina' then
                 player.print({'un.starter-kit-insufficient'})
             else
                 player.print({'un.starter-kit-unavailable'})
@@ -1717,12 +1791,16 @@ events.on(defines.events.on_gui_click, function(event)
         else
             element.caption = {
                 'un.starter-kit-confirm',
-                config.starter_kit_cost,
+                config.starter_kit_stamina_cost,
             }
             element.tags = {action = 'starter-kit-confirm'}
         end
     elseif element.name == SHIP_CREATE_NAME then
-        local platform, err = ships.create(player)
+        local actions = content[SHIP_ACTIONS_NAME]
+        local dropdown = actions and actions.valid and actions[SHIP_PLANET_NAME]
+        local planet_name = dropdown
+            and config.public_planets[dropdown.selected_index] or nil
+        local platform, err = ships.create(player, planet_name)
         if not platform then player.print(property_error(err)) end
         render_page(player, 'ships')
         update_frame(player)
@@ -1789,6 +1867,9 @@ events.on(defines.events.on_gui_click, function(event)
                         or tags.setting == 'asteroid_spawning_rate') then
                     disasters.apply_global_settings()
                 end
+                if ok and tags.setting == 'tech_leak_interval_hours' then
+                    technology_decay.reschedule()
+                end
                 player.print(ok and {'un.admin-setting-saved'}
                     or {'un.admin-invalid-value'})
                 render_page(player, 'admin')
@@ -1833,7 +1914,7 @@ events.on(defines.events.on_gui_click, function(event)
             element.caption = {
                 'un.property-build-confirm',
                 format_integer(requirement.experience_cost),
-                format_integer(requirement.coin_cost),
+                format_integer(requirement.stamina_cost),
             }
             element.tags = {
                 action = 'property-build-confirm',
@@ -1965,6 +2046,9 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
         local ok = settings.set(tags.setting, enabled)
         if ok and tags.setting == 'planet_resets_enabled' then
             disasters.apply_enabled(enabled)
+        end
+        if ok and tags.setting == 'tech_leak_enabled' then
+            technology_decay.apply_enabled(enabled)
         end
         player.print(ok and {'un.admin-setting-saved'}
             or {'un.admin-invalid-value'})
