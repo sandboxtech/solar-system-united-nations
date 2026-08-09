@@ -130,6 +130,41 @@ function M.transfer(from_index, to_index, amount, reason)
     return true
 end
 
+function M.taxed_transfer(from_index, to_index, price, payout, reason)
+    if not is_finite_integer(price) or price <= 0 then
+        return false, 'invalid-amount'
+    end
+    if not is_finite_integer(payout) or payout < 0 or payout > price then
+        return false, 'invalid-payout'
+    end
+
+    local buyer = M.ensure_account(from_index)
+    if not is_finite_integer(buyer.credit) or buyer.credit < price then
+        return false, 'insufficient-credit'
+    end
+
+    local seller = nil
+    local next_seller = nil
+    if to_index then
+        seller = M.ensure_account(to_index)
+        if not is_finite_integer(seller.credit) or seller.credit < 0 then
+            return false, 'invalid-balance'
+        end
+        next_seller = seller.credit + payout
+        if not is_finite_integer(next_seller) then return false, 'invalid-result' end
+    end
+
+    buyer.credit = buyer.credit - price
+    if seller then seller.credit = next_seller end
+    append_ledger(from_index, -price, reason, buyer.credit)
+    if seller and payout > 0 then
+        append_ledger(to_index, payout, reason, seller.credit)
+    end
+    notify_balance_changed(from_index, buyer.credit)
+    if seller then notify_balance_changed(to_index, seller.credit) end
+    return true
+end
+
 function M.on_balance_changed(handler)
     balance_handlers[#balance_handlers + 1] = handler
 end

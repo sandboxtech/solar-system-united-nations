@@ -2,7 +2,9 @@ local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
 local linked_inventory = require('scripts.linked_inventory')
+local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
+local surfaces = require('scripts.surfaces')
 
 local M = {}
 
@@ -15,6 +17,8 @@ local UBI_CLAIM_NAME = 'un_overview_ubi_claim'
 local SURFACE_NAME = 'un_overview_surface'
 local DROPOFF_NAME = 'un_overview_dropoff'
 local TABLE_NAME = 'un_overview_table'
+local TRAVEL_NAME = 'un_overview_travel'
+local PROPERTY_TABLE_NAME = 'un_property_table'
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
 -- game.tick only when queried or claimed.
@@ -46,6 +50,73 @@ function M.ensure_button(player)
         }
     end
     return button
+end
+
+local function property_price_name(property_id)
+    return 'un_property_price_' .. tostring(property_id)
+end
+
+local function render_property_table(player, frame)
+    local old = frame[PROPERTY_TABLE_NAME]
+    if old and old.valid then old.destroy() end
+    local list = frame.add{
+        type = 'table',
+        name = PROPERTY_TABLE_NAME,
+        column_count = 5,
+    }
+    list.add{type = 'label', caption = {'un.property-column-name'}}
+    list.add{type = 'label', caption = {'un.property-column-owner'}}
+    list.add{type = 'label', caption = {'un.property-column-price'}}
+    list.add{type = 'label', caption = ''}
+    list.add{type = 'label', caption = ''}
+
+    for _, property in ipairs(properties.list()) do
+        list.add{type = 'label', caption = properties.display_name(property)}
+        local owner = properties.owner_name(property)
+        list.add{
+            type = 'label',
+            caption = owner or {'un.property-vacant'},
+        }
+        list.add{
+            type = 'label',
+            name = property_price_name(property.id),
+            caption = format_integer(properties.current_price(property)),
+        }
+        if property.owner_index == player.index then
+            list.add{
+                type = 'button',
+                caption = {'un.property-enter'},
+                tags = {action = 'property-enter', property_id = property.id},
+            }
+            list.add{
+                type = 'button',
+                caption = {
+                    'un.property-renew',
+                    format_integer(properties.renew_fee(property)),
+                },
+                tags = {action = 'property-renew', property_id = property.id},
+            }
+        else
+            list.add{
+                type = 'button',
+                caption = {'un.property-buy'},
+                tags = {action = 'property-buy', property_id = property.id},
+            }
+            list.add{type = 'label', caption = ''}
+        end
+    end
+    frame.tags = {property_revision = storage.property_revision or 0}
+end
+
+local function property_error(err)
+    if err == 'insufficient-credit' then return {'un.property-error-credit'} end
+    if err == 'renew-limit' then return {'un.property-error-renew-limit'} end
+    if err == 'price-increased' then return {'un.property-error-price-changed'} end
+    if err == 'not-owner' or err == 'already-owner' then
+        return {'un.property-error-ownership'}
+    end
+    if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
+    return {'un.property-error-unavailable'}
 end
 
 local function update_frame(player)
@@ -93,6 +164,26 @@ local function update_frame(player)
             format_integer(claimable),
             format_integer(capacity),
         }
+    end
+
+    local travel = frame[TRAVEL_NAME]
+    if travel and travel.valid then
+        travel.caption = player.physical_surface.name == config.hospice_surface_name
+            and {'un.travel-nauvis'} or {'un.travel-hospice'}
+    end
+
+    if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
+        render_property_table(player, frame)
+    else
+        local property_table = frame[PROPERTY_TABLE_NAME]
+        if property_table and property_table.valid then
+            for _, property in ipairs(properties.list()) do
+                local price = property_table[property_price_name(property.id)]
+                if price and price.valid then
+                    price.caption = format_integer(properties.current_price(property))
+                end
+            end
+        end
     end
 end
 
@@ -159,6 +250,19 @@ local function open_frame(player)
     }
     claim.style.horizontally_stretchable = true
 
+    local travel = frame.add{
+        type = 'button',
+        name = TRAVEL_NAME,
+        caption = {'un.travel-hospice'},
+    }
+    travel.style.horizontally_stretchable = true
+    frame.add{
+        type = 'label',
+        caption = {'un.property-title'},
+        style = 'heading_2_label',
+    }
+    render_property_table(player, frame)
+
     frame.force_auto_center()
     player.opened = frame
     open_players[player.index] = true
@@ -206,6 +310,45 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
+    elseif element.name == TRAVEL_NAME then
+        local ok, err
+        if player.physical_surface.name == config.hospice_surface_name then
+            ok, err = surfaces.to_nauvis(player)
+        else
+            ok, err = surfaces.to_hospice(player)
+        end
+        if ok then close_frame(player) else player.print(property_error(err)) end
+    else
+        local tags = element.tags
+        if tags.action == 'property-buy' then
+            local property = properties.get(tags.property_id)
+            if not property then
+                player.print({'un.property-missing'})
+                render_property_table(player, player.gui.screen[FRAME_NAME])
+                return
+            end
+            local quote = properties.current_price(property)
+            element.caption = {'un.property-confirm-buy', format_integer(quote)}
+            element.tags = {
+                action = 'property-confirm-buy',
+                property_id = property.id,
+                quoted_price = quote,
+            }
+        elseif tags.action == 'property-confirm-buy' then
+            local ok, err = properties.buy(player, tags.property_id, tags.quoted_price)
+            if not ok then player.print(property_error(err)) end
+            render_property_table(player, player.gui.screen[FRAME_NAME])
+            update_frame(player)
+        elseif tags.action == 'property-renew' then
+            local ok, err = properties.renew(player, tags.property_id)
+            if not ok then player.print(property_error(err)) end
+            render_property_table(player, player.gui.screen[FRAME_NAME])
+            update_frame(player)
+        elseif tags.action == 'property-enter' then
+            local ok, err = properties.enter(player, tags.property_id)
+            if ok then close_frame(player)
+            else player.print(property_error(err)) end
+        end
     end
 end)
 

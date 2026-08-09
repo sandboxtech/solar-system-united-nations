@@ -71,39 +71,12 @@ local function evict_previous(player, new_surface_name, new_position)
     return old ~= nil
 end
 
-local function convert_manual_linked_chest(entity, player)
-    local surface = entity.surface
-    local position = entity.position
-    local force = entity.force
-    local quality = entity.quality.name
-    entity.destroy()
-
-    local wooden = surface.create_entity{
-        name = config.wooden_chest_name,
-        position = position,
-        force = force,
-        quality = quality,
-        player = player.index,
-        raise_built = false,
-    }
-    if not (wooden and wooden.valid) then
-        give_wooden_chest(player, surface, position, quality)
-    end
-end
-
 local function on_player_built(event)
     local entity = event.entity
     if not (entity and entity.valid) then return end
 
     local player = game.get_player(event.player_index)
     if not player then return end
-
-    -- A manually placed native linked chest is never trusted. Turn it into an
-    -- ordinary wooden chest without touching the player's registered dropoff.
-    if entity.name == config.linked_chest_name then
-        convert_manual_linked_chest(entity, player)
-        return
-    end
 
     if entity.name ~= config.wooden_chest_name then return end
     if not public_planets[entity.surface.name] then return end
@@ -226,6 +199,10 @@ end
 
 function M.has_active_dropoff(player_index)
     return resolve_record(player_index) ~= nil
+end
+
+function M.get_active_dropoff(player_index)
+    return resolve_record(player_index)
 end
 
 function M.convert_player(player)

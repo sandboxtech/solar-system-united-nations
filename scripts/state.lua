@@ -6,6 +6,10 @@ function M.ensure()
     local old_version = storage.schema_version or 0
     if storage.players == nil then storage.players = {} end
     if storage.properties == nil then storage.properties = {} end
+    if storage.next_property_id == nil then storage.next_property_id = 1 end
+    if storage.deleting_properties == nil then storage.deleting_properties = {} end
+    if storage.property_delete_confirm == nil then storage.property_delete_confirm = {} end
+    if storage.property_revision == nil then storage.property_revision = 0 end
     if storage.dropoffs == nil then storage.dropoffs = {} end
     if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then

@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 4
+M.schema_version = 5
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -42,6 +42,18 @@ M.quality_credit_multiplier = {
     rare = 4,
     epic = 8,
     legendary = 16,
+}
+
+M.hospice_surface_name = 'un-hospice'
+M.hospice_surface_size = 128
+M.property_surface_prefix = 'un-property-'
+M.property_default_tax = 0.05
+M.property_link_id_unowned = 0
+M.property_linked_chest_y = -4.5
+M.default_properties = {
+    {price = 1000, size = 64, linked_chests = 1},
+    {price = 5000, size = 128, linked_chests = 2},
+    {price = 20000, size = 192, linked_chests = 4},
 }
 
 -- Stage 0 uses an isolated surface and reserved link IDs. Player link IDs start
