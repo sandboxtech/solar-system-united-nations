@@ -337,10 +337,26 @@ function M.enter(player, property_id)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
     ensure_linked_chests(property)
+    local ok, err
     if player.admin then
-        return surfaces.teleport_near(player, surface, {0, 0}, false)
+        ok, err = surfaces.teleport_near(player, surface, {0, 0}, false)
+    else
+        ok, err = surfaces.teleport(player, surface)
     end
-    return surfaces.teleport(player, surface)
+    if ok and property.owner_index == player.index then
+        economy.ensure_account(player.index).last_property_id = property.id
+    end
+    return ok, err
+end
+
+function M.enter_last_owned(player)
+    local account = economy.ensure_account(player.index)
+    local property = M.get(account.last_property_id)
+    if not property or property.owner_index ~= player.index then
+        account.last_property_id = nil
+        return false, 'last-property-unavailable'
+    end
+    return M.enter(player, property.id)
 end
 
 local function command_player(command)
