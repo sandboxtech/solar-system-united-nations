@@ -10,7 +10,7 @@ local surfaces = require('scripts.surfaces')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 5
+local HUD_LAYOUT_VERSION = 6
 local HUD_TITLE_NAME = 'un_hud_title'
 local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_UBI_NAME = 'un_hud_ubi'
@@ -35,6 +35,7 @@ local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
+local PROPERTY_ACTIONS_NAME = 'un_property_actions'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
@@ -64,7 +65,6 @@ function M.ensure_button(player)
             and hud[HUD_TITLE_NAME]
             and hud[HUD_UBI_NAME]
             and hud[TRAVEL_PLANET_NAME]
-            and hud[TRAVEL_HOSPICE_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
             and hud[HUD_PROPERTY_NAME]
             and hud[HUD_PLAYERS_NAME]
@@ -96,7 +96,6 @@ function M.ensure_button(player)
         {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
         {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
         {TRAVEL_PLANET_NAME, 'space-location/nauvis', {'un.travel-planet'}},
-        {TRAVEL_HOSPICE_NAME, 'utility/gps_map_icon', {'un.travel-hospice'}},
         {HUD_LAST_PROPERTY_NAME, 'utility/enter', {'un.hud-last-property-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
@@ -132,8 +131,20 @@ local function set_frame_state(frame, page, property_revision)
 end
 
 local function render_property_table(player, frame, content)
+    local old_actions = content[PROPERTY_ACTIONS_NAME]
+    if old_actions and old_actions.valid then old_actions.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
+    local actions = content.add{
+        type = 'flow',
+        name = PROPERTY_ACTIONS_NAME,
+        direction = 'horizontal',
+    }
+    actions.add{
+        type = 'button',
+        name = TRAVEL_HOSPICE_NAME,
+        caption = {'un.travel-hospice'},
+    }
     local list = content.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
@@ -368,10 +379,11 @@ local function property_error(err)
     if err == 'ship-missing' then return {'un.ship-missing'} end
     if err == 'ship-not-ready' then return {'un.ship-not-ready'} end
     if err == 'ship-create-failed' then return {'un.ship-create-failed'} end
-    if err == 'last-property-unavailable' then
-        return {'un.property-error-last-property'}
-    end
     return {'un.property-error-unavailable'}
+end
+
+local function property_disappeared(err)
+    return err == 'missing' or err == 'surface-missing'
 end
 
 local DRAGGABLE_TYPES = {
@@ -671,7 +683,6 @@ events.on(defines.events.on_gui_click, function(event)
         if tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
             if not property then
-                player.print({'un.property-missing'})
                 render_property_table(player, frame, content)
                 return
             end
@@ -684,18 +695,26 @@ events.on(defines.events.on_gui_click, function(event)
             }
         elseif tags.action == 'property-confirm-buy' then
             local ok, err = properties.buy(player, tags.property_id, tags.quoted_price)
-            if not ok then player.print(property_error(err)) end
+            if not ok and not property_disappeared(err) then
+                player.print(property_error(err))
+            end
             render_property_table(player, frame, content)
             update_frame(player)
         elseif tags.action == 'property-renew' then
             local ok, err = properties.renew(player, tags.property_id)
-            if not ok then player.print(property_error(err)) end
+            if not ok and not property_disappeared(err) then
+                player.print(property_error(err))
+            end
             render_property_table(player, frame, content)
             update_frame(player)
         elseif tags.action == 'property-enter' then
             local ok, err = properties.enter(player, tags.property_id)
             if ok then close_frame(player)
-            else player.print(property_error(err)) end
+            elseif not property_disappeared(err) then
+                player.print(property_error(err))
+            else
+                render_property_table(player, frame, content)
+            end
         end
     end
 end)

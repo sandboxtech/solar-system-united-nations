@@ -66,22 +66,24 @@ M.property_link_id_unowned = 0
 M.property_max_size = 128
 M.property_sample_planets = {'nauvis', 'gleba'}
 M.property_side_lengths = {32, 64, 128}
+M.property_initial_price_min = 1000
+M.property_initial_price_max = 2000
 M.default_properties = {
-    {price = 1000, solar = 0.1, sample_planet = 'nauvis'},
-    {price = 1000, solar = 1, sample_planet = 'gleba'},
-    {price = 1000, solar = 10, sample_planet = 'nauvis'},
-    {price = 1000, solar = 0.1, sample_planet = 'gleba'},
-    {price = 5000, solar = 1, sample_planet = 'nauvis'},
-    {price = 5000, solar = 10, sample_planet = 'gleba'},
-    {price = 5000, solar = 0.1, sample_planet = 'nauvis'},
-    {price = 20000, solar = 1, sample_planet = 'gleba'},
-    {price = 20000, solar = 10, sample_planet = 'nauvis'},
+    {solar = 0.1, sample_planet = 'nauvis'},
+    {solar = 1, sample_planet = 'gleba'},
+    {solar = 10, sample_planet = 'nauvis'},
+    {solar = 0.1, sample_planet = 'gleba'},
+    {solar = 1, sample_planet = 'nauvis'},
+    {solar = 10, sample_planet = 'gleba'},
+    {solar = 0.1, sample_planet = 'nauvis'},
+    {solar = 1, sample_planet = 'gleba'},
+    {solar = 10, sample_planet = 'nauvis'},
 }
 
 M.ship_life_hours = 50
 M.ship_credit_cost = 1000
-M.ship_width_per_level = 16
-M.ship_width_bonus = 4
+M.ship_width_per_level = 2
+M.ship_base_width = 16
 M.ship_height = 512
 M.ship_home_planet = 'nauvis'
 M.ship_lock_native_creation = true

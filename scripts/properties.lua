@@ -160,7 +160,15 @@ end
 function M.create(spec)
     state.ensure()
     spec = spec or {}
-    local price = math.floor(tonumber(spec.price) or 1000)
+    local price
+    if spec.price == nil then
+        price = math.random(
+            config.property_initial_price_min,
+            config.property_initial_price_max
+        )
+    else
+        price = math.floor(tonumber(spec.price) or 0)
+    end
     local tax = tonumber(spec.tax) or config.property_default_tax
     local solar = tonumber(spec.solar) or 1
     local sides = config.property_side_lengths
@@ -373,7 +381,7 @@ function M.enter_last_owned(player)
     local property = M.get(account.last_property_id)
     if not property or property.owner_index ~= player.index then
         account.last_property_id = nil
-        return false, 'last-property-unavailable'
+        return surfaces.to_hospice(player)
     end
     return M.enter(player, property.id)
 end

@@ -48,8 +48,8 @@ local function apply_bounds(platform, owner_index)
     local ok, err = pcall(function()
         local settings = platform.surface.map_gen_settings
         local level = owner_index and experience.total_level(owner_index) or 0
-        settings.width = config.ship_width_per_level
-            * (level + config.ship_width_bonus)
+        settings.width = config.ship_base_width
+            + config.ship_width_per_level * level
         settings.height = config.ship_height
         platform.surface.map_gen_settings = settings
     end)
@@ -158,6 +158,10 @@ end
 function M.ensure()
     reconcile()
     M.enforce_lock()
+    for index, record in pairs(records()) do
+        local platform = platform_of(index)
+        if platform then apply_bounds(platform, record.owner_index) end
+    end
 end
 
 local function on_platform_surface(surface)
