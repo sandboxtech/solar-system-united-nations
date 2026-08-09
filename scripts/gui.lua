@@ -1,6 +1,7 @@
 local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
+local linked_inventory = require('scripts.linked_inventory')
 local scheduler = require('scripts.scheduler')
 
 local M = {}
@@ -9,10 +10,10 @@ local BUTTON_NAME = 'un_main_button'
 local FRAME_NAME = 'un_main_frame'
 local CLOSE_NAME = 'un_main_close'
 local BALANCE_NAME = 'un_overview_balance'
-local CLAIMABLE_NAME = 'un_overview_claimable'
 local UBI_PROGRESS_NAME = 'un_overview_ubi_progress'
 local UBI_CLAIM_NAME = 'un_overview_ubi_claim'
 local SURFACE_NAME = 'un_overview_surface'
+local DROPOFF_NAME = 'un_overview_dropoff'
 local TABLE_NAME = 'un_overview_table'
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
@@ -64,16 +65,18 @@ local function update_frame(player)
 
     local claimable = economy.get_claimable_ubi(player.index)
     local capacity = economy.get_ubi_capacity()
-    local claimable_label = table_element[CLAIMABLE_NAME]
-    if claimable_label and claimable_label.valid then
-        claimable_label.caption = format_integer(claimable)
-    end
 
     local surface_label = table_element[SURFACE_NAME]
     if surface_label and surface_label.valid then
         local surface = player.physical_surface
         surface_label.caption = surface and surface.valid
             and surface.localised_name or {'un.unknown'}
+    end
+
+    local dropoff = table_element[DROPOFF_NAME]
+    if dropoff and dropoff.valid then
+        dropoff.caption = linked_inventory.has_active_dropoff(player.index)
+            and {'un.dropoff-active'} or {'un.dropoff-missing'}
     end
 
     local progress = frame[UBI_PROGRESS_NAME]
@@ -85,7 +88,11 @@ local function update_frame(player)
     local claim = frame[UBI_CLAIM_NAME]
     if claim and claim.valid then
         claim.enabled = claimable > 0
-        claim.caption = {'un.ubi-claim'}
+        claim.caption = {
+            'un.ubi-claim',
+            format_integer(claimable),
+            format_integer(capacity),
+        }
     end
 end
 
@@ -134,10 +141,10 @@ local function open_frame(player)
     }
     table_element.add{type = 'label', caption = {'un.credit-label'}}
     table_element.add{type = 'label', name = BALANCE_NAME}
-    table_element.add{type = 'label', caption = {'un.ubi-available-label'}}
-    table_element.add{type = 'label', name = CLAIMABLE_NAME}
     table_element.add{type = 'label', caption = {'un.surface-label'}}
     table_element.add{type = 'label', name = SURFACE_NAME}
+    table_element.add{type = 'label', caption = {'un.dropoff-label'}}
+    table_element.add{type = 'label', name = DROPOFF_NAME}
 
     local progress = frame.add{
         type = 'progressbar',
@@ -145,11 +152,12 @@ local function open_frame(player)
         value = 0,
     }
     progress.style.horizontally_stretchable = true
-    frame.add{
+    local claim = frame.add{
         type = 'button',
         name = UBI_CLAIM_NAME,
-        caption = {'un.ubi-claim'},
+        caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
     }
+    claim.style.horizontally_stretchable = true
 
     frame.force_auto_center()
     player.opened = frame

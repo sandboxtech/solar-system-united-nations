@@ -2,6 +2,7 @@
 -- once through scripts.events, while feature modules add their own handlers.
 require('scripts.diagnostics')
 require('scripts.economy')
+require('scripts.linked_inventory')
 require('scripts.gui')
 
 local bootstrap = require('scripts.bootstrap')
