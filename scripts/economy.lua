@@ -127,32 +127,33 @@ function M.transfer(from_index, to_index, amount, fee, reason)
     if not is_finite_integer(amount) or amount <= 0 then
         return false, 'invalid-amount'
     end
-    if not is_finite_integer(fee) or fee < 0 then
+    if not is_finite_integer(fee) or fee < 0 or fee > amount then
         return false, 'invalid-fee'
     end
 
     local from = M.ensure_account(from_index)
     local to = M.ensure_account(to_index)
-    local debit = amount + fee
-    if not is_finite_integer(debit) then return false, 'invalid-result' end
-    if not is_finite_integer(from.credit) or from.credit < debit then
+    local payout = amount - fee
+    if not is_finite_integer(from.credit) or from.credit < amount then
         return false, 'insufficient-credit'
     end
     if not is_finite_integer(to.credit) or to.credit < 0 then
         return false, 'invalid-balance'
     end
 
-    local next_to = to.credit + amount
+    local next_to = to.credit + payout
     if not is_finite_integer(next_to) then return false, 'invalid-result' end
 
     -- Validate both results before mutating either account, then commit the pair.
-    from.credit = from.credit - debit
+    from.credit = from.credit - amount
     to.credit = next_to
-    append_ledger(from_index, -debit, reason or 'transfer-out', from.credit)
-    append_ledger(to_index, amount, reason or 'transfer-in', to.credit)
+    append_ledger(from_index, -amount, reason or 'transfer-out', from.credit)
+    if payout > 0 then
+        append_ledger(to_index, payout, reason or 'transfer-in', to.credit)
+    end
     notify_balance_changed(from_index, from.credit)
     notify_balance_changed(to_index, to.credit)
-    return true
+    return true, payout
 end
 
 function M.taxed_transfer(from_index, to_index, price, payout, reason)

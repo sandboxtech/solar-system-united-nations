@@ -27,6 +27,15 @@ M.public_planet_warning_minutes = {30, 5, 1}
 M.public_planet_check_ticks = 60 * 60
 M.public_planet_solar_factors = {0.75, 1, 1.25}
 M.public_planet_day_factors = {0.75, 1, 1.5}
+M.public_planet_resource_base = {frequency = 2, size = 2, richness = 0.25}
+M.public_planet_resource_spread = 3
+M.public_planet_terrain_spread = 3
+M.public_planet_cliff_spread = 2
+M.public_planet_enemy_spread = 4
+M.public_planet_peaceful_chance = 0.01
+M.technology_price_multiplier = 2
+M.spoil_time_modifier = 1
+M.asteroid_spawning_rate = 1
 
 M.player_cleanup_idle_hours = 90
 M.player_cleanup_check_ticks = 60 * 60 * 60
@@ -37,7 +46,7 @@ M.property_price_factor = 2
 M.property_lease_order = {'short', 'long'}
 M.property_lease_types = {
     short = {hours = 2},
-    long = {hours = 10},
+    long = {hours = 20},
 }
 
 M.initial_credit = 1000

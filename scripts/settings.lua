@@ -17,6 +17,21 @@ local DEFINITIONS = {
         exclusive_min = true,
         exclusive_max = true,
     },
+    technology_price_multiplier = {
+        default = config.technology_price_multiplier,
+        min = 0.001,
+        max = 1000,
+    },
+    spoil_time_modifier = {
+        default = config.spoil_time_modifier,
+        min = 0.001,
+        max = 1000,
+    },
+    asteroid_spawning_rate = {
+        default = config.asteroid_spawning_rate,
+        min = 0,
+        max = 1000,
+    },
     property_supply_enabled = {default = true, boolean = true},
     planet_resets_enabled = {default = true, boolean = true},
     admin_property_access = {default = false, boolean = true},

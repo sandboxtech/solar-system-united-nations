@@ -112,18 +112,138 @@ local function choose(list)
     return list[math.random(1, #list)]
 end
 
+local function power_of_two(spread)
+    return 2 ^ (-spread + math.random() * spread * 2)
+end
+
+local function sorted_control_names(map_settings)
+    local names = {}
+    for name in pairs(map_settings.autoplace_controls or {}) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return names
+end
+
+local function randomize_autoplace(map_settings, record)
+    local enemy_control = false
+    record.autoplace = {}
+    for _, name in ipairs(sorted_control_names(map_settings)) do
+        local prototype = prototypes.autoplace_control[name]
+        local control = map_settings.autoplace_controls[name]
+        local category = prototype and prototype.category
+        if category == 'resource' then
+            local base = config.public_planet_resource_base
+            control.frequency = base.frequency
+                * power_of_two(config.public_planet_resource_spread)
+            control.size = base.size
+                * power_of_two(config.public_planet_resource_spread)
+            control.richness = base.richness
+                * power_of_two(config.public_planet_resource_spread)
+        elseif category == 'enemy' then
+            enemy_control = true
+            control.frequency = power_of_two(config.public_planet_enemy_spread)
+            control.size = power_of_two(config.public_planet_enemy_spread)
+        elseif category == 'terrain' then
+            control.frequency = (control.frequency or 1)
+                * power_of_two(config.public_planet_terrain_spread)
+            control.size = (control.size or 1)
+                * power_of_two(config.public_planet_terrain_spread)
+            control.richness = (control.richness or 1)
+                * power_of_two(config.public_planet_terrain_spread)
+        end
+        record.autoplace[name] = {
+            frequency = control.frequency,
+            size = control.size,
+            richness = control.richness,
+        }
+    end
+
+    if enemy_control then
+        map_settings.starting_area = (map_settings.starting_area or 1)
+            * power_of_two(config.public_planet_enemy_spread)
+    end
+
+    local cliffs = map_settings.cliff_settings
+    if cliffs then
+        cliffs.cliff_elevation_interval = math.max(
+            1,
+            (cliffs.cliff_elevation_interval or 40)
+                * power_of_two(config.public_planet_cliff_spread)
+        )
+        cliffs.richness = (cliffs.richness or 1)
+            * power_of_two(config.public_planet_cliff_spread)
+    end
+end
+
+local function randomize_climate(map_settings, record)
+    local expressions = map_settings.property_expression_names or {}
+    record.climate = {
+        moisture_bias = (math.random() - math.random()) * 0.5,
+        aux_bias = (math.random() - math.random()) * 0.5,
+        temperature_bias = (math.random() - math.random()) * 20,
+        moisture_frequency = power_of_two(1),
+    }
+    expressions['control:moisture:bias'] = tostring(record.climate.moisture_bias)
+    expressions['control:aux:bias'] = tostring(record.climate.aux_bias)
+    expressions['control:temperature:bias'] = tostring(
+        record.climate.temperature_bias
+    )
+    expressions['control:moisture:frequency'] = tostring(
+        record.climate.moisture_frequency
+    )
+    map_settings.property_expression_names = expressions
+end
+
+local function randomize_demolishers(map_settings, record)
+    local territory = map_settings.territory_settings
+    if not (territory and territory.units and #territory.units > 0) then return end
+    territory.minimum_territory_size = math.max(
+        1,
+        math.floor((territory.minimum_territory_size or 10)
+            * power_of_two(2) + 0.5)
+    )
+    local roll = math.random()
+    if roll < 0.05 then
+        territory.minimum_territory_size = 4294967295
+        record.demolisher_tiers = 0
+    elseif roll < 0.25 then
+        territory.units = {'small-demolisher'}
+        record.demolisher_tiers = 1
+    elseif roll < 0.55 then
+        territory.units = {'small-demolisher', 'medium-demolisher'}
+        record.demolisher_tiers = 2
+    else
+        record.demolisher_tiers = #territory.units
+    end
+end
+
 local function prepare_new_round(name, surface, record)
     local planet = game.planets[name]
     if planet and planet.valid then planet.reset_map_gen_settings() end
-    local settings = surface.map_gen_settings
-    settings.seed = math.random(1, 2147483647)
-    surface.map_gen_settings = settings
+    local map_settings = surface.map_gen_settings
+    map_settings.seed = math.random(1, 2147483647)
+    randomize_autoplace(map_settings, record)
+    randomize_climate(map_settings, record)
+    randomize_demolishers(map_settings, record)
+    surface.map_gen_settings = map_settings
 
     record.round = record.round + 1
-    record.seed = settings.seed
+    record.seed = map_settings.seed
     record.solar_factor = choose(config.public_planet_solar_factors)
     record.day_factor = choose(config.public_planet_day_factors)
-    record.evolution = name == 'nauvis' and math.random() or nil
+    record.evolution = name == 'nauvis' and math.random() ^ 2 or nil
+    record.min_brightness = math.random() * 0.2
+    record.peaceful = math.random() < config.public_planet_peaceful_chance
+    local half_day = 0.1 + math.random() * 0.3
+    local evening = half_day + (0.5 - half_day)
+        * (0.4 + math.random() * 0.5)
+    record.daytime_parameters = {
+        dusk = half_day,
+        evening = evening,
+        morning = 1 - evening,
+        dawn = 1 - half_day,
+    }
 end
 
 local function begin_reset(name, surface, record)
@@ -182,6 +302,11 @@ local function finish_reset(name, surface, record)
                 * (record.day_factor or 1))
         )
     end)
+    pcall(function()
+        surface.daytime_parameters = record.daytime_parameters
+        surface.min_brightness = record.min_brightness
+        surface.peaceful_mode = record.peaceful == true
+    end)
     if name == 'nauvis' and record.evolution then
         game.forces.enemy.set_evolution_factor(record.evolution, surface)
     end
@@ -206,7 +331,18 @@ local function finish_reset(name, surface, record)
         planet_label(name),
         math.floor((record.solar_factor or 1) * 100 + 0.5),
         math.floor((record.day_factor or 1) * 100 + 0.5),
+        string.format('%.2f', record.min_brightness or 0),
+        record.peaceful and {'un.yes'} or {'un.no'},
     })
+end
+
+function M.apply_global_settings()
+    game.difficulty_settings.technology_price_multiplier =
+        settings.get('technology_price_multiplier')
+    game.difficulty_settings.spoil_time_modifier =
+        settings.get('spoil_time_modifier')
+    game.map_settings.asteroids.spawning_rate =
+        settings.get('asteroid_spawning_rate')
 end
 
 function M.is_open(name)
@@ -253,6 +389,7 @@ function M.apply_enabled(enabled)
 end
 
 function M.ensure()
+    M.apply_global_settings()
     for _, name in ipairs(config.public_planets) do ensure_record(name) end
     if not settings.get('planet_resets_enabled') then M.apply_enabled(false) end
 end

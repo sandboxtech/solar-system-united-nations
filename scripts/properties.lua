@@ -182,6 +182,14 @@ local function ensure_linked_chests(property)
     return true
 end
 
+local function sync_surface_visibility(property)
+    local surface = game.surfaces[property.surface_name]
+    local force = game.forces.player
+    if not (surface and surface.valid and force and force.valid) then return false end
+    force.set_surface_hidden(surface, property.owner_index ~= nil)
+    return true
+end
+
 function M.create(spec)
     state.ensure()
     spec = spec or {}
@@ -258,6 +266,7 @@ function M.create(spec)
         created_tick = game.tick,
     }
     storage.properties[id] = property
+    sync_surface_visibility(property)
     ensure_property_name_rendering(property, property_rendering_fallback(property))
     local translator = first_connected_player()
     if translator then request_property_name_translation(property, translator) end
@@ -290,6 +299,7 @@ function M.ensure_defaults()
         property.decay_ticks = config.property_lease_types[
             property.lease_type
         ].hours * config.ticks_per_hour
+        sync_surface_visibility(property)
         ensure_linked_chests(property)
         ensure_property_name_rendering(
             property,
@@ -393,6 +403,7 @@ function M.release_owner(player_index)
             property.owner_index = nil
             property.owner_cleanup_tick = game.tick
             ensure_linked_chests(property)
+            sync_surface_visibility(property)
             local translator = first_connected_player()
             if translator then
                 request_property_name_translation(property, translator)
@@ -457,6 +468,7 @@ function M.buy(player, property_id, quoted_price)
     if not ok then return false, err end
 
     property.owner_index = player.index
+    sync_surface_visibility(property)
     property.base_price = price
     property.price_at_tick = game.tick + property.decay_ticks
     property.purchased_tick = game.tick

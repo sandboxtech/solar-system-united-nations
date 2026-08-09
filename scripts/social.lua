@@ -109,7 +109,7 @@ local function transfer_command(command)
         math.ceil(amount * config.transfer_fee_rate)
     )
     local reason = 'credit-transfer:' .. player.index .. ':' .. target.index
-    local ok, err = economy.transfer(
+    local ok, result = economy.transfer(
         player.index,
         target.index,
         amount,
@@ -117,18 +117,19 @@ local function transfer_command(command)
         reason
     )
     if not ok then
-        if err == 'same-account' then
+        if result == 'same-account' then
             player.print({'un.transfer-self'})
-        elseif err == 'insufficient-credit' then
+        elseif result == 'insufficient-credit' then
             player.print({'un.property-error-credit'})
         else
             player.print({'un.transfer-failed'})
         end
         return
     end
-    player.print({'un.transfer-sent', amount, target.name, fee})
+    local payout = result
+    player.print({'un.transfer-sent', amount, target.name, fee, payout})
     if target.connected then
-        target.print({'un.transfer-received', amount, player.name})
+        target.print({'un.transfer-received', amount, player.name, fee, payout})
     end
 end
 
