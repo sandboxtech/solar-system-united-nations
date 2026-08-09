@@ -25,6 +25,9 @@ local function context(player)
     if not (surface and surface.valid) then return nil, 'invalid-location' end
     if surface.platform then return nil, 'in-space' end
     if player.vehicle and player.vehicle.valid then return nil, 'in-vehicle' end
+    if not surfaces.can_start_public_travel(surface) then
+        return nil, 'invalid-location'
+    end
     local planet_name = factions.of_player(player)
     if not planet_name then return nil, 'invalid-faction' end
     return planet_name

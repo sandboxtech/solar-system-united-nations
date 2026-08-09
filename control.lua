@@ -2,6 +2,7 @@
 -- once through scripts.events, while feature modules add their own handlers.
 require('scripts.economy')
 require('scripts.factions')
+require('scripts.respawn')
 require('scripts.chat')
 require('scripts.starter')
 require('scripts.linked_inventory')

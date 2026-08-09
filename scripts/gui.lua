@@ -34,13 +34,13 @@ local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
 local NAV_PLAYERS_NAME = 'un_nav_players'
-local NAV_CRIME_NAME = 'un_nav_crime'
 local NAV_FACTIONS_NAME = 'un_nav_factions'
 local NAV_ADMIN_NAME = 'un_nav_admin'
 local HELP_STORY_NAME = 'un_help_story'
 local HELP_BRIEF_NAME = 'un_help_brief'
 local HELP_ADVANCED_NAME = 'un_help_advanced'
 local HELP_FULL_NAME = 'un_help_full'
+local HELP_ADMIN_NAME = 'un_help_admin'
 local HELP_DETAILS_NAME = 'un_help_details'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
@@ -50,18 +50,14 @@ local STAMINA_NAME = 'un_stamina'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
 local STARTER_KIT_NAME = 'un_starter_kit'
-local SUICIDE_PREFIX = 'un_suicide_'
 local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
-local SHIP_PLANET_NAME = 'un_ship_planet'
 local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local SHIP_TABLE_NAME = 'un_ship_table'
-local PROPERTY_ACTIONS_NAME = 'un_property_actions'
 local PROPERTY_SORT_FLOW_NAME = 'un_property_sort_flow'
 local PROPERTY_SORT_NAME = 'un_property_sort'
 local PROPERTY_TABLE_NAME = 'un_property_table'
-local PROPERTY_BUILD_PLANET_NAME = 'un_property_build_planet'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
 local PROPERTY_BUILD_LIFETIME_NAME = 'un_property_build_lifetime'
 local PROPERTY_BUILD_SIZE_NAME = 'un_property_build_size'
@@ -77,6 +73,7 @@ local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
 local PLANET_TABLE_NAME = 'un_planet_table'
 local TECH_LEAK_COUNTDOWN_NAME = 'un_tech_leak_countdown'
+local CRIME_ACTIONS_NAME = 'un_crime_actions'
 local CRIME_STATUS_NAME = 'un_crime_status'
 local CRIME_BUTTON_NAME = 'un_crime_button'
 local FACTION_TABLE_NAME = 'un_faction_table'
@@ -112,6 +109,9 @@ local ADMIN_NUMBER_SETTINGS = {
 -- game.tick only when queried or claimed.
 local open_players = {}
 
+local crime_error_caption
+local update_crime_action
+
 local PROPERTY_SORT_OPTIONS = {
     {'un.property-sort-expiry-ascending'},
     {'un.property-sort-expiry-descending'},
@@ -123,7 +123,7 @@ local function update_home_button(player, hud)
     hud = hud or player.gui.top[HUD_FLOW_NAME]
     local button = hud and hud.valid and hud[HUD_LAST_PROPERTY_NAME]
     if not (button and button.valid) then return end
-    local planet_name = surfaces.context_planet(player.physical_surface)
+    local planet_name = factions.of_player(player)
     if planet_name and player.physical_surface.name == planet_name then
         button.tooltip = {'un.hud-home-to-home-tooltip'}
     else
@@ -382,8 +382,8 @@ local function render_property_access_section(player, content)
 end
 
 local function render_property_table(player, frame, content)
-    local old_actions = content[PROPERTY_ACTIONS_NAME]
-    if old_actions and old_actions.valid then old_actions.destroy() end
+    local old_crime = content[CRIME_ACTIONS_NAME]
+    if old_crime and old_crime.valid then old_crime.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
     if old_access and old_access.valid then old_access.destroy() end
     local old_sort = content[PROPERTY_SORT_FLOW_NAME]
@@ -401,6 +401,22 @@ local function render_property_table(player, frame, content)
         type = 'label',
         caption = {'un.property-current-faction', planet_label(selected)},
     }
+    local crime_actions = content.add{
+        type = 'flow',
+        name = CRIME_ACTIONS_NAME,
+        direction = 'horizontal',
+    }
+    crime_actions.style.vertical_align = 'center'
+    crime_actions.add{
+        type = 'button',
+        name = CRIME_BUTTON_NAME,
+        caption = {
+            'un.crime-button',
+            config.crime_coin_cost,
+            config.crime_stamina_cost,
+        },
+    }
+    crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
     local sort_flow = content.add{
         type = 'flow',
         name = PROPERTY_SORT_FLOW_NAME,
@@ -498,6 +514,7 @@ local function render_property_table(player, frame, content)
     tags.property_sort = sort_index
     tags.property_sort_bucket = math.floor(game.tick / config.ticks_per_minute)
     frame.tags = tags
+    update_crime_action(player, content)
 end
 
 local function property_build_planet(player)
@@ -937,7 +954,7 @@ local function render_factions_page(player, frame, content)
     update_factions_page(player, content)
 end
 
-local function crime_error_caption(err)
+crime_error_caption = function(err)
     if err == 'in-space' then return {'un.crime-error-space'} end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'no-targets' then return {'un.crime-error-no-targets'} end
@@ -950,9 +967,10 @@ local function crime_error_caption(err)
     return {'un.crime-error-location'}
 end
 
-local function update_crime_page(player, content)
-    local status = content[CRIME_STATUS_NAME]
-    local button = content[CRIME_BUTTON_NAME]
+update_crime_action = function(player, content)
+    local actions = content[CRIME_ACTIONS_NAME]
+    local status = actions and actions.valid and actions[CRIME_STATUS_NAME]
+    local button = actions and actions.valid and actions[CRIME_BUTTON_NAME]
     if not (status and status.valid and button and button.valid) then return end
     local available, err, planet_name, count = crime.availability(player)
     status.caption = available and {
@@ -963,33 +981,6 @@ local function update_crime_page(player, content)
     button.enabled = available
     button.tooltip = available and {'un.crime-button-tooltip'}
         or crime_error_caption(err)
-end
-
-local function render_crime_page(player, frame, content)
-    local description = content.add{
-        type = 'label',
-        caption = {
-            'un.crime-description',
-            config.crime_coin_cost,
-            config.crime_stamina_cost,
-            config.crime_price_scale,
-        },
-    }
-    description.style.single_line = false
-    description.style.maximal_width = 680
-    content.add{type = 'label', name = CRIME_STATUS_NAME}
-    local button = content.add{
-        type = 'button',
-        name = CRIME_BUTTON_NAME,
-        caption = {
-            'un.crime-button',
-            config.crime_coin_cost,
-            config.crime_stamina_cost,
-        },
-    }
-    button.style.height = 40
-    set_frame_state(frame, 'crime')
-    update_crime_page(player, content)
 end
 
 local function count_pairs(value)
@@ -1166,11 +1157,13 @@ local function add_help_gap(parent)
     gap.style.height = 8
 end
 
-local function render_help_page(frame, content, mode)
+local function render_help_page(player, frame, content, mode)
     mode = mode or 'brief'
+    if mode == 'admin' and not player.admin then mode = 'brief' end
     local title = content.add{
         type = 'label',
         caption = mode == 'story' and {'un.help-story-title'}
+            or mode == 'admin' and {'un.help-admin-title'}
             or mode == 'full' and {'un.help-full-title'}
             or mode == 'advanced' and {'un.help-advanced-title'}
             or {'un.help-title'},
@@ -1197,10 +1190,19 @@ local function render_help_page(frame, content, mode)
         name = HELP_FULL_NAME,
         caption = {'un.help-mode-full'},
     }
+    local admin
+    if player.admin then
+        admin = modes.add{
+            type = 'button',
+            name = HELP_ADMIN_NAME,
+            caption = {'un.help-mode-admin'},
+        }
+    end
     story.enabled = mode ~= 'story'
     brief.enabled = mode ~= 'brief'
     advanced.enabled = mode ~= 'advanced'
     full.enabled = mode ~= 'full'
+    if admin then admin.enabled = mode ~= 'admin' end
 
     local details = content.add{
         type = 'scroll-pane',
@@ -1308,7 +1310,12 @@ local function render_help_page(frame, content, mode)
             config.ship_width_per_level,
             config.ship_height,
         })
-        add_help_line(travel, {'un.help-detail-travel'})
+        add_help_line(travel, {
+            'un.help-detail-travel',
+            config.fast_respawn_stamina_cost,
+            config.fast_respawn_seconds,
+            config.normal_respawn_seconds,
+        })
         add_help_gap(details)
 
         local world = add_help_card(details, {'un.help-detail-world-heading'})
@@ -1317,7 +1324,7 @@ local function render_help_page(frame, content, mode)
             'un.help-detail-tech-leak',
             settings.get('tech_leak_interval_hours'),
         })
-    else
+    elseif mode == 'full' then
         local formulas = add_help_card(details, {
             'un.help-detail-formulas-heading',
         })
@@ -1362,7 +1369,6 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(world, {
             'un.help-detail-reset-schedule',
-            settings.get('cleanup_idle_hours'),
         })
         add_help_line(world, {
             'un.help-detail-tech-leak-formula',
@@ -1375,6 +1381,27 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(commands, {'un.help-detail-command-transfer'})
         add_help_line(commands, {'un.help-detail-command-rename'})
+    else
+        local security = add_help_card(details, {
+            'un.help-admin-security-heading',
+        })
+        add_help_line(security, {'un.help-admin-security'})
+        add_help_gap(details)
+
+        local limits = add_help_card(details, {
+            'un.help-admin-limits-heading',
+        })
+        add_help_line(limits, {
+            'un.help-admin-limits',
+            settings.get('property_limit_per_planet'),
+            settings.get('cleanup_idle_hours'),
+        })
+        add_help_gap(details)
+
+        local controls = add_help_card(details, {
+            'un.help-admin-controls-heading',
+        })
+        add_help_line(controls, {'un.help-admin-controls'})
     end
     set_frame_state(frame, 'help')
 end
@@ -1460,7 +1487,7 @@ local function render_page(player, page)
     content.clear()
 
     if page == 'help' then
-        render_help_page(frame, content)
+        render_help_page(player, frame, content)
     elseif page == 'overview' then
         render_overview_page(player, frame, content)
     elseif page == 'property-build' then
@@ -1473,15 +1500,13 @@ local function render_page(player, page)
         render_ships_page(player, frame, content)
     elseif page == 'players' then
         render_players_page(player, frame, content)
-    elseif page == 'crime' then
-        render_crime_page(player, frame, content)
     elseif page == 'factions' then
         render_factions_page(player, frame, content)
     elseif page == 'admin' then
         render_admin_page(player, frame, content)
     else
         page = 'help'
-        render_help_page(frame, content)
+        render_help_page(player, frame, content)
     end
 
     local navigation = frame[NAVIGATION_NAME]
@@ -1492,7 +1517,6 @@ local function render_page(player, page)
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
-    navigation[NAV_CRIME_NAME].enabled = page ~= 'crime'
     navigation[NAV_FACTIONS_NAME].enabled = page ~= 'factions'
     local admin = navigation[NAV_ADMIN_NAME]
     if admin and admin.valid then admin.enabled = page ~= 'admin' end
@@ -1771,8 +1795,7 @@ local function update_frame(player)
                 end
             end
         end
-    elseif page == 'crime' then
-        update_crime_page(player, content)
+        update_crime_action(player, content)
     elseif page == 'factions' then
         update_factions_page(player, content)
     elseif page == 'players' then
@@ -1879,7 +1902,6 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
-    navigation.add{type = 'button', name = NAV_CRIME_NAME, caption = {'un.page-crime'}}
     navigation.add{
         type = 'button',
         name = NAV_FACTIONS_NAME,
@@ -1968,15 +1990,17 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == HELP_BRIEF_NAME
             or element.name == HELP_ADVANCED_NAME
             or element.name == HELP_FULL_NAME
+            or element.name == HELP_ADMIN_NAME
             or element.name == HELP_STORY_NAME then
         local frame = player.gui.screen[FRAME_NAME]
         local content = frame and frame.valid and frame[CONTENT_NAME]
         if not (content and content.valid) then return end
         local mode = element.name == HELP_STORY_NAME and 'story'
+            or element.name == HELP_ADMIN_NAME and 'admin'
             or element.name == HELP_FULL_NAME and 'full'
             or element.name == HELP_ADVANCED_NAME and 'advanced' or 'brief'
         content.clear()
-        render_help_page(frame, content, mode)
+        render_help_page(player, frame, content, mode)
         update_frame(player)
     elseif element.name == NAV_UBI_NAME then
         render_page(player, 'overview')
@@ -1995,9 +2019,6 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == NAV_PLAYERS_NAME then
         render_page(player, 'players')
-        update_frame(player)
-    elseif element.name == NAV_CRIME_NAME then
-        render_page(player, 'crime')
         update_frame(player)
     elseif element.name == NAV_FACTIONS_NAME then
         render_page(player, 'factions')
@@ -2225,23 +2246,6 @@ events.on(defines.events.on_gui_click, function(event)
             end
         end
     end
-end)
-
-events.on(defines.events.on_gui_selected_tab_changed, function(event)
-    local element = event.element
-    if not (element and element.valid and element.name == PROPERTY_ACTIONS_NAME) then
-        return
-    end
-    local player = game.get_player(event.player_index)
-    local planet_name = config.public_planets[element.selected_tab_index]
-    local frame = player and player.gui.screen[FRAME_NAME]
-    local content = frame and frame.valid and frame[CONTENT_NAME]
-    if not (player and planet_name and content and content.valid) then return end
-    local tags = frame.tags
-    tags.property_planet = planet_name
-    frame.tags = tags
-    render_property_table(player, frame, content)
-    update_frame(player)
 end)
 
 events.on(defines.events.on_gui_selection_state_changed, function(event)

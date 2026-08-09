@@ -114,6 +114,10 @@ function M.switch_by_suicide(player, target_planet)
     local character = character_of(player)
     if not character then return false, 'no-character' end
 
+    if not stamina.spend(player.index, config.suicide_stamina_cost) then
+        return false, 'insufficient-stamina'
+    end
+
     storage.pending_faction_switches[player.index] = {
         source_planet = source_planet,
         target_planet = target_planet,
@@ -124,11 +128,8 @@ function M.switch_by_suicide(player, target_planet)
     if not died then
         storage.pending_faction_switches[player.index] = nil
         storage.respawn_hospice_planets[player.index] = nil
+        stamina.refund(player.index, config.suicide_stamina_cost)
         return false, 'death-failed'
-    end
-    if not stamina.spend(player.index, config.suicide_stamina_cost) then
-        log('[un] faction switch stamina charge failed for player '
-            .. tostring(player.index))
     end
     return true
 end

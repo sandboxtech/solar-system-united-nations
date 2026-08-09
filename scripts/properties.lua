@@ -94,13 +94,13 @@ end
 function M.display_name(property)
     if property.custom_name then return property.custom_name end
     if not property.owner_index then
-        if property.permanent and property.sample_planet then
+        if property.sample_planet then
             return {
                 '',
                 '[planet=' .. property.sample_planet .. '] ',
                 {
                     'un.property-surface-vacant',
-                    property.planet_property_number,
+                    property.planet_property_number or property.id,
                 },
             }
         end
@@ -621,6 +621,10 @@ function M.release_owner(player_index)
     for _, property in ipairs(M.list()) do
         if property.owner_index == player_index then
             assign_owner(property, nil)
+            property.planet_property_number = next_planet_property_number(
+                property.sample_planet,
+                property.id
+            )
             property.owner_cleanup_tick = game.tick
             ensure_linked_chests(property)
             sync_surface_visibility(property)
@@ -641,6 +645,10 @@ function M.release_owner_in_faction(player_index, planet_name)
     for _, property in ipairs(M.list(planet_name)) do
         if property.owner_index == player_index then
             assign_owner(property, nil)
+            property.planet_property_number = next_planet_property_number(
+                property.sample_planet,
+                property.id
+            )
             property.owner_cleanup_tick = game.tick
             ensure_linked_chests(property)
             sync_surface_visibility(property)

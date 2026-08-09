@@ -151,7 +151,10 @@ M.property_permanent_defaults = {
 
 M.stamina_max = 100000
 M.stamina_per_second = 1
-M.suicide_stamina_cost = 1000
+M.suicide_stamina_cost = 10000
+M.fast_respawn_stamina_cost = 1000
+M.fast_respawn_seconds = 10
+M.normal_respawn_seconds = 60
 
 M.ship_life_hours = 12
 M.ship_stamina_cost = 10000

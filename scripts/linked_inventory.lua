@@ -2,6 +2,7 @@ local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
+local factions = require('scripts.factions')
 local scheduler = require('scripts.scheduler')
 local state = require('scripts.state')
 
@@ -210,6 +211,22 @@ function M.clear_player_dropoff(player_index)
     storage.dropoffs[player_index] = nil
 end
 
+function M.release_player_dropoff(player)
+    state.ensure()
+    local chest = resolve_record(player.index)
+    if chest and chest.valid then
+        local quality = chest.quality.name
+        chest.destroy()
+        give_wooden_chest(
+            player,
+            player.physical_surface,
+            player.physical_position,
+            quality
+        )
+    end
+    storage.dropoffs[player.index] = nil
+end
+
 function M.clear_surface_dropoffs(surface_name)
     state.ensure()
     local indexes = {}
@@ -254,6 +271,10 @@ scheduler.every(config.science_conversion_ticks, function()
     for _, player in pairs(game.connected_players) do
         M.convert_player(player)
     end
+end)
+
+factions.on_switch_cleanup(function(player)
+    M.release_player_dropoff(player)
 end)
 
 return M
