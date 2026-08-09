@@ -12,10 +12,13 @@ local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
 local HUD_TITLE_NAME = 'un_hud_title'
-local BUTTON_NAME = 'un_main_button'
+local HUD_EMBLEM_NAME = 'un_hud_emblem'
+local LEGACY_BUTTON_NAME = 'un_main_button'
+local HUD_UBI_NAME = 'un_hud_ubi'
 local HUD_TRAVEL_NAME = 'un_hud_travel'
 local HUD_PROPERTY_NAME = 'un_hud_property'
 local HUD_EXPERIENCE_NAME = 'un_hud_experience'
+local HUD_PLAYERS_NAME = 'un_hud_players'
 local FRAME_NAME = 'un_main_frame'
 local CLOSE_NAME = 'un_main_close'
 local CONTENT_NAME = 'un_main_content'
@@ -24,6 +27,7 @@ local NAV_UBI_NAME = 'un_nav_ubi'
 local NAV_TRAVEL_NAME = 'un_nav_travel'
 local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_EXPERIENCE_NAME = 'un_nav_experience'
+local NAV_PLAYERS_NAME = 'un_nav_players'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
@@ -36,11 +40,11 @@ local SUICIDE_NAME = 'un_suicide'
 local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
-local SHIP_ENTER_NAME = 'un_ship_enter'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
+local PLAYER_TABLE_NAME = 'un_player_table'
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
 -- game.tick only when queried or claimed.
@@ -61,30 +65,52 @@ end
 
 function M.ensure_button(player)
     local root = player.gui.top
-    local old = root[BUTTON_NAME]
+    local old = root[LEGACY_BUTTON_NAME]
     if old and old.valid then old.destroy() end
 
     local hud = root[HUD_FLOW_NAME]
-    if hud and hud.valid then return hud end
+    if hud and hud.valid then
+        local complete = hud[HUD_TITLE_NAME]
+            and hud[HUD_EMBLEM_NAME]
+            and hud[HUD_UBI_NAME]
+            and hud[HUD_TRAVEL_NAME]
+            and hud[HUD_PROPERTY_NAME]
+            and hud[HUD_EXPERIENCE_NAME]
+            and hud[HUD_PLAYERS_NAME]
+        if complete then return hud end
+        hud.destroy()
+    end
     hud = root.add{
-        type = 'flow',
+        type = 'frame',
         name = HUD_FLOW_NAME,
         direction = 'horizontal',
     }
     hud.style.vertical_align = 'center'
+    hud.style.padding = 4
+    local emblem = hud.add{
+        type = 'sprite',
+        name = HUD_EMBLEM_NAME,
+        sprite = 'utility/player_force_icon',
+        tooltip = {'un.hud-title'},
+    }
+    emblem.style.width = 28
+    emblem.style.height = 28
     local title = hud.add{
         type = 'label',
         name = HUD_TITLE_NAME,
         caption = {'un.hud-title'},
     }
-    title.style.font = 'default-large-bold'
-    title.style.right_margin = 8
+    title.style.font = 'default-bold'
+    title.style.font_color = {r = 0.35, g = 0.75, b = 1}
+    title.style.left_margin = 2
+    title.style.right_margin = 10
 
     local buttons = {
-        {BUTTON_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
+        {HUD_UBI_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
         {HUD_TRAVEL_NAME, 'item/linked-chest', {'un.hud-travel-tooltip'}},
         {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
         {HUD_EXPERIENCE_NAME, 'item/automation-science-pack', {'un.hud-experience-tooltip'}},
+        {HUD_PLAYERS_NAME, 'utility/side_menu_players_icon', {'un.hud-players-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
@@ -149,11 +175,14 @@ local function render_property_table(player, frame, content)
             caption = format_integer(properties.current_price(property)),
         }
         if property.owner_index == player.index then
-            list.add{
-                type = 'button',
-                caption = {'un.property-enter'},
+            local enter = list.add{
+                type = 'sprite-button',
+                sprite = 'utility/enter',
+                tooltip = {'un.property-enter'},
                 tags = {action = 'property-enter', property_id = property.id},
             }
+            enter.style.width = 32
+            enter.style.height = 32
             list.add{
                 type = 'button',
                 caption = {
@@ -169,11 +198,14 @@ local function render_property_table(player, frame, content)
                 tags = {action = 'property-buy', property_id = property.id},
             }
             if player.admin then
-                list.add{
-                    type = 'button',
-                    caption = {'un.property-enter-admin'},
+                local enter = list.add{
+                    type = 'sprite-button',
+                    sprite = 'utility/enter',
+                    tooltip = {'un.property-enter-admin'},
                     tags = {action = 'property-enter', property_id = property.id},
                 }
+                enter.style.width = 32
+                enter.style.height = 32
             else
                 list.add{type = 'label', caption = ''}
             end
@@ -216,17 +248,21 @@ local function render_travel_page(frame, content)
     location.add{type = 'label', name = DROPOFF_LOCATION_NAME}
 
     local planet = content.add{
-        type = 'button',
+        type = 'sprite-button',
         name = TRAVEL_PLANET_NAME,
-        caption = {'un.travel-planet'},
+        sprite = 'space-location/nauvis',
+        tooltip = {'un.travel-planet'},
     }
-    planet.style.horizontally_stretchable = true
+    planet.style.width = 40
+    planet.style.height = 40
     local hospice = content.add{
-        type = 'button',
+        type = 'sprite-button',
         name = TRAVEL_HOSPICE_NAME,
-        caption = {'un.travel-hospice'},
+        sprite = 'utility/gps_map_icon',
+        tooltip = {'un.travel-hospice'},
     }
-    hospice.style.horizontally_stretchable = true
+    hospice.style.width = 40
+    hospice.style.height = 40
 
     content.add{type = 'line'}
     content.add{type = 'label', name = SHIP_STATUS_NAME}
@@ -242,21 +278,18 @@ local function render_travel_page(frame, content)
     }
     ship_actions.add{
         type = 'button',
-        name = SHIP_ENTER_NAME,
-        caption = {'un.ship-enter'},
-    }
-    ship_actions.add{
-        type = 'button',
         name = SHIP_SCUTTLE_NAME,
         caption = {'un.ship-scuttle'},
     }
 
     local suicide = content.add{
-        type = 'button',
+        type = 'sprite-button',
         name = SUICIDE_NAME,
-        caption = {'un.suicide'},
+        sprite = 'utility/danger_icon',
+        tooltip = {'un.suicide'},
     }
-    suicide.style.horizontally_stretchable = true
+    suicide.style.width = 40
+    suicide.style.height = 40
     set_frame_state(frame, 'travel')
 end
 
@@ -281,6 +314,56 @@ local function render_experience_page(player, frame, content)
     set_frame_state(frame, 'experience')
 end
 
+local function player_signature()
+    local parts = {}
+    for _, player in pairs(game.players) do
+        parts[#parts + 1] = tostring(player.index)
+            .. (player.connected and '+' or '-')
+    end
+    table.sort(parts)
+    return table.concat(parts, ',')
+end
+
+local function player_element_name(kind, player_index)
+    return 'un_player_' .. kind .. '_' .. tostring(player_index)
+end
+
+local function format_hours(ticks)
+    return string.format('%.1f', math.max(0, ticks) / config.ticks_per_hour)
+end
+
+local function render_players_page(frame, content)
+    local list = content.add{
+        type = 'table',
+        name = PLAYER_TABLE_NAME,
+        column_count = 5,
+    }
+    list.add{type = 'label', caption = {'un.player-column-status'}}
+    list.add{type = 'label', caption = {'un.player-column-name'}}
+    list.add{type = 'label', caption = {'un.player-column-online-hours'}}
+    list.add{type = 'label', caption = {'un.player-column-offline-hours'}}
+    list.add{type = 'label', caption = {'un.player-column-locale'}}
+
+    local players = {}
+    for _, player in pairs(game.players) do players[#players + 1] = player end
+    table.sort(players, function(a, b)
+        if a.connected ~= b.connected then return a.connected end
+        if a.name ~= b.name then return a.name < b.name end
+        return a.index < b.index
+    end)
+    for _, player in ipairs(players) do
+        list.add{type = 'label', name = player_element_name('status', player.index)}
+        list.add{type = 'label', caption = player.name}
+        list.add{type = 'label', name = player_element_name('online', player.index)}
+        list.add{type = 'label', name = player_element_name('offline', player.index)}
+        list.add{type = 'label', name = player_element_name('locale', player.index)}
+    end
+    set_frame_state(frame, 'players')
+    local tags = frame.tags
+    tags.player_signature = player_signature()
+    frame.tags = tags
+end
+
 local function render_page(player, page)
     local frame = player.gui.screen[FRAME_NAME]
     if not (frame and frame.valid) then return end
@@ -294,6 +377,8 @@ local function render_page(player, page)
         render_property_table(player, frame, content)
     elseif page == 'experience' then
         render_experience_page(player, frame, content)
+    elseif page == 'players' then
+        render_players_page(frame, content)
     else
         page = 'ubi'
         render_ubi_page(frame, content)
@@ -304,6 +389,7 @@ local function render_page(player, page)
     navigation[NAV_TRAVEL_NAME].enabled = page ~= 'travel'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
     navigation[NAV_EXPERIENCE_NAME].enabled = page ~= 'experience'
+    navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
 end
 
 local function property_error(err)
@@ -314,13 +400,28 @@ local function property_error(err)
         return {'un.property-error-ownership'}
     end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
-    if err == 'position-missing' then return {'un.travel-no-position'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
+    if err == 'ship-home-restricted' then return {'un.ship-home-restricted'} end
     if err == 'ship-already-have' then return {'un.ship-already-have'} end
     if err == 'ship-missing' then return {'un.ship-missing'} end
     if err == 'ship-not-ready' then return {'un.ship-not-ready'} end
     if err == 'ship-create-failed' then return {'un.ship-create-failed'} end
     return {'un.property-error-unavailable'}
+end
+
+local DRAGGABLE_TYPES = {
+    flow = true,
+    frame = true,
+    label = true,
+    table = true,
+    ['empty-widget'] = true,
+}
+
+local function make_frame_draggable(element, frame)
+    for _, child in pairs(element.children) do
+        if DRAGGABLE_TYPES[child.type] then child.drag_target = frame end
+        make_frame_draggable(child, frame)
+    end
 end
 
 local function update_frame(player)
@@ -378,19 +479,16 @@ local function update_frame(player)
         local status = content[SHIP_STATUS_NAME]
         local ship_actions = content[SHIP_ACTIONS_NAME]
         local create = ship_actions[SHIP_CREATE_NAME]
-        local enter = ship_actions[SHIP_ENTER_NAME]
         local scuttle = ship_actions[SHIP_SCUTTLE_NAME]
         if platform then
             local hours = math.ceil(math.max(0, ships.left_ticks(record))
                 / config.ticks_per_hour)
             status.caption = {'un.ship-status', platform.name, hours}
             create.enabled = false
-            enter.enabled = platform.surface ~= nil
             scuttle.enabled = true
         else
             status.caption = {'un.ship-none'}
             create.enabled = true
-            enter.enabled = false
             scuttle.enabled = false
         end
     elseif page == 'property' then
@@ -435,6 +533,46 @@ local function update_frame(player)
                 experience.total_level(player.index),
             }
         end
+    elseif page == 'players' then
+        if frame.tags.player_signature ~= player_signature() then
+            content.clear()
+            render_players_page(frame, content)
+        end
+        local list = content[PLAYER_TABLE_NAME]
+        if list and list.valid then
+            for _, listed_player in pairs(game.players) do
+                local status = list[player_element_name('status', listed_player.index)]
+                local online = list[player_element_name('online', listed_player.index)]
+                local offline = list[player_element_name('offline', listed_player.index)]
+                local locale = list[player_element_name('locale', listed_player.index)]
+                if status and status.valid then
+                    status.caption = listed_player.connected
+                        and {'un.player-online'} or {'un.player-offline'}
+                end
+                if online and online.valid then
+                    online.caption = format_hours(listed_player.online_time)
+                end
+                if offline and offline.valid then
+                    local account = economy.ensure_account(listed_player.index)
+                    local observed_ticks = math.max(
+                        0,
+                        game.tick - (account.created_tick or game.tick)
+                    )
+                    local offline_ticks = math.max(
+                        0,
+                        observed_ticks - listed_player.online_time
+                    )
+                    offline.caption = format_hours(offline_ticks)
+                end
+                if locale and locale.valid then locale.caption = listed_player.locale end
+            end
+        end
+    end
+    if not frame.tags.drag_ready then
+        make_frame_draggable(frame, frame)
+        local tags = frame.tags
+        tags.drag_ready = true
+        frame.tags = tags
     end
 end
 
@@ -480,6 +618,7 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_TRAVEL_NAME, caption = {'un.page-travel'}}
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
     navigation.add{type = 'button', name = NAV_EXPERIENCE_NAME, caption = {'un.page-experience'}}
+    navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
 
     local content = frame.add{
         type = 'flow',
@@ -526,8 +665,7 @@ events.on(defines.events.on_gui_click, function(event)
     if not (element and element.valid) then return end
     local player = game.get_player(event.player_index)
     if not player then return end
-    if element.name == BUTTON_NAME then
-        M.ensure_button(player)
+    if element.name == HUD_UBI_NAME then
         open_frame(player, 'ubi')
     elseif element.name == HUD_TRAVEL_NAME then
         open_frame(player, 'travel')
@@ -535,6 +673,8 @@ events.on(defines.events.on_gui_click, function(event)
         open_frame(player, 'property')
     elseif element.name == HUD_EXPERIENCE_NAME then
         open_frame(player, 'experience')
+    elseif element.name == HUD_PLAYERS_NAME then
+        open_frame(player, 'players')
     elseif element.name == CLOSE_NAME then
         close_frame(player)
     elseif element.name == NAV_UBI_NAME then
@@ -548,6 +688,9 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == NAV_EXPERIENCE_NAME then
         render_page(player, 'experience')
+        update_frame(player)
+    elseif element.name == NAV_PLAYERS_NAME then
+        render_page(player, 'players')
         update_frame(player)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
@@ -563,9 +706,6 @@ events.on(defines.events.on_gui_click, function(event)
         if not platform then player.print(property_error(err)) end
         render_page(player, 'travel')
         update_frame(player)
-    elseif element.name == SHIP_ENTER_NAME then
-        local ok, err = ships.enter(player)
-        if ok then close_frame(player) else player.print(property_error(err)) end
     elseif element.name == SHIP_SCUTTLE_NAME then
         if element.tags.action == 'ship-scuttle-confirm' then
             local ok, err = ships.scuttle(player)
@@ -582,7 +722,8 @@ events.on(defines.events.on_gui_click, function(event)
             local ok = surfaces.suicide(player)
             if not ok then player.print({'un.suicide-unavailable'}) end
         else
-            element.caption = {'un.suicide-confirm'}
+            element.sprite = 'utility/confirm_slot'
+            element.tooltip = {'un.suicide-confirm'}
             element.tags = {action = 'suicide-confirm'}
         end
     else

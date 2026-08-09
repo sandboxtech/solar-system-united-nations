@@ -53,6 +53,9 @@ function M.ensure_account(player_index)
         storage.players[player_index] = account
     end
     if account.credit == nil then account.credit = config.initial_credit end
+    if account.created_tick == nil then
+        account.created_tick = math.max(0, game.tick - (player and player.online_time or 0))
+    end
     if account.ubi_anchor_tick == nil then account.ubi_anchor_tick = game.tick end
     if player then account.name = player.name end
     return account

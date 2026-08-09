@@ -100,7 +100,7 @@ function M.create(player)
     if not (player and player.valid) then return nil, 'ship-create-failed' end
     local source = player.physical_surface
     if not (source and source.valid and source.name == 'nauvis') then
-        return nil, 'travel-restricted'
+        return nil, 'ship-home-restricted'
     end
     if M.of(player.index) then return nil, 'ship-already-have' end
 
