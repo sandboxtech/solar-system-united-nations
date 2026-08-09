@@ -122,15 +122,20 @@ function M.change(player_index, amount, reason)
     return true, next_balance
 end
 
-function M.transfer(from_index, to_index, amount, reason)
+function M.transfer(from_index, to_index, amount, fee, reason)
     if from_index == to_index then return false, 'same-account' end
     if not is_finite_integer(amount) or amount <= 0 then
         return false, 'invalid-amount'
     end
+    if not is_finite_integer(fee) or fee < 0 then
+        return false, 'invalid-fee'
+    end
 
     local from = M.ensure_account(from_index)
     local to = M.ensure_account(to_index)
-    if not is_finite_integer(from.credit) or from.credit < amount then
+    local debit = amount + fee
+    if not is_finite_integer(debit) then return false, 'invalid-result' end
+    if not is_finite_integer(from.credit) or from.credit < debit then
         return false, 'insufficient-credit'
     end
     if not is_finite_integer(to.credit) or to.credit < 0 then
@@ -141,9 +146,9 @@ function M.transfer(from_index, to_index, amount, reason)
     if not is_finite_integer(next_to) then return false, 'invalid-result' end
 
     -- Validate both results before mutating either account, then commit the pair.
-    from.credit = from.credit - amount
+    from.credit = from.credit - debit
     to.credit = next_to
-    append_ledger(from_index, -amount, reason or 'transfer-out', from.credit)
+    append_ledger(from_index, -debit, reason or 'transfer-out', from.credit)
     append_ledger(to_index, amount, reason or 'transfer-in', to.credit)
     notify_balance_changed(from_index, from.credit)
     notify_balance_changed(to_index, to.credit)
@@ -159,7 +164,22 @@ function M.taxed_transfer(from_index, to_index, price, payout, reason)
     end
 
     local buyer = M.ensure_account(from_index)
-    if not is_finite_integer(buyer.credit) or buyer.credit < price then
+    if not is_finite_integer(buyer.credit) then
+        return false, 'invalid-balance'
+    end
+
+    if from_index == to_index then
+        local tax = price - payout
+        if buyer.credit < tax then return false, 'insufficient-credit' end
+        if tax > 0 then
+            buyer.credit = buyer.credit - tax
+            append_ledger(from_index, -tax, reason, buyer.credit)
+            notify_balance_changed(from_index, buyer.credit)
+        end
+        return true
+    end
+
+    if buyer.credit < price then
         return false, 'insufficient-credit'
     end
 

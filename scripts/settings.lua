@@ -10,6 +10,13 @@ local DEFINITIONS = {
     ship_life_hours = {default = config.ship_life_hours, min = 1, max = 10000},
     cleanup_idle_hours = {default = config.player_cleanup_idle_hours, min = 1, max = 100000},
     property_tax_percent = {default = config.property_default_tax * 100, min = 0, max = 100},
+    property_price_factor = {
+        default = config.property_price_factor,
+        min = 1,
+        max = 100,
+        exclusive_min = true,
+        exclusive_max = true,
+    },
     property_supply_enabled = {default = true, boolean = true},
     planet_resets_enabled = {default = true, boolean = true},
 }
@@ -41,7 +48,9 @@ function M.set(key, value)
         if definition.integer and value ~= math.floor(value) then
             return false, 'invalid-value'
         end
-        if value < definition.min or value > definition.max then
+        if value < definition.min or value > definition.max
+                or definition.exclusive_min and value == definition.min
+                or definition.exclusive_max and value == definition.max then
             return false, 'out-of-range'
         end
     end

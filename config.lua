@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 20
+M.schema_version = 21
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -32,14 +32,21 @@ M.player_cleanup_idle_hours = 90
 M.player_cleanup_check_ticks = 60 * 60 * 60
 M.player_cleanup_admins = false
 
-M.property_decay_ticks = 2 * M.ticks_per_hour
-M.property_max_future_ticks = 30 * M.ticks_per_hour
 M.property_price_cap = 1000000000
+M.property_price_factor = 2
+M.property_lease_order = {'short', 'long'}
+M.property_lease_types = {
+    short = {hours = 2},
+    long = {hours = 10},
+}
 
 M.initial_credit = 1000
 M.ubi_credit_per_second = 1
 M.ubi_max_seconds = 30 * 60 * 60
 M.ledger_record_limit = 2000
+M.transfer_min_amount = 1000
+M.transfer_fee_rate = 0.001
+M.transfer_min_fee = 100
 M.gui_refresh_ticks = M.ticks_per_second
 M.friend_limit = 10
 
@@ -94,15 +101,15 @@ M.property_side_lengths = {32, 64, 128}
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 2000
 M.default_properties = {
-    {sample_planet = 'nauvis'},
-    {sample_planet = 'gleba'},
-    {sample_planet = 'nauvis'},
-    {sample_planet = 'gleba'},
-    {sample_planet = 'nauvis'},
-    {sample_planet = 'gleba'},
-    {sample_planet = 'nauvis'},
-    {sample_planet = 'gleba'},
-    {sample_planet = 'nauvis'},
+    {sample_planet = 'nauvis', lease_type = 'short'},
+    {sample_planet = 'gleba', lease_type = 'long'},
+    {sample_planet = 'nauvis', lease_type = 'short'},
+    {sample_planet = 'gleba', lease_type = 'long'},
+    {sample_planet = 'nauvis', lease_type = 'short'},
+    {sample_planet = 'gleba', lease_type = 'long'},
+    {sample_planet = 'nauvis', lease_type = 'short'},
+    {sample_planet = 'gleba', lease_type = 'long'},
+    {sample_planet = 'nauvis', lease_type = 'short'},
 }
 M.property_supply_check_ticks = M.ticks_per_hour
 M.property_supply_active_window_ticks = 30 * M.ticks_per_hour
@@ -116,7 +123,8 @@ M.property_supply_high_vacancy = 0.50
 M.property_supply_high_median_price = 100000
 M.property_supply_low_median_price = 500
 
-M.ship_life_hours = 50
+M.ship_life_hours = 12
+M.ship_legacy_life_hours = 50
 M.ship_credit_cost = 1000
 M.ship_width_per_level = 2
 M.ship_base_width = 16

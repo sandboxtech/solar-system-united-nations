@@ -59,7 +59,7 @@ end
 
 function M.life_ticks(record)
     return record and record.life_ticks
-        or config.ship_life_hours * config.ticks_per_hour
+        or config.ship_legacy_life_hours * config.ticks_per_hour
 end
 
 function M.left_ticks(record)
@@ -153,7 +153,8 @@ function M.create(player)
     local record = {
         owner_index = player.index,
         created_tick = game.tick,
-        life_ticks = settings.get('ship_life_hours') * config.ticks_per_hour,
+        life_ticks = (settings.get('ship_life_hours')
+            + experience.total_level(player.index)) * config.ticks_per_hour,
     }
     records()[platform.index] = record
     local applied, apply_err = pcall(function() platform.apply_starter_pack() end)

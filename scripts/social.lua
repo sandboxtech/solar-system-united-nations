@@ -1,3 +1,4 @@
+local config = require('config')
 local economy = require('scripts.economy')
 local settings = require('scripts.settings')
 
@@ -98,12 +99,23 @@ local function transfer_command(command)
         player.print({'un.player-not-found'})
         return
     end
-    if not amount or amount <= 0 or amount ~= math.floor(amount) then
-        player.print({'un.transfer-invalid-amount'})
+    if not amount or amount ~= math.floor(amount)
+            or amount < config.transfer_min_amount then
+        player.print({'un.transfer-invalid-amount', config.transfer_min_amount})
         return
     end
+    local fee = math.max(
+        config.transfer_min_fee,
+        math.ceil(amount * config.transfer_fee_rate)
+    )
     local reason = 'credit-transfer:' .. player.index .. ':' .. target.index
-    local ok, err = economy.transfer(player.index, target.index, amount, reason)
+    local ok, err = economy.transfer(
+        player.index,
+        target.index,
+        amount,
+        fee,
+        reason
+    )
     if not ok then
         if err == 'same-account' then
             player.print({'un.transfer-self'})
@@ -114,7 +126,7 @@ local function transfer_command(command)
         end
         return
     end
-    player.print({'un.transfer-sent', amount, target.name})
+    player.print({'un.transfer-sent', amount, target.name, fee})
     if target.connected then
         target.print({'un.transfer-received', amount, player.name})
     end

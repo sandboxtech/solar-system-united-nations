@@ -1,6 +1,7 @@
 local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
+local experience = require('scripts.experience')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local social = require('scripts.social')
@@ -194,6 +195,13 @@ function M.create(spec)
         price = math.floor(tonumber(spec.price) or 0)
     end
     local tax = tonumber(spec.tax) or settings.get('property_tax_percent') / 100
+    local lease_type = spec.lease_type
+    if not config.property_lease_types[lease_type] then
+        lease_type = config.property_lease_order[
+            math.random(1, #config.property_lease_order)
+        ]
+    end
+    local lease = config.property_lease_types[lease_type]
     local solar = config.property_solar_multiplier
     local sides = config.property_side_lengths
     local width = tonumber(spec.width)
@@ -237,7 +245,8 @@ function M.create(spec)
         owner_index = nil,
         base_price = price,
         price_at_tick = game.tick,
-        decay_ticks = config.property_decay_ticks,
+        lease_type = lease_type,
+        decay_ticks = lease.hours * config.ticks_per_hour,
         tax = tax,
         width = width,
         height = height,
@@ -275,6 +284,12 @@ function M.ensure_defaults()
     -- Configuration loading is also the one-shot repair path for properties
     -- created before all homes used the fixed central four-chest layout.
     for _, property in ipairs(M.list()) do
+        if not config.property_lease_types[property.lease_type] then
+            property.lease_type = property.id % 2 == 1 and 'short' or 'long'
+        end
+        property.decay_ticks = config.property_lease_types[
+            property.lease_type
+        ].hours * config.ticks_per_hour
         ensure_linked_chests(property)
         ensure_property_name_rendering(
             property,
@@ -312,10 +327,32 @@ end
 function M.current_price(property, tick)
     tick = tick or game.tick
     local exponent = (property.price_at_tick - tick) / property.decay_ticks
-    local raw = property.base_price * (10 ^ exponent)
+    local raw = property.base_price
+        * (settings.get('property_price_factor') ^ exponent)
     if raw >= config.property_price_cap then return config.property_price_cap end
     if raw <= 1 then return 1 end
     return math.ceil(raw)
+end
+
+function M.lease_hours(property)
+    local lease = config.property_lease_types[property.lease_type]
+    return lease and lease.hours or 0
+end
+
+function M.lease_name(property)
+    return {'un.property-lease-' .. tostring(property.lease_type)}
+end
+
+function M.transaction_tax_rate(property)
+    local level = property.owner_index
+        and experience.total_level(property.owner_index) or 0
+    return property.tax / (level / 100 + 1)
+end
+
+function M.transaction_tax(property, price)
+    if not property.owner_index then return price end
+    local payout = math.floor(price * (1 - M.transaction_tax_rate(property)))
+    return price - payout
 end
 
 function M.owner_name(property)
@@ -375,8 +412,10 @@ end
 function M.buy_availability(player, property)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
-    if property.owner_index == player.index then return false, 'already-owner' end
-    if economy.get_balance(player.index) < M.current_price(property) then
+    local price = M.current_price(property)
+    local required = property.owner_index == player.index
+        and M.transaction_tax(property, price) or price
+    if economy.get_balance(player.index) < required then
         return false, 'insufficient-credit'
     end
     return true
@@ -396,32 +435,18 @@ function M.enter_availability(player, property)
     return false, 'not-owner'
 end
 
-function M.renew_availability(player, property)
-    if not property then return false, 'missing' end
-    if not valid_surface(property) then return false, 'surface-missing' end
-    if property.owner_index ~= player.index then return false, 'not-owner' end
-    if property.price_at_tick + property.decay_ticks
-            > game.tick + config.property_max_future_ticks then
-        return false, 'renew-limit'
-    end
-    if economy.get_balance(player.index) < M.renew_fee(property) then
-        return false, 'insufficient-credit'
-    end
-    return true
-end
-
 function M.buy(player, property_id, quoted_price)
     local property = M.get(property_id)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
-    if property.owner_index == player.index then return false, 'already-owner' end
-
     local price = M.current_price(property)
     local seller_name = M.owner_name(property)
     local transaction_name = property.custom_name
         or {'un.property-default-name', property.id}
     if quoted_price and price > quoted_price then return false, 'price-increased', price end
-    local payout = math.floor(price * (1 - property.tax))
+    local payout = property.owner_index
+        and math.floor(price * (1 - M.transaction_tax_rate(property))) or 0
+    local tax = price - payout
     local ok, err = economy.taxed_transfer(
         player.index,
         property.owner_index,
@@ -448,6 +473,8 @@ function M.buy(player, property_id, quoted_price)
             price,
             seller_name,
             transaction_name,
+            payout,
+            tax,
         })
     else
         game.print({
@@ -455,31 +482,10 @@ function M.buy(player, property_id, quoted_price)
             player.name,
             price,
             transaction_name,
+            price,
         })
     end
     return true, price
-end
-
-function M.renew_fee(property)
-    return math.max(1, math.ceil(M.current_price(property) * property.tax))
-end
-
-function M.renew(player, property_id)
-    local property = M.get(property_id)
-    if not property then return false, 'missing' end
-    if not valid_surface(property) then return false, 'surface-missing' end
-    if property.owner_index ~= player.index then return false, 'not-owner' end
-    local next_tick = property.price_at_tick + property.decay_ticks
-    if next_tick > game.tick + config.property_max_future_ticks then
-        return false, 'renew-limit'
-    end
-    local fee = M.renew_fee(property)
-    local ok, err = economy.change(player.index, -fee, 'property-renew')
-    if not ok then return false, err end
-    property.price_at_tick = next_tick
-    property.last_renew_tick = game.tick
-    bump_revision()
-    return true, fee
 end
 
 function M.enter(player, property_id)
