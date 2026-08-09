@@ -1,4 +1,5 @@
 local config = require('config')
+local crime = require('scripts.crime')
 local disasters = require('scripts.disasters')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
@@ -32,6 +33,7 @@ local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
 local NAV_PLAYERS_NAME = 'un_nav_players'
+local NAV_CRIME_NAME = 'un_nav_crime'
 local NAV_ADMIN_NAME = 'un_nav_admin'
 local HELP_BRIEF_NAME = 'un_help_brief'
 local HELP_ADVANCED_NAME = 'un_help_advanced'
@@ -72,6 +74,8 @@ local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
 local PLANET_TABLE_NAME = 'un_planet_table'
 local TECH_LEAK_COUNTDOWN_NAME = 'un_tech_leak_countdown'
+local CRIME_STATUS_NAME = 'un_crime_status'
+local CRIME_BUTTON_NAME = 'un_crime_button'
 local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
 local ADMIN_PLAYER_TABLE_NAME = 'un_admin_player_table'
@@ -862,6 +866,61 @@ local function render_planets_page(frame, content)
     set_frame_state(frame, 'planets')
 end
 
+local function crime_error_caption(err)
+    if err == 'in-space' then return {'un.crime-error-space'} end
+    if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
+    if err == 'no-targets' then return {'un.crime-error-no-targets'} end
+    if err == 'insufficient-credit' then
+        return {'un.crime-error-credit', config.crime_coin_cost}
+    end
+    if err == 'insufficient-stamina' then
+        return {'un.crime-error-stamina', config.crime_stamina_cost}
+    end
+    return {'un.crime-error-location'}
+end
+
+local function update_crime_page(player, content)
+    local status = content[CRIME_STATUS_NAME]
+    local button = content[CRIME_BUTTON_NAME]
+    if not (status and status.valid and button and button.valid) then return end
+    local available, err, planet_name, count = crime.availability(player)
+    status.caption = available and {
+        'un.crime-ready',
+        planet_label(planet_name),
+        count,
+    } or crime_error_caption(err)
+    button.enabled = available
+    button.tooltip = available and {'un.crime-button-tooltip'}
+        or crime_error_caption(err)
+end
+
+local function render_crime_page(player, frame, content)
+    local description = content.add{
+        type = 'label',
+        caption = {
+            'un.crime-description',
+            config.crime_coin_cost,
+            config.crime_stamina_cost,
+            config.crime_price_scale,
+        },
+    }
+    description.style.single_line = false
+    description.style.maximal_width = 680
+    content.add{type = 'label', name = CRIME_STATUS_NAME}
+    local button = content.add{
+        type = 'button',
+        name = CRIME_BUTTON_NAME,
+        caption = {
+            'un.crime-button',
+            config.crime_coin_cost,
+            config.crime_stamina_cost,
+        },
+    }
+    button.style.height = 40
+    set_frame_state(frame, 'crime')
+    update_crime_page(player, content)
+end
+
 local function count_pairs(value)
     local count = 0
     for _ in pairs(value or {}) do count = count + 1 end
@@ -1085,6 +1144,13 @@ local function render_help_page(frame, content, mode)
         local travel = add_help_card(details, {'un.help-card-travel'})
         add_help_line(travel, {'un.help-brief-travel'})
         add_help_gap(details)
+        local crime_card = add_help_card(details, {'un.help-card-crime'})
+        add_help_line(crime_card, {
+            'un.help-brief-crime',
+            config.crime_coin_cost,
+            config.crime_stamina_cost,
+        })
+        add_help_gap(details)
         local project = add_help_card(details, {'un.help-card-project'})
         add_help_line(project, {'un.help-brief-project'})
     elseif mode == 'advanced' then
@@ -1183,6 +1249,12 @@ local function render_help_page(frame, content, mode)
         add_help_line(formulas, {
             'un.help-detail-property-trade',
             settings.get('property_tax_percent'),
+        })
+        add_help_line(formulas, {
+            'un.help-detail-crime',
+            config.crime_coin_cost,
+            config.crime_stamina_cost,
+            config.crime_price_scale,
         })
         add_help_gap(details)
 
@@ -1314,6 +1386,8 @@ local function render_page(player, page)
         render_ships_page(player, frame, content)
     elseif page == 'players' then
         render_players_page(player, frame, content)
+    elseif page == 'crime' then
+        render_crime_page(player, frame, content)
     elseif page == 'admin' then
         render_admin_page(player, frame, content)
     else
@@ -1329,6 +1403,7 @@ local function render_page(player, page)
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
+    navigation[NAV_CRIME_NAME].enabled = page ~= 'crime'
     local admin = navigation[NAV_ADMIN_NAME]
     if admin and admin.valid then admin.enabled = page ~= 'admin' end
 end
@@ -1606,6 +1681,8 @@ local function update_frame(player)
                 end
             end
         end
+    elseif page == 'crime' then
+        update_crime_page(player, content)
     elseif page == 'players' then
         if frame.tags.player_signature ~= player_signature() then
             content.clear()
@@ -1710,6 +1787,7 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
+    navigation.add{type = 'button', name = NAV_CRIME_NAME, caption = {'un.page-crime'}}
     if player.admin then
         navigation.add{type = 'button', name = NAV_ADMIN_NAME, caption = {'un.page-admin'}}
     end
@@ -1819,6 +1897,9 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_PLAYERS_NAME then
         render_page(player, 'players')
         update_frame(player)
+    elseif element.name == NAV_CRIME_NAME then
+        render_page(player, 'crime')
+        update_frame(player)
     elseif element.name == NAV_ADMIN_NAME then
         if player.admin then
             render_page(player, 'admin')
@@ -1864,6 +1945,16 @@ events.on(defines.events.on_gui_click, function(event)
         else
             element.caption = {'un.ship-scuttle-confirm'}
             element.tags = {action = 'ship-scuttle-confirm'}
+        end
+    elseif element.name == CRIME_BUTTON_NAME then
+        local attempted, result = crime.attempt(player)
+        if not attempted then
+            player.print(crime_error_caption(result))
+            update_frame(player)
+        elseif result then
+            close_frame(player)
+        else
+            update_frame(player)
         end
     elseif element.name:sub(1, #SUICIDE_PREFIX) == SUICIDE_PREFIX then
         local planet_name = element.tags.planet

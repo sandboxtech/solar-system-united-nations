@@ -152,6 +152,9 @@ M.suicide_stamina_cost = 100
 
 M.ship_life_hours = 12
 M.ship_stamina_cost = 10000
+M.crime_coin_cost = 1000
+M.crime_stamina_cost = 10000
+M.crime_price_scale = 10000
 M.ship_width_per_level = 2
 M.ship_base_width = 16
 M.ship_height = 512
