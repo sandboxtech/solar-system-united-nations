@@ -33,6 +33,30 @@ local function is_positive_integer(value)
     return type(value) == 'number' and value > 0 and value == math.floor(value)
 end
 
+local function is_nonnegative_integer(value)
+    return type(value) == 'number' and value >= 0 and value == math.floor(value)
+end
+
+function M.normalize_build_name(value)
+    if value == nil then return nil, nil end
+    if type(value) ~= 'string' then return nil, 'invalid-property-name' end
+    if value:find('%c') then return nil, 'invalid-property-name' end
+    local name = value:match('^%s*(.-)%s*$') or ''
+    if name == '' then return nil, nil end
+    if #name > config.property_name_max_bytes then
+        return nil, 'invalid-property-name'
+    end
+    local characters = 0
+    for index = 1, #name do
+        local byte = name:byte(index)
+        if byte < 128 or byte >= 192 then characters = characters + 1 end
+    end
+    if characters > config.property_name_max_characters then
+        return nil, 'invalid-property-name'
+    end
+    return name, nil
+end
+
 local function next_available_property_id()
     local id = 1
     while storage.properties[id]
@@ -50,18 +74,18 @@ local function next_owner_property_number(owner_index, excluded_property_id)
                     or candidate.expires_tick > game.tick)
                 and candidate.owner_index == owner_index
                 and candidate.id ~= excluded_property_id
-                and is_positive_integer(candidate.owner_property_number) then
+                and is_nonnegative_integer(candidate.owner_property_number) then
             used[candidate.owner_property_number] = true
         end
     end
-    local number = 1
+    local number = 0
     while used[number] do number = number + 1 end
     return number
 end
 
 local function assign_owner(property, owner_index)
     if property.owner_index == owner_index then
-        if owner_index and not is_positive_integer(
+        if owner_index and not is_nonnegative_integer(
             property.owner_property_number
         ) then
             property.owner_property_number = next_owner_property_number(
@@ -111,10 +135,13 @@ function M.display_name(property)
     local owner_name = owner and owner.name
         or account and account.name
         or ('#' .. property.owner_index)
+    local number = property.owner_property_number
+    local suffix = is_nonnegative_integer(number) and number > 0
+        and (' ' .. tostring(number)) or ''
     return {
-        'un.property-surface-owned',
-        owner_name,
-        property.owner_property_number,
+        '',
+        '[planet=' .. property.sample_planet .. '] ',
+        {'un.property-surface-owned', owner_name, suffix},
     }
 end
 
@@ -269,6 +296,8 @@ end
 local function create(spec)
     state.ensure()
     spec = spec or {}
+    local custom_name, name_err = M.normalize_build_name(spec.custom_name)
+    if name_err then return nil, name_err end
     local price
     if spec.price == nil then
         price = math.random(
@@ -319,7 +348,7 @@ local function create(spec)
     storage.next_property_id = id + 1
     local property = {
         id = id,
-        custom_name = nil,
+        custom_name = custom_name,
         surface_name = surface.name,
         surface_index = surface.index,
         status = 'active',
@@ -502,7 +531,9 @@ function M.build_availability(player, planet_name, lifetime_index, size_index)
     return true, nil, requirement
 end
 
-function M.build(player, planet_name, lifetime_index, size_index)
+function M.build(player, planet_name, lifetime_index, size_index, custom_name)
+    local normalized_name, name_err = M.normalize_build_name(custom_name)
+    if name_err then return nil, name_err end
     local available, err, requirement = M.build_availability(
         player,
         planet_name,
@@ -536,6 +567,7 @@ function M.build(player, planet_name, lifetime_index, size_index)
         decay_hours = requirement.lifetime.decay_hours,
         width = requirement.size.width,
         height = requirement.size.height,
+        custom_name = normalized_name,
     })
     if not ok or not property then
         experience.record(player.index, {{
@@ -810,64 +842,6 @@ function M.home_travel(player)
     return surfaces.to_planet_origin(player, planet_name)
 end
 
-local function command_player(command)
-    return command.player_index and game.get_player(command.player_index) or nil
-end
-
-local function reply(command, message)
-    local player = command_player(command)
-    if player then player.print(message) else localised_print(message) end
-end
-
-local function property_at_player_body(player)
-    local surface = player.physical_surface
-    if not (surface and surface.valid) then return nil end
-    for _, property in ipairs(M.list()) do
-        if property.surface_index == surface.index then return property end
-    end
-    return nil
-end
-
-local function valid_custom_name(name)
-    if name == '' or #name > 256 or name:find('%c') then return false end
-    local characters = 0
-    for index = 1, #name do
-        local byte = name:byte(index)
-        if byte < 128 or byte >= 192 then characters = characters + 1 end
-    end
-    return characters <= 64
-end
-
-local function rename_from_command(command, parameter)
-    local player = command_player(command)
-    if not player then
-        reply(command, {'un.property-rename-player-only'})
-        return
-    end
-    local property = property_at_player_body(player)
-    if not property then
-        player.print({'un.property-rename-not-inside'})
-        return
-    end
-    if property.owner_index ~= player.index then
-        player.print({'un.property-rename-not-owner'})
-        return
-    end
-    local name = parameter:match('^%s*rename%s+(.+)%s*$') or ''
-    name = name:match('^%s*(.-)%s*$') or ''
-    if not valid_custom_name(name) then
-        player.print({'un.property-rename-invalid'})
-        return
-    end
-    property.custom_name = name
-    property.rendered_name = name
-    property.rendered_name_locale = nil
-    ensure_linked_chests(property)
-    ensure_property_name_rendering(property, name)
-    bump_revision()
-    player.print({'un.property-renamed', property.id, name})
-end
-
 local function evacuate_expired_property(property, surface)
     local hospice = surfaces.ensure_hospice(property.sample_planet)
     for _, player in pairs(game.players) do
@@ -968,19 +942,6 @@ function M.admin_set_tax(player, percent)
     bump_revision()
     return true
 end
-
-local function on_command(command)
-    state.ensure()
-    local parameter = command.parameter or ''
-    local action = parameter:match('^%s*(%S*)')
-    if action == 'rename' then
-        rename_from_command(command, parameter)
-        return
-    end
-    reply(command, {'un.property-command-usage'})
-end
-
-commands.add_command('un-property', {'un.property-command-help'}, on_command)
 
 events.on(defines.events.on_surface_deleted, function(event)
     state.ensure()

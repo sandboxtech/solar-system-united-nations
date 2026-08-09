@@ -96,10 +96,11 @@ M.science_pack_order = {
 }
 
 M.hospice_surface_prefix = 'un-hospice-'
-M.hospice_surface_size = 64
+M.hospice_surface_width = 128
+M.hospice_surface_height = 64
 M.hospice_core_size = 32
 M.hospice_liquid_border_width = 2
-M.hospice_tile_layout_version = 3
+M.hospice_tile_layout_version = 4
 M.hospice_tiles = {
     nauvis = {land = 'grass-1', liquid = 'water'},
     vulcanus = {land = 'volcanic-ash-soil', liquid = 'lava'},
@@ -113,6 +114,8 @@ M.property_solar_multiplier = 0.10
 M.property_min_brightness = 0.05
 M.property_link_id_unowned = 0
 M.property_max_size = 256
+M.property_name_max_characters = 64
+M.property_name_max_bytes = 256
 M.property_sample_planets = M.public_planets
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 3000

@@ -155,17 +155,18 @@ local function apply_natural_sample(surface, property_id, half_width, half_heigh
 end
 
 local function apply_hospice_tiles(surface, planet_name)
-    local half_size = config.hospice_surface_size / 2
+    local half_width = config.hospice_surface_width / 2
+    local half_height = config.hospice_surface_height / 2
     local core_half = config.hospice_core_size / 2
     local border = config.hospice_liquid_border_width
     local planet_tiles = config.hospice_tiles[planet_name]
     local tiles = {}
-    for y = -half_size, half_size - 1 do
-        for x = -half_size, half_size - 1 do
-            local in_liquid_border = x < -half_size + border
-                or x >= half_size - border
-                or y < -half_size + border
-                or y >= half_size - border
+    for y = -half_height, half_height - 1 do
+        for x = -half_width, half_width - 1 do
+            local in_liquid_border = x < -half_width + border
+                or x >= half_width - border
+                or y < -half_height + border
+                or y >= half_height - border
             local tile_name = in_core(x, y, core_half)
                 and TUTORIAL_GRID_NAME
                 or in_liquid_border and planet_tiles.liquid
@@ -214,15 +215,24 @@ function M.ensure_hospice(planet_name)
     if not (surface and surface.valid) then
         surface = game.create_surface(
             surface_name,
-            map_gen_settings(config.hospice_surface_size)
+            map_gen_settings(
+                config.hospice_surface_width,
+                config.hospice_surface_height
+            )
         )
     else
         local settings = surface.map_gen_settings
-        settings.width = config.hospice_surface_size
-        settings.height = config.hospice_surface_size
+        settings.width = config.hospice_surface_width
+        settings.height = config.hospice_surface_height
         surface.map_gen_settings = settings
     end
-    ensure_generated(surface, 1)
+    ensure_generated(
+        surface,
+        math.max(1, math.ceil(math.max(
+            config.hospice_surface_width,
+            config.hospice_surface_height
+        ) / 64))
+    )
     if storage.hospice_grid_versions[planet_name]
             ~= config.hospice_tile_layout_version then
         apply_hospice_tiles(surface, planet_name)

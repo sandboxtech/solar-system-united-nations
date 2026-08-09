@@ -60,6 +60,7 @@ local PROPERTY_SORT_FLOW_NAME = 'un_property_sort_flow'
 local PROPERTY_SORT_NAME = 'un_property_sort'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
+local PROPERTY_BUILD_NAME_NAME = 'un_property_build_name'
 local PROPERTY_BUILD_LIFETIME_NAME = 'un_property_build_lifetime'
 local PROPERTY_BUILD_SIZE_NAME = 'un_property_build_size'
 local PROPERTY_BUILD_COST_NAME = 'un_property_build_cost'
@@ -633,6 +634,15 @@ local function render_property_build_page(player, frame, content)
     form.add{type = 'label', caption = {'un.property-build-planet'}}
     local selected_planet = factions.of_player(player) or 'nauvis'
     form.add{type = 'label', caption = planet_label(selected_planet)}
+    form.add{type = 'label', caption = {'un.property-build-name'}}
+    form.add{
+        type = 'textfield',
+        name = PROPERTY_BUILD_NAME_NAME,
+        tooltip = {
+            'un.property-build-name-tooltip',
+            config.property_name_max_characters,
+        },
+    }
     form.add{type = 'label', caption = {'un.property-build-lifetime'}}
     local lifetime_items = {}
     for _, option in ipairs(properties.build_lifetime_options()) do
@@ -1624,6 +1634,12 @@ local function property_error(err)
     end
     if err == 'insufficient-stamina' then return {'un.stamina-insufficient'} end
     if err == 'property-limit' then return {'un.property-build-limit'} end
+    if err == 'invalid-property-name' then
+        return {
+            'un.property-build-name-invalid',
+            config.property_name_max_characters,
+        }
+    end
     return {'un.property-error-unavailable'}
 end
 
@@ -2262,6 +2278,14 @@ events.on(defines.events.on_gui_click, function(event)
             local planet_name = property_build_planet(player)
             local lifetime_index = form[PROPERTY_BUILD_LIFETIME_NAME].selected_index
             local size_index = form[PROPERTY_BUILD_SIZE_NAME].selected_index
+            local name_field = form[PROPERTY_BUILD_NAME_NAME]
+            local custom_name, name_err = properties.normalize_build_name(
+                name_field and name_field.valid and name_field.text or ''
+            )
+            if name_err then
+                player.print(property_error(name_err))
+                return
+            end
             local can_build, err, requirement = properties.build_availability(
                 player,
                 planet_name,
@@ -2283,13 +2307,15 @@ events.on(defines.events.on_gui_click, function(event)
                 planet_name = planet_name,
                 lifetime_index = lifetime_index,
                 size_index = size_index,
+                custom_name = custom_name or '',
             }
         elseif tags.action == 'property-build-confirm' then
             local property, err = properties.build(
                 player,
                 tags.planet_name,
                 tags.lifetime_index,
-                tags.size_index
+                tags.size_index,
+                tags.custom_name
             )
             player.print(property and {'un.property-built', property.id}
                 or property_error(err))
