@@ -72,6 +72,15 @@ function M.remove_offline_friends(player_index)
     return removed
 end
 
+function M.remove_player(player_index)
+    if not storage.players then return end
+    for _, account in pairs(storage.players) do
+        if type(account) == 'table' and type(account.friends) == 'table' then
+            account.friends[player_index] = nil
+        end
+    end
+end
+
 local function friend_command(command)
     local player = command_player(command)
     if not player then

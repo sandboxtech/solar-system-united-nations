@@ -320,6 +320,21 @@ function M.set_all_open(player_index, enabled)
     return true
 end
 
+function M.release_owner(player_index)
+    state.ensure()
+    local changed = 0
+    for _, property in ipairs(M.list()) do
+        if property.owner_index == player_index then
+            property.owner_index = nil
+            property.owner_cleanup_tick = game.tick
+            ensure_linked_chests(property)
+            changed = changed + 1
+        end
+    end
+    if changed > 0 then bump_revision() end
+    return changed
+end
+
 local function valid_surface(property)
     local surface = property and game.surfaces[property.surface_name]
     return surface and surface.valid or false

@@ -7,6 +7,8 @@ require('scripts.properties')
 require('scripts.restrictions')
 require('scripts.social')
 require('scripts.ships')
+require('scripts.disasters')
+require('scripts.player_cleanup')
 require('scripts.gui')
 
 local bootstrap = require('scripts.bootstrap')

@@ -2,6 +2,7 @@ local gui = require('scripts.gui')
 local properties = require('scripts.properties')
 local restrictions = require('scripts.restrictions')
 local ships = require('scripts.ships')
+local disasters = require('scripts.disasters')
 local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
 
@@ -13,6 +14,7 @@ function M.run()
     properties.ensure_defaults()
     restrictions.ensure()
     ships.ensure()
+    disasters.ensure()
     gui.ensure_all()
 end
 

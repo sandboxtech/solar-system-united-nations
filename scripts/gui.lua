@@ -141,6 +141,7 @@ local function disabled_tooltip(action, err)
     if err == 'insufficient-credit' then return {'un.property-error-credit'} end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
+    if err == 'planet-closed' then return {'un.travel-planet-closed'} end
     if err == 'renew-limit' then return {'un.property-error-renew-limit'} end
     if action == 'buy' and err == 'already-owner' then
         return {'un.property-buy-disabled-owner'}
@@ -438,6 +439,7 @@ local function render_help_page(frame, content, mode)
         config.ship_height,
     })
     add_help_line(details, {'un.help-detail-travel'})
+    add_help_line(details, {'un.help-detail-resets'})
 
     if mode == 'full' then
         add_help_line(details, {'un.help-detail-formulas-heading'}, true)
@@ -465,6 +467,15 @@ local function render_help_page(frame, content, mode)
             config.property_supply_high_median_price,
             config.property_supply_high_vacancy * 100,
             config.property_supply_low_median_price,
+        })
+        add_help_line(details, {
+            'un.help-detail-reset-schedule',
+            config.public_planet_reset_hours.nauvis,
+            config.public_planet_reset_hours.vulcanus,
+            config.public_planet_reset_hours.gleba,
+            config.public_planet_reset_hours.fulgora,
+            config.public_planet_reset_hours.aquilo,
+            config.player_cleanup_idle_hours,
         })
         add_help_line(details, {'un.help-detail-commands-heading'}, true)
         add_help_line(details, {'un.help-detail-command-friend'})
@@ -585,6 +596,7 @@ local function property_error(err)
     end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
+    if err == 'planet-closed' then return {'un.travel-planet-closed'} end
     if err == 'ship-home-restricted' then return {'un.ship-home-restricted'} end
     if err == 'ship-already-have' then return {'un.ship-already-have'} end
     if err == 'ship-missing' then return {'un.ship-missing'} end

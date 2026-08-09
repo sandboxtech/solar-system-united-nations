@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 14
+M.schema_version = 16
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -9,6 +9,28 @@ M.ticks_per_hour = 60 * M.ticks_per_minute
 M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
 M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
+M.public_planet_reset_hours = {
+    nauvis = 2,
+    vulcanus = 3,
+    gleba = 4,
+    fulgora = 5,
+    aquilo = 7,
+}
+M.public_planet_initial_offset_minutes = {
+    nauvis = 0,
+    vulcanus = 10,
+    gleba = 20,
+    fulgora = 30,
+    aquilo = 40,
+}
+M.public_planet_warning_minutes = {30, 5, 1}
+M.public_planet_check_ticks = 60 * 60
+M.public_planet_solar_factors = {0.75, 1, 1.25}
+M.public_planet_day_factors = {0.75, 1, 1.5}
+
+M.player_cleanup_idle_hours = 90
+M.player_cleanup_check_ticks = 60 * 60 * 60
+M.player_cleanup_admins = false
 
 M.property_decay_ticks = 2 * M.ticks_per_hour
 M.property_max_future_ticks = 30 * M.ticks_per_hour

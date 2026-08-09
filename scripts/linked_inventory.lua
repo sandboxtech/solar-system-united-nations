@@ -204,6 +204,25 @@ function M.get_active_dropoff(player_index)
     return resolve_record(player_index)
 end
 
+function M.clear_player_dropoff(player_index)
+    state.ensure()
+    local chest = resolve_record(player_index)
+    if chest and chest.valid then chest.destroy() end
+    storage.dropoffs[player_index] = nil
+end
+
+function M.clear_surface_dropoffs(surface_name)
+    state.ensure()
+    local indexes = {}
+    for player_index, record in pairs(storage.dropoffs) do
+        if record.surface == surface_name then indexes[#indexes + 1] = player_index end
+    end
+    table.sort(indexes)
+    for _, player_index in ipairs(indexes) do
+        M.clear_player_dropoff(player_index)
+    end
+end
+
 function M.convert_player(player)
     local inventory = M.get_inventory(player)
     if not (inventory and inventory.valid) then return 0, 0 end

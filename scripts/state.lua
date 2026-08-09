@@ -18,6 +18,9 @@ function M.ensure()
     end
     if storage.dropoffs == nil then storage.dropoffs = {} end
     if storage.ships == nil then storage.ships = {} end
+    if storage.public_planet_resets == nil then
+        storage.public_planet_resets = {}
+    end
     if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then
         storage.ledger = {first_id = 1, next_id = 1, records = {}}

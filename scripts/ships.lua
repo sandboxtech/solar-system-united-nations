@@ -155,6 +155,22 @@ function M.scuttle(player)
     return true
 end
 
+function M.remove_owner(player_index)
+    local removed = 0
+    for index, record in pairs(records()) do
+        if record.owner_index == player_index then
+            local platform = platform_of(index)
+            if platform and not is_scheduled(platform) then
+                record.scuttled_tick = game.tick
+                platform.destroy(1)
+            end
+            records()[index] = nil
+            removed = removed + 1
+        end
+    end
+    return removed
+end
+
 function M.ensure()
     reconcile()
     M.enforce_lock()

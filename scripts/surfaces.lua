@@ -222,6 +222,12 @@ function M.can_start_public_travel(surface)
         == config.property_surface_prefix
 end
 
+function M.is_public_planet_open(name)
+    local records = storage.public_planet_resets
+    local record = records and records[name]
+    return not record or record.state == 'open'
+end
+
 function M.teleport_near(player, surface, center, allow_vehicle)
     if not (surface and surface.valid) then return false, 'surface-missing' end
     if not allow_vehicle and player.vehicle and player.vehicle.valid then
@@ -247,6 +253,9 @@ function M.to_planet(player)
     local source = player.physical_surface
     if not M.can_start_public_travel(source) then
         return false, 'travel-restricted'
+    end
+    if not M.is_public_planet_open('nauvis') then
+        return false, 'planet-closed'
     end
     local dropoff = linked_inventory.get_active_dropoff(player.index)
     if dropoff then
