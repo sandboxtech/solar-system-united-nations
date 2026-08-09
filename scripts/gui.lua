@@ -16,8 +16,9 @@ local technology_decay = require('scripts.technology_decay')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 9
+local HUD_LAYOUT_VERSION = 11
 local LEGACY_BUTTON_NAME = 'un_main_button'
+local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_MENU_NAME = 'un_hud_menu'
 local HUD_LAST_PROPERTY_NAME = 'un_hud_last_property'
 local FRAME_NAME = 'un_main_frame'
@@ -164,6 +165,7 @@ function M.ensure_button(player)
     local hud = root[HUD_FLOW_NAME]
     if hud and hud.valid then
         local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
+            and hud[HUD_TITLE_NAME]
             and hud[HUD_MENU_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
         if complete then
@@ -180,6 +182,18 @@ function M.ensure_button(player)
     hud.style.vertical_align = 'center'
     hud.style.padding = 4
     hud.tags = {layout_version = HUD_LAYOUT_VERSION}
+    local title = hud.add{
+        type = 'label',
+        name = HUD_TITLE_NAME,
+        caption = {'un.hud-title'},
+    }
+    title.style.font = 'default-large-bold'
+    title.style.font_color = {r = 1, g = 1, b = 1}
+    title.style.height = 40
+    title.style.horizontal_align = 'center'
+    title.style.vertical_align = 'center'
+    title.style.left_margin = 4
+    title.style.right_margin = 6
     local buttons = {
         {HUD_MENU_NAME, 'virtual-signal/signal-info', {'un.hud-menu-tooltip'}},
         {HUD_LAST_PROPERTY_NAME, 'virtual-signal/signal-map-marker', {'un.hud-home-tooltip'}},
@@ -200,6 +214,21 @@ end
 
 local function property_price_name(property_id)
     return 'un_property_price_' .. tostring(property_id)
+end
+
+local function property_price_change_name(property_id)
+    return 'un_property_price_change_' .. tostring(property_id)
+end
+
+local function property_price_change_caption(property, current_price)
+    local change = current_price - property.base_price
+    if change > 0 then
+        return {'un.property-price-change-up', format_integer(change)}
+    end
+    if change < 0 then
+        return {'un.property-price-change-down', format_integer(-change)}
+    end
+    return {'un.property-price-change-same'}
 end
 
 local function property_buy_name(property_id)
@@ -406,6 +435,8 @@ local function render_property_table(player, frame, content)
     list.add{type = 'label', caption = {'un.property-column-owner'}}
     list.add{type = 'label', caption = {'un.property-column-lifetime'}}
     list.add{type = 'label', caption = {'un.property-column-price'}}
+    list.add{type = 'label', caption = {'un.property-column-price-change'}}
+    list.add{type = 'label', caption = {'un.property-column-price-period'}}
     list.add{type = 'label', caption = {'un.property-buy'}}
     list.add{type = 'label', caption = {'un.property-enter'}}
 
@@ -425,11 +456,26 @@ local function render_property_table(player, frame, content)
             name = property_remaining_name(property.id),
             caption = property_lifetime_caption(property),
         }
+        local current_price = properties.current_price(property)
         list.add{
             type = 'label',
             name = property_price_name(property.id),
             caption = {'un.coin-amount',
-                format_integer(properties.current_price(property))},
+                format_integer(current_price)},
+        }
+        list.add{
+            type = 'label',
+            name = property_price_change_name(property.id),
+            caption = property_price_change_caption(property, current_price),
+            tooltip = {'un.property-price-change-tooltip'},
+        }
+        list.add{
+            type = 'label',
+            caption = {
+                'un.property-price-period-hours',
+                tostring(property.decay_ticks / config.ticks_per_hour),
+            },
+            tooltip = {'un.property-price-period-tooltip'},
         }
         local can_buy, buy_error = properties.buy_availability(player, property)
         list.add{
@@ -694,7 +740,7 @@ local function render_experience_section(content)
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
-        column_count = 4,
+        column_count = 3,
         style = 'bordered_table',
     }
     for index, name in ipairs(config.science_pack_order) do
@@ -740,7 +786,7 @@ local function render_ships_page(player, frame, content)
     local list = content.add{
         type = 'table',
         name = SHIP_TABLE_NAME,
-        column_count = 3,
+        column_count = 4,
         style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.ship-column-owner'}}
@@ -1206,7 +1252,7 @@ local function render_players_page(viewer, frame, content)
     local list = content.add{
         type = 'table',
         name = PLAYER_TABLE_NAME,
-        column_count = 6,
+        column_count = 8,
         style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.player-column-status'}}
@@ -1227,7 +1273,7 @@ local function render_players_page(viewer, frame, content)
         list.add{type = 'label', name = player_element_name('coins', player.index)}
         list.add{type = 'label', name = player_element_name('level', player.index)}
         if player.index == viewer.index then
-            list.add{type = 'label', caption = ''}
+            list.add{type = 'label', caption = {'un.player-self'}}
         else
             local added = social.is_friend(viewer.index, player.index)
             list.add{
@@ -1340,9 +1386,14 @@ local function update_property_row(player, property_table, property)
         remaining.caption = property_lifetime_caption(property)
     end
     local price = property_table[property_price_name(property.id)]
+    local current_price = properties.current_price(property)
     if price and price.valid then
         price.caption = {'un.coin-amount',
-            format_integer(properties.current_price(property))}
+            format_integer(current_price)}
+    end
+    local change = property_table[property_price_change_name(property.id)]
+    if change and change.valid then
+        change.caption = property_price_change_caption(property, current_price)
     end
 
     local can_buy, buy_error = properties.buy_availability(player, property)
@@ -1796,7 +1847,7 @@ events.on(defines.events.on_gui_click, function(event)
             element.tags = {action = 'starter-kit-confirm'}
         end
     elseif element.name == SHIP_CREATE_NAME then
-        local actions = content[SHIP_ACTIONS_NAME]
+        local actions = element.parent
         local dropdown = actions and actions.valid and actions[SHIP_PLANET_NAME]
         local planet_name = dropdown
             and config.public_planets[dropdown.selected_index] or nil
