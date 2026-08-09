@@ -65,8 +65,10 @@ end
 function M.feature_description(property)
     local width = property.width or property.size or 0
     local height = property.height or property.size or 0
-    local shape = property.shape == 'long'
-        and {'un.property-shape-long'} or {'un.property-shape-square'}
+    local shape = property.shape == 'square'
+        and {'un.property-shape-square'}
+        or property.shape == 'long' and {'un.property-shape-long'}
+        or {'un.property-shape-rectangle'}
     local sample_planet = property.sample_planet
     local sample_description = sample_planet and {
         '',
@@ -145,21 +147,28 @@ function M.create(spec)
     state.ensure()
     spec = spec or {}
     local price = math.floor(tonumber(spec.price) or 1000)
-    local n = tonumber(spec.n) or 16
     local tax = tonumber(spec.tax) or config.property_default_tax
-    local shape = spec.shape or 'square'
     local solar = tonumber(spec.solar) or 1
-    local half_width = shape == 'long' and 2 * n or n
-    local half_height = n
+    local sides = config.property_side_lengths
+    local width = tonumber(spec.width)
+        or sides[math.random(1, #sides)]
+    local height = tonumber(spec.height)
+        or sides[math.random(1, #sides)]
+    local shape = width == height and 'square' or 'rectangle'
     if not is_positive_integer(price) or price > config.property_price_cap then
         return nil, 'invalid-price'
     end
-    if not is_positive_integer(n) or n < 4 then
+    if not is_positive_integer(width) or not is_positive_integer(height) then
         return nil, 'invalid-size'
     end
-    if shape ~= 'square' and shape ~= 'long' then return nil, 'invalid-shape' end
-    if 2 * half_width > config.property_max_size
-            or 2 * half_height > config.property_max_size then
+    local valid_width, valid_height = false, false
+    for _, side in ipairs(sides) do
+        if width == side then valid_width = true end
+        if height == side then valid_height = true end
+    end
+    if not valid_width or not valid_height
+            or width > config.property_max_size
+            or height > config.property_max_size then
         return nil, 'invalid-size'
     end
     if solar < 0 then return nil, 'invalid-solar' end
@@ -168,8 +177,8 @@ function M.create(spec)
     local id = storage.next_property_id
     local surface, half_width, half_height, sample_planet, sample_position
         = surfaces.create_property_surface(id, {
-        n = n,
-        shape = shape,
+        width = width,
+        height = height,
         solar = solar,
         sample_planet = spec.sample_planet,
     })
@@ -186,9 +195,8 @@ function M.create(spec)
         price_at_tick = game.tick,
         decay_ticks = config.property_decay_ticks,
         tax = tax,
-        n = n,
-        width = 2 * half_width,
-        height = 2 * half_height,
+        width = width,
+        height = height,
         shape = shape,
         solar = solar,
         sample_planet = sample_planet,
@@ -452,13 +460,10 @@ local function on_command(command)
     if action == '' or action == 'list' then
         reply(command, {'un.property-command-count', #M.list()})
     elseif action == 'create' then
-        if third ~= '' then
-            reply(command, {'un.property-command-error'})
-            return
-        end
         local property, err = M.create{
             price = first ~= '' and tonumber(first) or nil,
-            n = second ~= '' and tonumber(second) or nil,
+            width = second ~= '' and tonumber(second) or nil,
+            height = third ~= '' and tonumber(third) or nil,
         }
         if property then
             reply(command, {'un.property-created', property.id})

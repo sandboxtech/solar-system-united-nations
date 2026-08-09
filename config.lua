@@ -65,16 +65,17 @@ M.property_default_tax = 0.10
 M.property_link_id_unowned = 0
 M.property_max_size = 128
 M.property_sample_planets = {'nauvis', 'gleba'}
+M.property_side_lengths = {32, 64, 128}
 M.default_properties = {
-    {price = 1000, n = 8, shape = 'square', solar = 0.1, sample_planet = 'nauvis'},
-    {price = 1000, n = 8, shape = 'square', solar = 1, sample_planet = 'gleba'},
-    {price = 1000, n = 8, shape = 'long', solar = 10, sample_planet = 'nauvis'},
-    {price = 1000, n = 8, shape = 'long', solar = 0.1, sample_planet = 'gleba'},
-    {price = 5000, n = 16, shape = 'square', solar = 1, sample_planet = 'nauvis'},
-    {price = 5000, n = 16, shape = 'square', solar = 10, sample_planet = 'gleba'},
-    {price = 5000, n = 16, shape = 'long', solar = 0.1, sample_planet = 'nauvis'},
-    {price = 20000, n = 32, shape = 'square', solar = 1, sample_planet = 'gleba'},
-    {price = 20000, n = 32, shape = 'long', solar = 10, sample_planet = 'nauvis'},
+    {price = 1000, solar = 0.1, sample_planet = 'nauvis'},
+    {price = 1000, solar = 1, sample_planet = 'gleba'},
+    {price = 1000, solar = 10, sample_planet = 'nauvis'},
+    {price = 1000, solar = 0.1, sample_planet = 'gleba'},
+    {price = 5000, solar = 1, sample_planet = 'nauvis'},
+    {price = 5000, solar = 10, sample_planet = 'gleba'},
+    {price = 5000, solar = 0.1, sample_planet = 'nauvis'},
+    {price = 20000, solar = 1, sample_planet = 'gleba'},
+    {price = 20000, solar = 10, sample_planet = 'nauvis'},
 }
 
 M.ship_life_hours = 50

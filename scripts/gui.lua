@@ -2,7 +2,6 @@ local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
-local linked_inventory = require('scripts.linked_inventory')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
 local ships = require('scripts.ships')
@@ -11,8 +10,8 @@ local surfaces = require('scripts.surfaces')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
+local HUD_LAYOUT_VERSION = 2
 local HUD_TITLE_NAME = 'un_hud_title'
-local HUD_EMBLEM_NAME = 'un_hud_emblem'
 local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_UBI_NAME = 'un_hud_ubi'
 local HUD_TRAVEL_NAME = 'un_hud_travel'
@@ -32,8 +31,6 @@ local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
-local LOCATION_TABLE_NAME = 'un_dropoff_location_table'
-local DROPOFF_LOCATION_NAME = 'un_dropoff_location'
 local TRAVEL_PLANET_NAME = 'un_travel_planet'
 local TRAVEL_HOSPICE_NAME = 'un_travel_hospice'
 local SUICIDE_NAME = 'un_suicide'
@@ -59,10 +56,6 @@ local function format_integer(value)
     return sign .. grouped
 end
 
-local function format_coordinate(value)
-    return string.format('%.1f', value)
-end
-
 function M.ensure_button(player)
     local root = player.gui.top
     local old = root[LEGACY_BUTTON_NAME]
@@ -70,8 +63,8 @@ function M.ensure_button(player)
 
     local hud = root[HUD_FLOW_NAME]
     if hud and hud.valid then
-        local complete = hud[HUD_TITLE_NAME]
-            and hud[HUD_EMBLEM_NAME]
+        local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
+            and hud[HUD_TITLE_NAME]
             and hud[HUD_UBI_NAME]
             and hud[HUD_TRAVEL_NAME]
             and hud[HUD_PROPERTY_NAME]
@@ -87,22 +80,17 @@ function M.ensure_button(player)
     }
     hud.style.vertical_align = 'center'
     hud.style.padding = 4
-    local emblem = hud.add{
-        type = 'sprite',
-        name = HUD_EMBLEM_NAME,
-        sprite = 'utility/player_force_icon',
-        tooltip = {'un.hud-title'},
-    }
-    emblem.style.width = 28
-    emblem.style.height = 28
+    hud.tags = {layout_version = HUD_LAYOUT_VERSION}
     local title = hud.add{
         type = 'label',
         name = HUD_TITLE_NAME,
         caption = {'un.hud-title'},
     }
     title.style.font = 'default-bold'
-    title.style.font_color = {r = 0.35, g = 0.75, b = 1}
-    title.style.left_margin = 2
+    title.style.font_color = {r = 1, g = 1, b = 1}
+    title.style.height = 40
+    title.style.vertical_align = 'center'
+    title.style.left_margin = 4
     title.style.right_margin = 10
 
     local buttons = {
@@ -110,7 +98,7 @@ function M.ensure_button(player)
         {HUD_TRAVEL_NAME, 'item/linked-chest', {'un.hud-travel-tooltip'}},
         {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
         {HUD_EXPERIENCE_NAME, 'item/automation-science-pack', {'un.hud-experience-tooltip'}},
-        {HUD_PLAYERS_NAME, 'utility/side_menu_players_icon', {'un.hud-players-tooltip'}},
+        {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
@@ -239,15 +227,8 @@ local function render_ubi_page(frame, content)
 end
 
 local function render_travel_page(frame, content)
-    local location = content.add{
-        type = 'table',
-        name = LOCATION_TABLE_NAME,
-        column_count = 2,
-    }
-    location.add{type = 'label', caption = {'un.dropoff-location-label'}}
-    location.add{type = 'label', name = DROPOFF_LOCATION_NAME}
-
-    local planet = content.add{
+    local travel_actions = content.add{type = 'flow', direction = 'horizontal'}
+    local planet = travel_actions.add{
         type = 'sprite-button',
         name = TRAVEL_PLANET_NAME,
         sprite = 'space-location/nauvis',
@@ -255,7 +236,7 @@ local function render_travel_page(frame, content)
     }
     planet.style.width = 40
     planet.style.height = 40
-    local hospice = content.add{
+    local hospice = travel_actions.add{
         type = 'sprite-button',
         name = TRAVEL_HOSPICE_NAME,
         sprite = 'utility/gps_map_icon',
@@ -263,6 +244,14 @@ local function render_travel_page(frame, content)
     }
     hospice.style.width = 40
     hospice.style.height = 40
+    local suicide = travel_actions.add{
+        type = 'sprite-button',
+        name = SUICIDE_NAME,
+        sprite = 'utility/danger_icon',
+        tooltip = {'un.suicide'},
+    }
+    suicide.style.width = 40
+    suicide.style.height = 40
 
     content.add{type = 'line'}
     content.add{type = 'label', name = SHIP_STATUS_NAME}
@@ -282,14 +271,6 @@ local function render_travel_page(frame, content)
         caption = {'un.ship-scuttle'},
     }
 
-    local suicide = content.add{
-        type = 'sprite-button',
-        name = SUICIDE_NAME,
-        sprite = 'utility/danger_icon',
-        tooltip = {'un.suicide'},
-    }
-    suicide.style.width = 40
-    suicide.style.height = 40
     set_frame_state(frame, 'travel')
 end
 
@@ -459,22 +440,6 @@ local function update_frame(player)
             }
         end
     elseif page == 'travel' then
-        local location_table = content[LOCATION_TABLE_NAME]
-        local location = location_table and location_table.valid
-            and location_table[DROPOFF_LOCATION_NAME]
-        if location and location.valid then
-            local dropoff = linked_inventory.get_active_dropoff(player.index)
-            if dropoff then
-                location.caption = {
-                    'un.dropoff-location',
-                    dropoff.surface.localised_name,
-                    format_coordinate(dropoff.position.x),
-                    format_coordinate(dropoff.position.y),
-                }
-            else
-                location.caption = {'un.dropoff-missing'}
-            end
-        end
         local platform, record = ships.of(player.index)
         local status = content[SHIP_STATUS_NAME]
         local ship_actions = content[SHIP_ACTIONS_NAME]
@@ -529,7 +494,6 @@ local function update_frame(player)
         if summary and summary.valid then
             summary.caption = {
                 'un.experience-summary',
-                format_integer(experience.total_consumed(player.index)),
                 experience.total_level(player.index),
             }
         end

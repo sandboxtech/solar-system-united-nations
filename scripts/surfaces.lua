@@ -76,7 +76,9 @@ local function copy_sample_tiles(
             }
         end
     end
-    destination.set_tiles(tiles, false, false, true, false)
+    -- Let Factorio correct neighbouring tile transitions so copied biomes keep
+    -- their native smooth borders instead of exposing raw stair-step edges.
+    destination.set_tiles(tiles, true, false, true, false)
 end
 
 local function is_rock(entity)
@@ -177,11 +179,10 @@ function M.ensure_hospice()
 end
 
 function M.create_property_surface(property_id, spec)
-    local n = spec.n
-    local half_width = spec.shape == 'long' and 2 * n or n
-    local half_height = n
-    local width = 2 * half_width
-    local height = 2 * half_height
+    local width = spec.width
+    local height = spec.height
+    local half_width = width / 2
+    local half_height = height / 2
     local name = config.property_surface_prefix .. tostring(property_id)
     local surface = game.surfaces[name]
     if not (surface and surface.valid) then
