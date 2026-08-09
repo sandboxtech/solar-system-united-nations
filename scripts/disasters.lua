@@ -65,9 +65,23 @@ local function ensure_record(name)
 end
 
 local function evacuate_player(player, target_surface)
-    if player.connected and player.surface == target_surface
-            and player.physical_surface ~= target_surface then
+    local hospice = surfaces.ensure_hospice(target_surface.name)
+    if player.connected and player.controller_type == defines.controllers.remote
+            and player.surface == target_surface then
         pcall(function() player.exit_remote_view() end)
+        -- In 2.0 exit_remote_view can legitimately fail while the physical
+        -- controller is in a rocket or on a platform. Keep that physical
+        -- controller intact and redirect only the remote controller.
+        if player.controller_type == defines.controllers.remote
+                and player.surface == target_surface then
+            pcall(function()
+                player.set_controller{
+                    type = defines.controllers.remote,
+                    surface = hospice,
+                    position = {0, 0},
+                }
+            end)
+        end
     end
     if player.physical_surface == target_surface then
         local moved = false
@@ -76,7 +90,7 @@ local function evacuate_player(player, target_surface)
             if player.vehicle and player.vehicle.valid then player.driving = false end
             moved = surfaces.teleport_near(
                 player,
-                surfaces.ensure_hospice(),
+                hospice,
                 {0, 0},
                 true
             )
@@ -85,7 +99,7 @@ local function evacuate_player(player, target_surface)
             local character = player.character
             if character and character.valid then
                 pcall(function()
-                    character.teleport({0, 2}, surfaces.ensure_hospice())
+                    character.teleport({0, 2}, hospice)
                 end)
             end
         end
@@ -96,7 +110,7 @@ local function evacuate_player(player, target_surface)
     for _, character in pairs(player.get_associated_characters()) do
         if character.valid and character.surface == target_surface then
             pcall(function()
-                character.teleport({0, 2}, surfaces.ensure_hospice())
+                character.teleport({0, 2}, hospice)
             end)
         end
     end
@@ -310,7 +324,7 @@ local function finish_reset(name, surface, record)
     if name == 'nauvis' and record.evolution then
         game.forces.enemy.set_evolution_factor(record.evolution, surface)
     end
-    if name == 'nauvis' then surfaces.sync_all_property_environments() end
+    surfaces.sync_all_property_environments()
     game.forces.player.set_spawn_position({0, 0}, surface)
     surface.request_to_generate_chunks({0, 0}, 1)
     surface.force_generate_chunk_requests()

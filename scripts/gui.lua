@@ -13,7 +13,7 @@ local surfaces = require('scripts.surfaces')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 7
+local HUD_LAYOUT_VERSION = 8
 local HUD_TITLE_NAME = 'un_hud_title'
 local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_HELP_NAME = 'un_hud_help'
@@ -42,8 +42,6 @@ local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
-local TRAVEL_PLANET_NAME = 'un_travel_planet'
-local TRAVEL_HOSPICE_NAME = 'un_travel_hospice'
 local SUICIDE_NAME = 'un_suicide'
 local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
@@ -73,11 +71,26 @@ local ADMIN_NUMBER_SETTINGS = {
     {'cleanup_idle_hours', 'un.admin-setting-cleanup-hours'},
     {'property_tax_percent', 'un.admin-setting-property-tax'},
     {'property_price_factor', 'un.admin-setting-property-factor'},
+    {'technology_price_multiplier', 'un.admin-setting-technology-price'},
+    {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
+    {'asteroid_spawning_rate', 'un.admin-setting-asteroid-rate'},
 }
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
 -- game.tick only when queried or claimed.
 local open_players = {}
+
+local function update_home_button(player, hud)
+    hud = hud or player.gui.top[HUD_FLOW_NAME]
+    local button = hud and hud.valid and hud[HUD_LAST_PROPERTY_NAME]
+    if not (button and button.valid) then return end
+    local planet_name = surfaces.context_planet(player.physical_surface)
+    if planet_name and player.physical_surface.name == planet_name then
+        button.tooltip = {'un.hud-home-to-home-tooltip'}
+    else
+        button.tooltip = {'un.hud-home-to-planet-tooltip'}
+    end
+end
 
 local function format_integer(value)
     local raw = string.format('%.0f', value)
@@ -99,11 +112,13 @@ function M.ensure_button(player)
             and hud[HUD_TITLE_NAME]
             and hud[HUD_HELP_NAME]
             and hud[HUD_UBI_NAME]
-            and hud[TRAVEL_PLANET_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
             and hud[HUD_PROPERTY_NAME]
             and hud[HUD_PLAYERS_NAME]
-        if complete then return hud end
+        if complete then
+            update_home_button(player, hud)
+            return hud
+        end
         hud.destroy()
     end
     hud = root.add{
@@ -131,8 +146,7 @@ function M.ensure_button(player)
         {HUD_UBI_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
         {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
         {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
-        {TRAVEL_PLANET_NAME, 'space-location/nauvis', {'un.travel-planet'}},
-        {HUD_LAST_PROPERTY_NAME, 'virtual-signal/signal-map-marker', {'un.hud-last-property-tooltip'}},
+        {HUD_LAST_PROPERTY_NAME, 'virtual-signal/signal-map-marker', {'un.hud-home-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
@@ -144,6 +158,7 @@ function M.ensure_button(player)
         button.style.width = 40
         button.style.height = 40
     end
+    update_home_button(player, hud)
     return hud
 end
 
@@ -210,10 +225,10 @@ local function format_countdown(ticks)
 end
 
 local function set_frame_state(frame, page, property_revision)
-    frame.tags = {
-        page = page,
-        property_revision = property_revision or -1,
-    }
+    local tags = frame.tags
+    tags.page = page
+    tags.property_revision = property_revision or -1
+    frame.tags = tags
 end
 
 local function render_property_access_section(player, content)
@@ -241,22 +256,36 @@ local function render_property_table(player, frame, content)
     if old_access and old_access.valid then old_access.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
-    local property_list = properties.list()
-    local actions = content.add{
-        type = 'flow',
-        name = PROPERTY_ACTIONS_NAME,
-        direction = 'horizontal',
-    }
-    actions.add{
-        type = 'button',
-        name = TRAVEL_HOSPICE_NAME,
-        caption = {'un.travel-hospice'},
-    }
-    local owned = 0
-    for _, property in ipairs(property_list) do
-        if property.owner_index == player.index then owned = owned + 1 end
+    local selected = frame.tags.property_planet
+    if not selected then
+        selected = surfaces.context_planet(player.physical_surface) or 'nauvis'
+        local tags = frame.tags
+        tags.property_planet = selected
+        frame.tags = tags
     end
-    if owned > 0 then render_property_access_section(player, content) end
+    local property_list = properties.list(selected)
+    local actions = content.add{
+        type = 'tabbed-pane',
+        name = PROPERTY_ACTIONS_NAME,
+    }
+    local selected_index = 1
+    for index, planet_name in ipairs(config.public_planets) do
+        local tab = actions.add{
+            type = 'tab',
+            caption = {
+                '',
+                '[planet=' .. planet_name .. '] ',
+                {'space-location-name.' .. planet_name},
+            },
+        }
+        local tab_content = actions.add{type = 'flow', direction = 'vertical'}
+        actions.add_tab(tab, tab_content)
+        if planet_name == selected then selected_index = index end
+    end
+    actions.selected_tab_index = selected_index
+    if properties.owned_count(player.index) > 0 then
+        render_property_access_section(player, content)
+    end
     local list = content.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
@@ -511,7 +540,10 @@ local function render_admin_page(player, frame, content)
             allow_decimal = key == 'ship_life_hours'
                 or key == 'cleanup_idle_hours'
                 or key == 'property_tax_percent'
-                or key == 'property_price_factor',
+                or key == 'property_price_factor'
+                or key == 'technology_price_multiplier'
+                or key == 'spoil_time_modifier'
+                or key == 'asteroid_spawning_rate',
             allow_negative = false,
             lose_focus_on_confirm = true,
         }
@@ -719,11 +751,20 @@ local function render_help_page(frame, content, mode)
     else
         add_help_line(details, {'un.help-detail-formulas-heading'}, true)
         add_help_line(details, {
+            'un.help-detail-experience-effects',
+            config.ship_base_width,
+            config.ship_width_per_level,
+            settings.get('ship_life_hours'),
+            settings.get('property_tax_percent'),
+        })
+        add_help_line(details, {
             'un.help-detail-property-price',
             config.property_lease_types.short.hours,
             config.property_lease_types.long.hours,
             config.property_price_cap,
             settings.get('property_price_factor'),
+            config.property_lease_types.long.hours
+                / config.property_lease_types.short.hours,
         })
         add_help_line(details, {
             'un.help-detail-property-trade',
@@ -742,6 +783,20 @@ local function render_help_page(frame, content, mode)
             config.property_supply_high_median_price,
             config.property_supply_high_vacancy * 100,
             config.property_supply_low_median_price,
+        })
+        add_help_line(details, {
+            'un.help-detail-world-randomization',
+            config.public_planet_resource_base.frequency,
+            config.public_planet_resource_base.size,
+            config.public_planet_resource_base.richness,
+            config.public_planet_resource_spread,
+            config.public_planet_terrain_spread,
+            config.public_planet_cliff_spread,
+            config.public_planet_enemy_spread,
+            config.public_planet_peaceful_chance * 100,
+            settings.get('technology_price_multiplier'),
+            settings.get('spoil_time_modifier'),
+            settings.get('asteroid_spawning_rate'),
         })
         add_help_line(details, {
             'un.help-detail-reset-schedule',
@@ -1204,6 +1259,10 @@ end
 
 events.on(defines.events.on_player_created, ensure_player)
 events.on(defines.events.on_player_joined_game, ensure_player)
+events.on(defines.events.on_player_changed_surface, function(event)
+    local player = game.get_player(event.player_index)
+    if player then update_home_button(player) end
+end)
 events.on(defines.events.on_player_left_game, function(event)
     open_players[event.player_index] = nil
 end)
@@ -1231,7 +1290,7 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == HUD_UBI_NAME then
         open_frame(player, 'overview')
     elseif element.name == HUD_LAST_PROPERTY_NAME then
-        local ok, err = properties.enter_last_owned(player)
+        local ok, err = properties.home_travel(player)
         if not ok then player.print(property_error(err)) end
     elseif element.name == HUD_PROPERTY_NAME then
         open_frame(player, 'property')
@@ -1276,12 +1335,6 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
-    elseif element.name == TRAVEL_PLANET_NAME then
-        local ok, err = surfaces.to_planet(player)
-        if ok then close_frame(player) else player.print(property_error(err)) end
-    elseif element.name == TRAVEL_HOSPICE_NAME then
-        local ok, err = surfaces.to_hospice(player)
-        if ok then close_frame(player) else player.print(property_error(err)) end
     elseif element.name == SHIP_CREATE_NAME then
         local platform, err = ships.create(player)
         if not platform then player.print(property_error(err)) end
@@ -1324,6 +1377,11 @@ events.on(defines.events.on_gui_click, function(event)
                     and settings.set(tags.setting, input.text)
                 if ok and tags.setting == 'property_tax_percent' then
                     properties.admin_set_tax(player, settings.get(tags.setting))
+                end
+                if ok and (tags.setting == 'technology_price_multiplier'
+                        or tags.setting == 'spoil_time_modifier'
+                        or tags.setting == 'asteroid_spawning_rate') then
+                    disasters.apply_global_settings()
                 end
                 player.print(ok and {'un.admin-setting-saved'}
                     or {'un.admin-invalid-value'})
@@ -1433,6 +1491,23 @@ events.on(defines.events.on_gui_click, function(event)
             end
         end
     end
+end)
+
+events.on(defines.events.on_gui_selected_tab_changed, function(event)
+    local element = event.element
+    if not (element and element.valid and element.name == PROPERTY_ACTIONS_NAME) then
+        return
+    end
+    local player = game.get_player(event.player_index)
+    local planet_name = config.public_planets[element.selected_tab_index]
+    local frame = player and player.gui.screen[FRAME_NAME]
+    local content = frame and frame.valid and frame[CONTENT_NAME]
+    if not (player and planet_name and content and content.valid) then return end
+    local tags = frame.tags
+    tags.property_planet = planet_name
+    frame.tags = tags
+    render_property_table(player, frame, content)
+    update_frame(player)
 end)
 
 events.on(defines.events.on_gui_switch_state_changed, function(event)

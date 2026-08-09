@@ -22,6 +22,10 @@ function M.ensure()
         storage.public_planet_resets = {}
     end
     if storage.admin_settings == nil then storage.admin_settings = {} end
+    if storage.hospice_grid_versions == nil then storage.hospice_grid_versions = {} end
+    if storage.respawn_hospice_planets == nil then
+        storage.respawn_hospice_planets = {}
+    end
     if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then
         storage.ledger = {first_id = 1, next_id = 1, records = {}}

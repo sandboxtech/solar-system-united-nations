@@ -97,7 +97,7 @@ M.science_pack_order = {
     'promethium-science-pack',
 }
 
-M.hospice_surface_name = 'un-hospice'
+M.hospice_surface_prefix = 'un-hospice-'
 M.hospice_surface_size = 64
 M.property_surface_prefix = 'un-property-'
 M.property_default_tax = 0.10
@@ -105,20 +105,21 @@ M.property_solar_multiplier = 0.10
 M.property_min_brightness = 0.05
 M.property_link_id_unowned = 0
 M.property_max_size = 128
-M.property_sample_planets = {'nauvis', 'gleba'}
+M.property_sample_planets = M.public_planets
 M.property_side_lengths = {32, 64, 128}
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 2000
 M.default_properties = {
     {sample_planet = 'nauvis', lease_type = 'short'},
+    {sample_planet = 'nauvis', lease_type = 'long'},
+    {sample_planet = 'vulcanus', lease_type = 'short'},
+    {sample_planet = 'vulcanus', lease_type = 'long'},
+    {sample_planet = 'gleba', lease_type = 'short'},
     {sample_planet = 'gleba', lease_type = 'long'},
-    {sample_planet = 'nauvis', lease_type = 'short'},
-    {sample_planet = 'gleba', lease_type = 'long'},
-    {sample_planet = 'nauvis', lease_type = 'short'},
-    {sample_planet = 'gleba', lease_type = 'long'},
-    {sample_planet = 'nauvis', lease_type = 'short'},
-    {sample_planet = 'gleba', lease_type = 'long'},
-    {sample_planet = 'nauvis', lease_type = 'short'},
+    {sample_planet = 'fulgora', lease_type = 'short'},
+    {sample_planet = 'fulgora', lease_type = 'long'},
+    {sample_planet = 'aquilo', lease_type = 'short'},
+    {sample_planet = 'aquilo', lease_type = 'long'},
 }
 M.property_supply_check_ticks = M.ticks_per_hour
 M.property_supply_active_window_ticks = 30 * M.ticks_per_hour

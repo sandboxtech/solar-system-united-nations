@@ -27,7 +27,7 @@ local function ensure_generated(surface, radius)
 end
 
 local function sample_planet_name(property_id, requested)
-    if requested == 'nauvis' or requested == 'gleba' then return requested end
+    if public_planets[requested] then return requested end
     local names = config.property_sample_planets
     return names[(property_id - 1) % #names + 1]
 end
@@ -55,7 +55,7 @@ local function sample_center(source, property_id, half_width, half_height)
     end
     return {
         x = 4096 + (property_id * 977) % 2048,
-        y = (source.name == 'gleba' and -1 or 1)
+        y = ((property_id % 2 == 0) and -1 or 1)
             * (4096 + (property_id * 1597) % 2048),
     }
 end
@@ -166,11 +166,39 @@ local function apply_tutorial_grid(surface, half_size)
     surface.set_tiles(tiles, false, false, true, false)
 end
 
-function M.ensure_hospice()
-    local surface = game.surfaces[config.hospice_surface_name]
+function M.hospice_surface_name(planet_name)
+    return config.hospice_surface_prefix .. (planet_name or 'nauvis')
+end
+
+function M.hospice_planet(surface)
+    if not (surface and surface.valid) then return nil end
+    local prefix = config.hospice_surface_prefix
+    if surface.name:sub(1, #prefix) ~= prefix then return nil end
+    local name = surface.name:sub(#prefix + 1)
+    return public_planets[name] and name or nil
+end
+
+function M.property_planet(surface)
+    if not (surface and surface.valid) then return nil end
+    for _, property in pairs(storage.properties or {}) do
+        if property.surface_index == surface.index then return property.sample_planet end
+    end
+    return nil
+end
+
+function M.context_planet(surface)
+    if not (surface and surface.valid) then return nil end
+    if public_planets[surface.name] then return surface.name end
+    return M.hospice_planet(surface) or M.property_planet(surface)
+end
+
+function M.ensure_hospice(planet_name)
+    planet_name = public_planets[planet_name] and planet_name or 'nauvis'
+    local surface_name = M.hospice_surface_name(planet_name)
+    local surface = game.surfaces[surface_name]
     if not (surface and surface.valid) then
         surface = game.create_surface(
-            config.hospice_surface_name,
+            surface_name,
             map_gen_settings(config.hospice_surface_size)
         )
     else
@@ -180,34 +208,37 @@ function M.ensure_hospice()
         surface.map_gen_settings = settings
     end
     ensure_generated(surface, 1)
-    if storage.hospice_grid_version ~= 1 then
+    if storage.hospice_grid_versions[planet_name] ~= 1 then
         apply_tutorial_grid(surface, config.hospice_surface_size / 2)
-        storage.hospice_grid_version = 1
+        storage.hospice_grid_versions[planet_name] = 1
     end
-    surface.localised_name = {'un.hospice-name'}
+    surface.localised_name = {
+        'un.hospice-name-planet',
+        {'space-location-name.' .. planet_name},
+    }
     game.forces.player.set_spawn_position({0, 0}, surface)
     return surface
 end
 
-function M.sync_property_environment(surface, min_brightness)
+function M.sync_property_environment(surface, min_brightness, planet_name)
     if not (surface and surface.valid) then return false end
-    local nauvis = game.surfaces.nauvis
-    if not (nauvis and nauvis.valid) then return false end
-    surface.daytime_parameters = nauvis.daytime_parameters
-    surface.ticks_per_day = nauvis.ticks_per_day
-    surface.daytime = nauvis.daytime
-    surface.always_day = nauvis.always_day
-    surface.freeze_daytime = nauvis.freeze_daytime
+    local planet = game.surfaces[planet_name or 'nauvis']
+    if not (planet and planet.valid) then return false end
+    surface.daytime_parameters = planet.daytime_parameters
+    surface.ticks_per_day = planet.ticks_per_day
+    surface.daytime = planet.daytime
+    surface.always_day = planet.always_day
+    surface.freeze_daytime = planet.freeze_daytime
     surface.solar_power_multiplier = config.property_solar_multiplier
     surface.min_brightness = min_brightness or config.property_min_brightness
     return true
 end
 
 function M.sync_all_property_environments()
-    for name, surface in pairs(game.surfaces) do
-        if name:sub(1, #config.property_surface_prefix)
-                == config.property_surface_prefix then
-            M.sync_property_environment(surface)
+    for _, property in pairs(storage.properties or {}) do
+        local surface = game.surfaces[property.surface_name]
+        if surface and surface.valid then
+            M.sync_property_environment(surface, nil, property.sample_planet)
         end
     end
 end
@@ -231,7 +262,7 @@ function M.create_property_surface(property_id, spec)
         spec.sample_planet
     )
     if not sample_planet then return nil, nil, nil, nil, nil end
-    M.sync_property_environment(surface)
+    M.sync_property_environment(surface, nil, sample_planet)
     surface.localised_name = spec.name or {'un.property-default-name', property_id}
     game.forces.player.set_spawn_position({0, 0}, surface)
     game.forces.player.chart(surface, {
@@ -250,7 +281,7 @@ end
 function M.can_start_public_travel(surface)
     if not (surface and surface.valid) then return false end
     if public_planets[surface.name] then return true end
-    if surface.name == config.hospice_surface_name then return true end
+    if M.hospice_planet(surface) then return true end
     return surface.name:sub(1, #config.property_surface_prefix)
         == config.property_surface_prefix
 end
@@ -278,24 +309,21 @@ function M.teleport(player, surface)
     return M.teleport_near(player, surface, {0, 0}, false)
 end
 
-function M.to_hospice(player)
-    return M.teleport(player, M.ensure_hospice())
+function M.to_hospice(player, planet_name)
+    planet_name = planet_name or M.context_planet(player.physical_surface) or 'nauvis'
+    return M.teleport(player, M.ensure_hospice(planet_name))
 end
 
-function M.to_planet(player)
+function M.to_planet_origin(player, planet_name)
     local source = player.physical_surface
     if not M.can_start_public_travel(source) then
         return false, 'travel-restricted'
     end
-    if not M.is_public_planet_open('nauvis') then
+    planet_name = public_planets[planet_name] and planet_name or 'nauvis'
+    if not M.is_public_planet_open(planet_name) then
         return false, 'planet-closed'
     end
-    local dropoff = linked_inventory.get_active_dropoff(player.index)
-    if dropoff then
-        return M.teleport_near(player, dropoff.surface, dropoff.position, false)
-    end
-
-    local surface = game.surfaces.nauvis
+    local surface = game.surfaces[planet_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
     return M.teleport_near(player, surface, {0, 0}, false)
 end
@@ -308,18 +336,25 @@ function M.suicide(player)
         end
     end
     if not (character and character.valid) then return false, 'no-character' end
+    storage.respawn_hospice_planets[player.index] =
+        M.context_planet(character.surface) or 'nauvis'
     return character.die(game.forces.neutral)
 end
 
 local function respawn_destination(player)
+    local planet_name = storage.respawn_hospice_planets[player.index]
+    if planet_name then
+        storage.respawn_hospice_planets[player.index] = nil
+        return M.ensure_hospice(planet_name), {0, 0}
+    end
     local dropoff = linked_inventory.get_active_dropoff(player.index)
     if dropoff then return dropoff.surface, dropoff.position end
-    return M.ensure_hospice(), {0, 0}
+    return M.ensure_hospice('nauvis'), {0, 0}
 end
 
 events.on(defines.events.on_player_created, function(event)
     local player = game.get_player(event.player_index)
-    if player then M.to_hospice(player) end
+    if player then M.to_hospice(player, 'nauvis') end
 end)
 
 events.on(defines.events.on_player_respawned, function(event)

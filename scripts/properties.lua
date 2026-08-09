@@ -160,7 +160,11 @@ local function ensure_linked_chests(property)
     surface.localised_name = M.surface_display_name(property)
     property.solar = config.property_solar_multiplier
     property.min_brightness = config.property_min_brightness
-    surfaces.sync_property_environment(surface, property.min_brightness)
+    surfaces.sync_property_environment(
+        surface,
+        property.min_brightness,
+        property.sample_planet
+    )
     normalize_linked_chest_positions(property, surface)
     local link_id = property.owner_index or config.property_link_id_unowned
     for _, position in ipairs(property.linked_chest_positions) do
@@ -324,11 +328,14 @@ function M.get(property_id)
     return nil
 end
 
-function M.list()
+function M.list(planet_name)
     state.ensure()
     local result = {}
     for _, property in pairs(storage.properties) do
-        if property.status == 'active' then result[#result + 1] = property end
+        if property.status == 'active'
+                and (not planet_name or property.sample_planet == planet_name) then
+            result[#result + 1] = property
+        end
     end
     table.sort(result, function(a, b) return a.id < b.id end)
     return result
@@ -515,19 +522,43 @@ function M.enter(player, property_id)
         ok, err = surfaces.teleport(player, surface)
     end
     if ok and property.owner_index == player.index then
-        economy.ensure_account(player.index).last_property_id = property.id
+        local account = economy.ensure_account(player.index)
+        account.last_property_id = property.id
+        account.last_property_by_planet = account.last_property_by_planet or {}
+        account.last_property_by_planet[property.sample_planet] = property.id
     end
     return ok, err
 end
 
 function M.enter_last_owned(player)
-    local account = economy.ensure_account(player.index)
-    local property = M.get(account.last_property_id)
-    if not property or property.owner_index ~= player.index then
-        account.last_property_id = nil
-        return surfaces.to_hospice(player)
+    return M.home_travel(player)
+end
+
+local function owned_home(player_index, planet_name)
+    local account = economy.ensure_account(player_index)
+    account.last_property_by_planet = account.last_property_by_planet or {}
+    local property = M.get(account.last_property_by_planet[planet_name])
+    if property and property.owner_index == player_index
+            and property.sample_planet == planet_name then
+        return property
     end
-    return M.enter(player, property.id)
+    account.last_property_by_planet[planet_name] = nil
+    for _, candidate in ipairs(M.list(planet_name)) do
+        if candidate.owner_index == player_index then return candidate end
+    end
+    return nil
+end
+
+function M.home_travel(player)
+    local source = player.physical_surface
+    local planet_name = surfaces.context_planet(source)
+    if not planet_name then return false, 'travel-restricted' end
+    if source.name == planet_name then
+        local property = owned_home(player.index, planet_name)
+        if property then return M.enter(player, property.id) end
+        return surfaces.to_hospice(player, planet_name)
+    end
+    return surfaces.to_planet_origin(player, planet_name)
 end
 
 local function command_player(command)
