@@ -27,9 +27,11 @@ local function ensure_surface(name)
     return planet.create_surface()
 end
 
-local function period(name)
-    return (config.public_planet_reset_hours[name] or 2)
-        * config.ticks_per_hour
+local function roll_period_ticks()
+    local random = math.random()
+    local hours = config.public_planet_reset_min_hours
+        + config.public_planet_reset_random_hours * random * random
+    return math.floor(hours * config.ticks_per_hour + 0.5)
 end
 
 local function ensure_record(name)
@@ -43,17 +45,21 @@ local function ensure_record(name)
         record = {
             state = 'open',
             round = 0,
-            next_tick = game.tick + period(name) + offset,
+            period_ticks = roll_period_ticks(),
             warned = {},
         }
+        record.next_tick = game.tick + record.period_ticks + offset
         records[name] = record
     end
     if record.state == nil then record.state = 'open' end
     if record.round == nil then record.round = 0 end
     if record.warned == nil then record.warned = {} end
+    if record.period_ticks == nil then
+        record.period_ticks = roll_period_ticks()
+    end
     if record.next_tick == nil and record.state == 'open'
             and settings.get('planet_resets_enabled') then
-        record.next_tick = game.tick + period(name)
+        record.next_tick = game.tick + record.period_ticks
     end
     if surface and surface.valid then
         if record.base_solar == nil then
@@ -338,12 +344,13 @@ local function finish_reset(name, surface, record)
     record.state = 'open'
     record.surface_index = surface.index
     record.clear_started_tick = nil
+    record.period_ticks = roll_period_ticks()
     if settings.get('planet_resets_enabled') then
-        record.next_tick = game.tick + period(name)
+        record.next_tick = game.tick + record.period_ticks
         record.paused_left_ticks = nil
     else
         record.next_tick = nil
-        record.paused_left_ticks = period(name)
+        record.paused_left_ticks = record.period_ticks
     end
     record.warned = {}
     game.print({
@@ -398,7 +405,8 @@ function M.apply_enabled(enabled)
         if enabled then
             if record.state == 'open' and not record.next_tick then
                 record.next_tick = game.tick
-                    + (record.paused_left_ticks or period(name))
+                    + (record.paused_left_ticks or record.period_ticks
+                        or roll_period_ticks())
             end
             record.paused_left_ticks = nil
         elseif record.state == 'open' and record.next_tick then

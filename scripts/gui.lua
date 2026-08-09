@@ -13,20 +13,17 @@ local surfaces = require('scripts.surfaces')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 8
-local HUD_TITLE_NAME = 'un_hud_title'
+local HUD_LAYOUT_VERSION = 9
 local LEGACY_BUTTON_NAME = 'un_main_button'
-local HUD_HELP_NAME = 'un_hud_help'
-local HUD_UBI_NAME = 'un_hud_ubi'
+local HUD_MENU_NAME = 'un_hud_menu'
 local HUD_LAST_PROPERTY_NAME = 'un_hud_last_property'
-local HUD_PROPERTY_NAME = 'un_hud_property'
-local HUD_PLAYERS_NAME = 'un_hud_players'
 local FRAME_NAME = 'un_main_frame'
 local CLOSE_NAME = 'un_main_close'
 local CONTENT_NAME = 'un_main_content'
 local NAVIGATION_NAME = 'un_main_navigation'
 local NAV_HELP_NAME = 'un_nav_help'
 local NAV_UBI_NAME = 'un_nav_ubi'
+local NAV_PROPERTY_BUILD_NAME = 'un_nav_property_build'
 local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
@@ -42,7 +39,7 @@ local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
-local SUICIDE_NAME = 'un_suicide'
+local SUICIDE_PREFIX = 'un_suicide_'
 local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
@@ -50,6 +47,13 @@ local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local SHIP_TABLE_NAME = 'un_ship_table'
 local PROPERTY_ACTIONS_NAME = 'un_property_actions'
 local PROPERTY_TABLE_NAME = 'un_property_table'
+local PROPERTY_BUILD_PLANET_NAME = 'un_property_build_planet'
+local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
+local PROPERTY_BUILD_LIFETIME_NAME = 'un_property_build_lifetime'
+local PROPERTY_BUILD_SIZE_NAME = 'un_property_build_size'
+local PROPERTY_BUILD_COST_NAME = 'un_property_build_cost'
+local PROPERTY_BUILD_AVAILABLE_NAME = 'un_property_build_available'
+local PROPERTY_BUILD_BUTTON_NAME = 'un_property_build_button'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
@@ -59,9 +63,6 @@ local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
 local ADMIN_PLAYER_TABLE_NAME = 'un_admin_player_table'
 local ADMIN_PROPERTY_TABLE_NAME = 'un_admin_property_table'
-local ADMIN_PROPERTY_PRICE_NAME = 'un_admin_property_price'
-local ADMIN_PROPERTY_WIDTH_NAME = 'un_admin_property_width'
-local ADMIN_PROPERTY_HEIGHT_NAME = 'un_admin_property_height'
 
 local ADMIN_NUMBER_SETTINGS = {
     {'initial_coin', 'un.admin-setting-initial-coin'},
@@ -109,12 +110,8 @@ function M.ensure_button(player)
     local hud = root[HUD_FLOW_NAME]
     if hud and hud.valid then
         local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
-            and hud[HUD_TITLE_NAME]
-            and hud[HUD_HELP_NAME]
-            and hud[HUD_UBI_NAME]
+            and hud[HUD_MENU_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
-            and hud[HUD_PROPERTY_NAME]
-            and hud[HUD_PLAYERS_NAME]
         if complete then
             update_home_button(player, hud)
             return hud
@@ -129,23 +126,8 @@ function M.ensure_button(player)
     hud.style.vertical_align = 'center'
     hud.style.padding = 4
     hud.tags = {layout_version = HUD_LAYOUT_VERSION}
-    local title = hud.add{
-        type = 'label',
-        name = HUD_TITLE_NAME,
-        caption = {'un.hud-title'},
-    }
-    title.style.font = 'default-bold'
-    title.style.font_color = {r = 1, g = 1, b = 1}
-    title.style.height = 40
-    title.style.vertical_align = 'center'
-    title.style.left_margin = 4
-    title.style.right_margin = 10
-
     local buttons = {
-        {HUD_HELP_NAME, 'virtual-signal/signal-info', {'un.hud-help-tooltip'}},
-        {HUD_UBI_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
-        {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
-        {HUD_PLAYERS_NAME, 'entity/character', {'un.hud-players-tooltip'}},
+        {HUD_MENU_NAME, 'virtual-signal/signal-info', {'un.hud-menu-tooltip'}},
         {HUD_LAST_PROPERTY_NAME, 'virtual-signal/signal-map-marker', {'un.hud-home-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
@@ -172,6 +154,10 @@ end
 
 local function property_enter_name(property_id)
     return 'un_property_enter_' .. tostring(property_id)
+end
+
+local function property_remaining_name(property_id)
+    return 'un_property_remaining_' .. tostring(property_id)
 end
 
 local function disabled_tooltip(action, err)
@@ -293,7 +279,7 @@ local function render_property_table(player, frame, content)
     }
     list.add{type = 'label', caption = {'un.property-column-name'}}
     list.add{type = 'label', caption = {'un.property-column-owner'}}
-    list.add{type = 'label', caption = {'un.property-column-lease'}}
+    list.add{type = 'label', caption = {'un.property-column-lifetime'}}
     list.add{type = 'label', caption = {'un.property-column-price'}}
     list.add{type = 'label', caption = {'un.property-buy'}}
     list.add{type = 'label', caption = {'un.property-enter'}}
@@ -309,7 +295,11 @@ local function render_property_table(player, frame, content)
             type = 'label',
             caption = owner or {'un.property-vacant'},
         }
-        list.add{type = 'label', caption = properties.lease_name(property)}
+        list.add{
+            type = 'label',
+            name = property_remaining_name(property.id),
+            caption = format_countdown(properties.left_ticks(property)),
+        }
         list.add{
             type = 'label',
             name = property_price_name(property.id),
@@ -343,6 +333,123 @@ local function render_property_table(player, frame, content)
     set_frame_state(frame, 'property', storage.property_revision or 0)
 end
 
+local function property_build_planet(form)
+    local dropdown = form and form.valid and form[PROPERTY_BUILD_PLANET_NAME]
+    return dropdown and config.public_planets[dropdown.selected_index] or nil
+end
+
+local function update_property_build_page(player, content)
+    local form = content[PROPERTY_BUILD_FORM_NAME]
+    if not (form and form.valid) then return end
+    local planet_name = property_build_planet(form)
+    local lifetime = form[PROPERTY_BUILD_LIFETIME_NAME]
+    local size = form[PROPERTY_BUILD_SIZE_NAME]
+    local cost_label = form[PROPERTY_BUILD_COST_NAME]
+    local available_label = form[PROPERTY_BUILD_AVAILABLE_NAME]
+    local button = form[PROPERTY_BUILD_BUTTON_NAME]
+    if not (planet_name and lifetime and size and cost_label
+            and available_label and button) then return end
+    local can_build, err, requirement = properties.build_availability(
+        player,
+        planet_name,
+        lifetime.selected_index,
+        size.selected_index
+    )
+    if not requirement then return end
+    local pack_name = {'item-name.' .. requirement.pack}
+    cost_label.caption = {
+        'un.property-build-cost',
+        '[img=item/' .. requirement.pack .. ']',
+        pack_name,
+        format_integer(requirement.experience_cost),
+    }
+    available_label.caption = {
+        'un.property-build-available',
+        '[img=item/' .. requirement.pack .. ']',
+        format_integer(experience.amount(player.index, requirement.pack)),
+    }
+    button.enabled = can_build
+    button.tooltip = can_build and {'un.property-build'}
+        or err == 'planet-closed' and {'un.travel-planet-closed'}
+        or {'un.property-build-insufficient-experience'}
+    if button.tags.action ~= 'property-build-confirm' then
+        button.caption = {'un.property-build'}
+        button.tags = {action = 'property-build'}
+    end
+end
+
+local function render_property_build_page(player, frame, content)
+    local intro = content.add{
+        type = 'label',
+        caption = {'un.property-build-intro'},
+    }
+    intro.style.single_line = false
+    intro.style.maximal_width = 680
+    local form = content.add{
+        type = 'table',
+        name = PROPERTY_BUILD_FORM_NAME,
+        column_count = 2,
+    }
+    form.add{type = 'label', caption = {'un.property-build-planet'}}
+    local planet_items = {}
+    local selected_planet = surfaces.context_planet(player.physical_surface)
+    local selected_planet_index = 1
+    for index, planet_name in ipairs(config.public_planets) do
+        planet_items[#planet_items + 1] = planet_label(planet_name)
+        if planet_name == selected_planet then selected_planet_index = index end
+    end
+    form.add{
+        type = 'drop-down',
+        name = PROPERTY_BUILD_PLANET_NAME,
+        items = planet_items,
+        selected_index = selected_planet_index,
+    }
+    form.add{type = 'label', caption = {'un.property-build-lifetime'}}
+    local lifetime_items = {}
+    for _, option in ipairs(config.property_lifetime_options) do
+        lifetime_items[#lifetime_items + 1] = {
+            'un.property-build-lifetime-option',
+            option.hours,
+            option.cost,
+        }
+    end
+    form.add{
+        type = 'drop-down',
+        name = PROPERTY_BUILD_LIFETIME_NAME,
+        items = lifetime_items,
+        selected_index = 1,
+    }
+    form.add{type = 'label', caption = {'un.property-build-size'}}
+    local size_items = {}
+    for _, option in ipairs(config.property_size_options) do
+        size_items[#size_items + 1] = {
+            'un.property-build-size-option',
+            option.width,
+            option.height,
+            option.cost,
+        }
+    end
+    form.add{
+        type = 'drop-down',
+        name = PROPERTY_BUILD_SIZE_NAME,
+        items = size_items,
+        selected_index = 1,
+    }
+    form.add{type = 'label', caption = {'un.property-build-total'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_COST_NAME}
+    form.add{type = 'label', caption = {'un.property-build-owned'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_AVAILABLE_NAME}
+    form.add{type = 'label', caption = ''}
+    form.add{
+        type = 'button',
+        name = PROPERTY_BUILD_BUTTON_NAME,
+        caption = {'un.property-build'},
+        tags = {action = 'property-build'},
+    }
+    set_frame_state(frame, 'property-build')
+    update_property_build_page(player, content)
+end
+
 local function render_ubi_section(content)
     local balance = content.add{
         type = 'table',
@@ -367,14 +474,20 @@ local function render_ubi_section(content)
 end
 
 local function render_suicide_section(content)
-    local suicide = content.add{
-        type = 'button',
-        name = SUICIDE_NAME,
-        caption = {'un.suicide'},
-        tooltip = {'un.suicide'},
+    local actions = content.add{
+        type = 'flow',
+        direction = 'horizontal',
     }
-    suicide.style.horizontally_stretchable = true
-    suicide.style.height = 40
+    for _, planet_name in ipairs(config.public_planets) do
+        local suicide = actions.add{
+            type = 'button',
+            name = SUICIDE_PREFIX .. planet_name,
+            caption = {'un.suicide', planet_label(planet_name)},
+            tooltip = {'un.suicide-tooltip', planet_label(planet_name)},
+            tags = {action = 'suicide', planet = planet_name},
+        }
+        suicide.style.height = 40
+    end
 end
 
 local function render_ship_actions(content)
@@ -560,14 +673,6 @@ local function render_admin_page(player, frame, content)
     switches.add{
         type = 'switch',
         left_label_caption = {'un.admin-disabled'},
-        right_label_caption = {'un.admin-setting-property-supply'},
-        switch_state = settings.get('property_supply_enabled') and 'right' or 'left',
-        allow_none_state = false,
-        tags = {action = 'admin-setting-switch', setting = 'property_supply_enabled'},
-    }
-    switches.add{
-        type = 'switch',
-        left_label_caption = {'un.admin-disabled'},
         right_label_caption = {'un.admin-setting-planet-resets'},
         switch_state = settings.get('planet_resets_enabled') and 'right' or 'left',
         allow_none_state = false,
@@ -584,20 +689,7 @@ local function render_admin_page(player, frame, content)
 
     scroll.add{type = 'line'}
     scroll.add{type = 'label', caption = {'un.admin-properties-title'}, style = 'heading_2_label'}
-    local create = scroll.add{type = 'flow', direction = 'horizontal'}
-    create.style.vertical_align = 'center'
-    create.add{type = 'label', caption = {'un.admin-property-price'}}
-    create.add{type = 'textfield', name = ADMIN_PROPERTY_PRICE_NAME, numeric = true}
-    create.add{type = 'label', caption = {'un.admin-property-width'}}
-    create.add{type = 'textfield', name = ADMIN_PROPERTY_WIDTH_NAME, numeric = true}
-    create.add{type = 'label', caption = {'un.admin-property-height'}}
-    create.add{type = 'textfield', name = ADMIN_PROPERTY_HEIGHT_NAME, numeric = true}
-    create.add{
-        type = 'button',
-        caption = {'un.admin-property-create'},
-        tags = {action = 'admin-property-create'},
-    }
-    create.add{
+    scroll.add{
         type = 'button',
         caption = {'un.admin-property-repair'},
         tags = {action = 'admin-property-repair'},
@@ -609,15 +701,13 @@ local function render_admin_page(player, frame, content)
     }
     property_table.add{type = 'label', caption = {'un.admin-property-id'}}
     property_table.add{type = 'label', caption = {'un.property-column-name'}}
-    property_table.add{type = 'label', caption = {'un.admin-operation'}}
+    property_table.add{type = 'label', caption = {'un.property-column-lifetime'}}
     for _, property in ipairs(properties.list()) do
         property_table.add{type = 'label', caption = tostring(property.id)}
         property_table.add{type = 'label', caption = properties.surface_display_name(property)}
-        property_table.add{
-            type = 'button',
-            caption = {'un.admin-property-delete'},
-            tags = {action = 'admin-property-delete', property_id = property.id},
-        }
+        property_table.add{type = 'label', caption = format_countdown(
+            properties.left_ticks(property)
+        )}
     end
 
     scroll.add{type = 'line'}
@@ -695,33 +785,19 @@ local function render_help_page(frame, content, mode)
     details.style.maximal_height = 620
 
     if mode == 'brief' then
-        add_help_line(details, {'un.help-section-beginner'}, true)
-        add_help_line(details, {'un.help-detail-linked-chest'})
+        add_help_line(details, {'un.help-brief-start'})
         add_help_line(details, {
-            'un.help-detail-science',
-            config.science_conversion_ticks / config.ticks_per_minute,
-            config.quality_credit_multiplier.normal,
-            config.quality_credit_multiplier.uncommon,
-            config.quality_credit_multiplier.rare,
-            config.quality_credit_multiplier.epic,
-            config.quality_credit_multiplier.legendary,
+            'un.help-brief-property',
+            config.property_build_experience_per_point,
         })
-        add_help_line(details, {
-            'un.help-detail-ubi',
-            config.ubi_credit_per_second,
-            config.ubi_max_seconds / 3600,
-            economy.get_ubi_capacity(),
-            settings.get('initial_coin'),
-        })
+        add_help_line(details, {'un.help-brief-travel'})
     elseif mode == 'advanced' then
         add_help_line(details, {'un.help-detail-property-heading'}, true)
-        add_help_line(details, {'un.help-detail-property-basic'})
         add_help_line(details, {
-            'un.help-detail-property-generation',
-            config.property_initial_price_min,
-            config.property_initial_price_max,
-            config.property_min_brightness,
+            'un.help-detail-property-build',
+            config.property_build_experience_per_point,
         })
+        add_help_line(details, {'un.help-detail-property-basic'})
 
         add_help_line(details, {'un.help-detail-growth-heading'}, true)
         add_help_line(details, {'un.help-detail-experience'})
@@ -759,31 +835,13 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(details, {
             'un.help-detail-property-price',
-            config.property_lease_types.short.hours,
             config.property_lease_types.long.hours,
             config.property_price_cap,
             settings.get('property_price_factor'),
-            config.property_lease_types.long.hours
-                / config.property_lease_types.short.hours,
         })
         add_help_line(details, {
             'un.help-detail-property-trade',
             settings.get('property_tax_percent'),
-        })
-        add_help_line(details, {
-            'un.help-detail-property-supply',
-            config.property_supply_check_ticks / config.ticks_per_hour,
-            config.property_supply_active_window_ticks / config.ticks_per_hour,
-            config.property_supply_minimum,
-            config.property_supply_per_active_player,
-            config.property_supply_confirmation_checks,
-            config.property_supply_change_chance * 100,
-            config.property_supply_stale_ticks / config.ticks_per_hour,
-            config.property_supply_low_vacancy * 100,
-            config.property_supply_high_median_price,
-            config.property_supply_high_vacancy * 100,
-            config.property_supply_low_median_price,
-            config.property_supply_minimum_per_planet,
         })
         add_help_line(details, {
             'un.help-detail-world-randomization',
@@ -801,11 +859,6 @@ local function render_help_page(frame, content, mode)
         })
         add_help_line(details, {
             'un.help-detail-reset-schedule',
-            config.public_planet_reset_hours.nauvis,
-            config.public_planet_reset_hours.vulcanus,
-            config.public_planet_reset_hours.gleba,
-            config.public_planet_reset_hours.fulgora,
-            config.public_planet_reset_hours.aquilo,
             settings.get('cleanup_idle_hours'),
         })
         add_help_line(details, {'un.help-detail-commands-heading'}, true)
@@ -901,6 +954,8 @@ local function render_page(player, page)
         render_help_page(frame, content)
     elseif page == 'overview' then
         render_overview_page(player, frame, content)
+    elseif page == 'property-build' then
+        render_property_build_page(player, frame, content)
     elseif page == 'property' then
         render_property_table(player, frame, content)
     elseif page == 'planets' then
@@ -919,6 +974,7 @@ local function render_page(player, page)
     local navigation = frame[NAVIGATION_NAME]
     navigation[NAV_HELP_NAME].enabled = page ~= 'help'
     navigation[NAV_UBI_NAME].enabled = page ~= 'overview'
+    navigation[NAV_PROPERTY_BUILD_NAME].enabled = page ~= 'property-build'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
@@ -941,6 +997,12 @@ local function property_error(err)
     if err == 'ship-missing' then return {'un.ship-missing'} end
     if err == 'ship-not-ready' then return {'un.ship-not-ready'} end
     if err == 'ship-create-failed' then return {'un.ship-create-failed'} end
+    if err == 'insufficient-experience' then
+        return {'un.property-build-insufficient-experience'}
+    end
+    if err == 'invalid-build-option' then
+        return {'un.property-build-invalid'}
+    end
     return {'un.property-error-unavailable'}
 end
 
@@ -964,6 +1026,10 @@ local function make_frame_draggable(element, frame)
 end
 
 local function update_property_row(player, property_table, property)
+    local remaining = property_table[property_remaining_name(property.id)]
+    if remaining and remaining.valid then
+        remaining.caption = format_countdown(properties.left_ticks(property))
+    end
     local price = property_table[property_price_name(property.id)]
     if price and price.valid then
         price.caption = {'un.coin-amount',
@@ -1081,6 +1147,8 @@ local function update_frame(player)
                 experience.total_level(player.index),
             }
         end
+    elseif page == 'property-build' then
+        update_property_build_page(player, content)
     elseif page == 'planets' then
         local list = content[PLANET_TABLE_NAME]
         if list and list.valid then
@@ -1212,6 +1280,11 @@ local function open_frame(player, initial_page)
     }
     navigation.add{type = 'button', name = NAV_HELP_NAME, caption = {'un.page-help'}}
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
+    navigation.add{
+        type = 'button',
+        name = NAV_PROPERTY_BUILD_NAME,
+        caption = {'un.page-property-build'},
+    }
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
@@ -1286,17 +1359,11 @@ events.on(defines.events.on_gui_click, function(event)
     if not (element and element.valid) then return end
     local player = game.get_player(event.player_index)
     if not player then return end
-    if element.name == HUD_HELP_NAME then
+    if element.name == HUD_MENU_NAME then
         open_frame(player, 'help')
-    elseif element.name == HUD_UBI_NAME then
-        open_frame(player, 'overview')
     elseif element.name == HUD_LAST_PROPERTY_NAME then
         local ok, err = properties.home_travel(player)
         if not ok then player.print(property_error(err)) end
-    elseif element.name == HUD_PROPERTY_NAME then
-        open_frame(player, 'property')
-    elseif element.name == HUD_PLAYERS_NAME then
-        open_frame(player, 'players')
     elseif element.name == CLOSE_NAME then
         close_frame(player)
     elseif element.name == NAV_HELP_NAME then
@@ -1315,6 +1382,9 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == NAV_UBI_NAME then
         render_page(player, 'overview')
+        update_frame(player)
+    elseif element.name == NAV_PROPERTY_BUILD_NAME then
+        render_page(player, 'property-build')
         update_frame(player)
     elseif element.name == NAV_PROPERTY_NAME then
         render_page(player, 'property')
@@ -1351,15 +1421,19 @@ events.on(defines.events.on_gui_click, function(event)
             element.caption = {'un.ship-scuttle-confirm'}
             element.tags = {action = 'ship-scuttle-confirm'}
         end
-    elseif element.name == SUICIDE_NAME then
+    elseif element.name:sub(1, #SUICIDE_PREFIX) == SUICIDE_PREFIX then
+        local planet_name = element.tags.planet
         if element.tags.action == 'suicide-confirm' then
             close_frame(player)
-            local ok = surfaces.suicide(player)
+            local ok = surfaces.suicide(player, planet_name)
             if not ok then player.print({'un.suicide-unavailable'}) end
         else
-            element.caption = {'un.suicide-confirm'}
-            element.tooltip = {'un.suicide-confirm'}
-            element.tags = {action = 'suicide-confirm'}
+            element.caption = {'un.suicide-confirm', planet_label(planet_name)}
+            element.tooltip = {'un.suicide-confirm', planet_label(planet_name)}
+            element.tags = {
+                action = 'suicide-confirm',
+                planet = planet_name,
+            }
         end
     else
         local tags = element.tags
@@ -1388,42 +1462,10 @@ events.on(defines.events.on_gui_click, function(event)
                     or {'un.admin-invalid-value'})
                 render_page(player, 'admin')
                 update_frame(player)
-            elseif tags.action == 'admin-property-create' then
-                local flow = element.parent
-                local price = flow[ADMIN_PROPERTY_PRICE_NAME].text
-                local width = flow[ADMIN_PROPERTY_WIDTH_NAME].text
-                local height = flow[ADMIN_PROPERTY_HEIGHT_NAME].text
-                local property = properties.create{
-                    price = price ~= '' and tonumber(price) or nil,
-                    width = width ~= '' and tonumber(width) or nil,
-                    height = height ~= '' and tonumber(height) or nil,
-                }
-                player.print(property and {'un.property-created', property.id}
-                    or {'un.property-command-error'})
-                render_page(player, 'admin')
-                update_frame(player)
             elseif tags.action == 'admin-property-repair' then
                 local ok, count = properties.admin_repair(player)
                 player.print(ok and {'un.property-repaired', count}
                     or {'un.admin-operation-failed'})
-                render_page(player, 'admin')
-                update_frame(player)
-            elseif tags.action == 'admin-property-delete' then
-                element.caption = {'un.admin-property-delete-confirm'}
-                element.tags = {
-                    action = 'admin-property-delete-confirm',
-                    property_id = tags.property_id,
-                }
-            elseif tags.action == 'admin-property-delete-confirm' then
-                local ok, err, blocker = properties.admin_delete(
-                    player,
-                    tags.property_id
-                )
-                if not ok and err == 'occupied' then
-                    player.print({'un.property-delete-occupied', blocker})
-                elseif not ok then
-                    player.print({'un.admin-operation-failed'})
-                end
                 render_page(player, 'admin')
                 update_frame(player)
             elseif tags.action == 'admin-balance-set' then
@@ -1440,6 +1482,44 @@ events.on(defines.events.on_gui_click, function(event)
                 render_page(player, 'admin')
                 update_frame(player)
             end
+        elseif tags.action == 'property-build' then
+            local form = content[PROPERTY_BUILD_FORM_NAME]
+            if not (form and form.valid) then return end
+            local planet_name = property_build_planet(form)
+            local lifetime_index = form[PROPERTY_BUILD_LIFETIME_NAME].selected_index
+            local size_index = form[PROPERTY_BUILD_SIZE_NAME].selected_index
+            local can_build, err, requirement = properties.build_availability(
+                player,
+                planet_name,
+                lifetime_index,
+                size_index
+            )
+            if not can_build then
+                player.print(property_error(err))
+                update_property_build_page(player, content)
+                return
+            end
+            element.caption = {
+                'un.property-build-confirm',
+                format_integer(requirement.experience_cost),
+            }
+            element.tags = {
+                action = 'property-build-confirm',
+                planet_name = planet_name,
+                lifetime_index = lifetime_index,
+                size_index = size_index,
+            }
+        elseif tags.action == 'property-build-confirm' then
+            local property, err = properties.build(
+                player,
+                tags.planet_name,
+                tags.lifetime_index,
+                tags.size_index
+            )
+            player.print(property and {'un.property-built', property.id}
+                or property_error(err))
+            render_page(player, 'property-build')
+            update_frame(player)
         elseif tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
             if not property then
@@ -1509,6 +1589,24 @@ events.on(defines.events.on_gui_selected_tab_changed, function(event)
     frame.tags = tags
     render_property_table(player, frame, content)
     update_frame(player)
+end)
+
+events.on(defines.events.on_gui_selection_state_changed, function(event)
+    local element = event.element
+    if not (element and element.valid) then return end
+    if element.name ~= PROPERTY_BUILD_PLANET_NAME
+            and element.name ~= PROPERTY_BUILD_LIFETIME_NAME
+            and element.name ~= PROPERTY_BUILD_SIZE_NAME then
+        return
+    end
+    local player = game.get_player(event.player_index)
+    local frame = player and player.gui.screen[FRAME_NAME]
+    local content = frame and frame.valid and frame[CONTENT_NAME]
+    local form = content and content.valid and content[PROPERTY_BUILD_FORM_NAME]
+    local button = form and form.valid and form[PROPERTY_BUILD_BUTTON_NAME]
+    if not (player and button and button.valid) then return end
+    button.tags = {action = 'property-build'}
+    update_property_build_page(player, content)
 end)
 
 events.on(defines.events.on_gui_switch_state_changed, function(event)

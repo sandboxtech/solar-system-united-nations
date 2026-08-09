@@ -10,6 +10,9 @@ local surfaces = require('scripts.surfaces')
 
 local M = {}
 
+local build_planets = {}
+for _, name in ipairs(config.public_planets) do build_planets[name] = true end
+
 local function bump_revision()
     storage.property_revision = (storage.property_revision or 0) + 1
 end
@@ -194,7 +197,7 @@ local function sync_surface_visibility(property)
     return true
 end
 
-function M.create(spec)
+local function create(spec)
     state.ensure()
     spec = spec or {}
     local price
@@ -207,7 +210,7 @@ function M.create(spec)
         price = math.floor(tonumber(spec.price) or 0)
     end
     local tax = tonumber(spec.tax) or settings.get('property_tax_percent') / 100
-    local lease_type = spec.lease_type
+    local lease_type = spec.lease_type or 'long'
     if not config.property_lease_types[lease_type] then
         lease_type = config.property_lease_order[
             math.random(1, #config.property_lease_order)
@@ -215,26 +218,22 @@ function M.create(spec)
     end
     local lease = config.property_lease_types[lease_type]
     local solar = config.property_solar_multiplier
-    local sides = config.property_side_lengths
     local width = tonumber(spec.width)
-        or sides[math.random(1, #sides)]
     local height = tonumber(spec.height)
-        or sides[math.random(1, #sides)]
     if not is_positive_integer(price) or price > config.property_price_cap then
         return nil, 'invalid-price'
     end
     if not is_positive_integer(width) or not is_positive_integer(height) then
         return nil, 'invalid-size'
     end
-    local valid_width, valid_height = false, false
-    for _, side in ipairs(sides) do
-        if width == side then valid_width = true end
-        if height == side then valid_height = true end
-    end
-    if not valid_width or not valid_height
-            or width > config.property_max_size
+    if width > config.property_max_size
             or height > config.property_max_size then
         return nil, 'invalid-size'
+    end
+    if not build_planets[spec.sample_planet] then return nil, 'invalid-planet' end
+    local lifetime_hours = tonumber(spec.lifetime_hours)
+    if not lifetime_hours or lifetime_hours <= 0 then
+        return nil, 'invalid-lifetime'
     end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
@@ -254,7 +253,7 @@ function M.create(spec)
         surface_name = surface.name,
         surface_index = surface.index,
         status = 'active',
-        owner_index = nil,
+        owner_index = spec.owner_index,
         base_price = price,
         price_at_tick = game.tick,
         lease_type = lease_type,
@@ -268,11 +267,14 @@ function M.create(spec)
         sample_position = sample_position,
         linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
+        expires_tick = game.tick + lifetime_hours * config.ticks_per_hour,
+        lifetime_hours = lifetime_hours,
     }
     storage.properties[id] = property
     sync_surface_visibility(property)
     ensure_property_name_rendering(property, property_rendering_fallback(property))
-    local translator = first_connected_player()
+    local translator = property.owner_index
+        and game.get_player(property.owner_index) or first_connected_player()
     if translator then request_property_name_translation(property, translator) end
     if not ensure_linked_chests(property) then
         log('[un] failed to create property linked chests for property ' .. id)
@@ -281,12 +283,8 @@ function M.create(spec)
     return property
 end
 
-function M.ensure_defaults()
+function M.ensure()
     state.ensure()
-    if not storage.default_properties_created then
-        for _, spec in ipairs(config.default_properties) do M.create(spec) end
-        storage.default_properties_created = true
-    end
     if storage.property_tax_version ~= 1 then
         for _, property in ipairs(M.list()) do
             property.tax = settings.get('property_tax_percent') / 100
@@ -324,7 +322,10 @@ end
 function M.get(property_id)
     state.ensure()
     local property = storage.properties[tonumber(property_id)]
-    if property and property.status == 'active' then return property end
+    if property and property.status == 'active'
+            and (not property.expires_tick or property.expires_tick > game.tick) then
+        return property
+    end
     return nil
 end
 
@@ -333,12 +334,97 @@ function M.list(planet_name)
     local result = {}
     for _, property in pairs(storage.properties) do
         if property.status == 'active'
+                and (not property.expires_tick or property.expires_tick > game.tick)
                 and (not planet_name or property.sample_planet == planet_name) then
             result[#result + 1] = property
         end
     end
     table.sort(result, function(a, b) return a.id < b.id end)
     return result
+end
+
+function M.left_ticks(property)
+    if not property or not property.expires_tick then return nil end
+    return math.max(0, property.expires_tick - game.tick)
+end
+
+function M.build_requirements(planet_name, lifetime_index, size_index)
+    local lifetime = config.property_lifetime_options[tonumber(lifetime_index)]
+    local size = config.property_size_options[tonumber(size_index)]
+    local pack = config.property_build_pack_by_planet[planet_name]
+    if not (build_planets[planet_name] and lifetime and size and pack) then
+        return nil
+    end
+    return {
+        planet_name = planet_name,
+        pack = pack,
+        lifetime = lifetime,
+        size = size,
+        experience_cost = config.property_build_experience_per_point
+            * lifetime.cost * size.cost,
+    }
+end
+
+function M.build_availability(player, planet_name, lifetime_index, size_index)
+    local requirement = M.build_requirements(
+        planet_name,
+        lifetime_index,
+        size_index
+    )
+    if not requirement then return false, 'invalid-build-option' end
+    if not surfaces.is_public_planet_open(planet_name) then
+        return false, 'planet-closed', requirement
+    end
+    if experience.amount(player.index, requirement.pack)
+            < requirement.experience_cost then
+        return false, 'insufficient-experience', requirement
+    end
+    return true, nil, requirement
+end
+
+function M.build(player, planet_name, lifetime_index, size_index)
+    local available, err, requirement = M.build_availability(
+        player,
+        planet_name,
+        lifetime_index,
+        size_index
+    )
+    if not available then return nil, err, requirement end
+    if not experience.spend(
+        player.index,
+        requirement.pack,
+        requirement.experience_cost
+    ) then
+        return nil, 'insufficient-experience', requirement
+    end
+    local ok, property, create_err = pcall(create, {
+        owner_index = player.index,
+        sample_planet = planet_name,
+        lifetime_hours = requirement.lifetime.hours,
+        width = requirement.size.width,
+        height = requirement.size.height,
+        lease_type = 'long',
+    })
+    if not ok or not property then
+        experience.record(player.index, {{
+            name = requirement.pack,
+            count = requirement.experience_cost,
+        }})
+        if not ok then
+            log('[un] property construction failed: ' .. tostring(property))
+            create_err = 'surface-create-failed'
+        end
+        return nil, create_err, requirement
+    end
+    game.print({
+        'un.property-built-broadcast',
+        player.name,
+        M.display_name(property),
+        {'', '[planet=' .. planet_name .. '] ',
+            {'space-location-name.' .. planet_name}},
+        requirement.experience_cost,
+    })
+    return property, nil, requirement
 end
 
 function M.current_price(property, tick)
@@ -619,169 +705,82 @@ local function rename_from_command(command, parameter)
     player.print({'un.property-renamed', property.id, name})
 end
 
-local function deletion_blocker(property)
-    local surface = game.surfaces[property.surface_name]
-    if not (surface and surface.valid) then return nil end
+local function evacuate_expired_property(property, surface)
+    local hospice = surfaces.ensure_hospice(property.sample_planet)
     for _, player in pairs(game.players) do
-        if player.physical_surface == surface or player.surface == surface then
-            return player.name
+        if player.controller_type == defines.controllers.remote
+                and player.surface == surface then
+            pcall(function() player.exit_remote_view() end)
+            if player.controller_type == defines.controllers.remote
+                    and player.surface == surface then
+                pcall(function()
+                    player.set_controller{
+                        type = defines.controllers.remote,
+                        surface = hospice,
+                        position = {0, 0},
+                    }
+                end)
+            end
+        end
+        if player.physical_surface == surface then
+            pcall(function()
+                if player.connected then player.exit_remote_view() end
+                if player.vehicle and player.vehicle.valid then
+                    player.driving = false
+                end
+                surfaces.teleport_near(player, hospice, {0, 0}, true)
+            end)
+        end
+        for _, character in pairs(player.get_associated_characters()) do
+            if character.valid and character.surface == surface then
+                pcall(function() character.teleport({0, 2}, hospice) end)
+            end
         end
     end
-    return nil
 end
 
-local function active_player_count()
-    local count = 0
-    for player_index, account in pairs(storage.players) do
-        local player = game.get_player(player_index)
-        local last_seen = player and player.connected and game.tick
-            or account.last_seen_tick or account.created_tick or 0
-        if game.tick - last_seen <= config.property_supply_active_window_ticks then
-            count = count + 1
-        end
-    end
-    return count
-end
-
-local function median_price(list)
-    local prices = {}
-    for _, property in ipairs(list) do
-        prices[#prices + 1] = M.current_price(property)
-    end
-    table.sort(prices)
-    local count = #prices
-    if count == 0 then return 0 end
-    if count % 2 == 1 then return prices[(count + 1) / 2] end
-    return (prices[count / 2] + prices[count / 2 + 1]) / 2
-end
-
-local function choose_retirement_candidate(list, planet_counts)
-    local candidates = {}
-    for _, property in ipairs(list) do
-        local surface = game.surfaces[property.surface_name]
-        local last_trade = property.purchased_tick or property.created_tick or game.tick
-        if not property.owner_index
-                and (planet_counts[property.sample_planet] or 0)
-                    > config.property_supply_minimum_per_planet
-                and surface and surface.valid
-                and not deletion_blocker(property)
-                and game.tick - last_trade >= config.property_supply_stale_ticks then
-            candidates[#candidates + 1] = property
-        end
-    end
-    table.sort(candidates, function(a, b)
-        local a_tick = a.purchased_tick or a.created_tick or 0
-        local b_tick = b.purchased_tick or b.created_tick or 0
-        if a_tick ~= b_tick then return a_tick < b_tick end
-        return a.id < b.id
-    end)
-    return candidates[1]
-end
-
-local function retire_property(property)
+local function expire_property(property)
+    local expired_name = M.display_name(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then
         clear_name_translation_requests(property.id)
         storage.properties[property.id] = nil
         bump_revision()
+        game.print({'un.property-expired', expired_name})
         return true
     end
-    storage.deleting_properties[surface.index] = property.id
-    if game.delete_surface(surface) then return true end
-    storage.deleting_properties[surface.index] = nil
-    return false
-end
-
-local function evaluate_supply()
-    state.ensure()
-    if not settings.get('property_supply_enabled') then return end
-    local list = M.list()
-    local total = #list
-    local unowned = 0
-    local planet_counts = {}
-    for _, property in ipairs(list) do
-        if not property.owner_index then unowned = unowned + 1 end
-        planet_counts[property.sample_planet] =
-            (planet_counts[property.sample_planet] or 0) + 1
-    end
-    local deficit_planet = nil
-    for _, planet_name in ipairs(config.public_planets) do
-        if (planet_counts[planet_name] or 0)
-                < config.property_supply_minimum_per_planet then
-            deficit_planet = planet_name
-            break
-        end
-    end
-    local active = active_player_count()
-    local target = math.max(
-        config.property_supply_minimum,
-        active * config.property_supply_per_active_player
-    )
-    local vacancy = total > 0 and unowned / total or 0
-    local median = median_price(list)
-    local expand = deficit_planet ~= nil or total < target
-        or (active > 0 and vacancy < config.property_supply_low_vacancy)
-        or (active > 0 and median > config.property_supply_high_median_price)
-    local candidate = choose_retirement_candidate(list, planet_counts)
-    local contract = total > target
-        and vacancy > config.property_supply_high_vacancy
-        and median < config.property_supply_low_median_price
-        and candidate ~= nil
-    local supply = storage.property_supply
-
-    if expand and not contract then
-        supply.expand_checks = (supply.expand_checks or 0) + 1
-        supply.contract_checks = 0
-        if supply.expand_checks >= config.property_supply_confirmation_checks
-                and math.random() < config.property_supply_change_chance then
-            local property = M.create{sample_planet = deficit_planet}
-            if property then supply.expand_checks = 0 end
-        end
-    elseif contract then
-        supply.contract_checks = (supply.contract_checks or 0) + 1
-        supply.expand_checks = 0
-        if supply.contract_checks >= config.property_supply_confirmation_checks
-                and math.random() < config.property_supply_change_chance
-                and retire_property(candidate) then
-            supply.contract_checks = 0
-        end
-    else
-        supply.expand_checks = 0
-        supply.contract_checks = 0
-    end
-end
-
-function M.admin_delete(player, property_id)
-    if not (player and player.valid and player.admin) then
-        return false, 'not-admin'
-    end
-    local property = M.get(property_id)
-    if not property then return false, 'missing' end
-    local blocker = deletion_blocker(property)
-    if blocker then return false, 'occupied', blocker end
-    local surface = game.surfaces[property.surface_name]
-    if not (surface and surface.valid) then
-        clear_name_translation_requests(property.id)
-        storage.properties[property.id] = nil
-        bump_revision()
-        return true
-    end
+    evacuate_expired_property(property, surface)
     property.status = 'deleting'
     storage.deleting_properties[surface.index] = property.id
     if game.delete_surface(surface) then
         bump_revision()
+        game.print({'un.property-expired', expired_name})
         return true
     end
     storage.deleting_properties[surface.index] = nil
     property.status = 'active'
-    return false, 'delete-failed'
+    log('[un] failed to delete expired property ' .. property.id)
+    return false
+end
+
+local function expire_due_properties()
+    state.ensure()
+    local due = {}
+    for _, property in pairs(storage.properties) do
+        if property.status == 'active' and property.expires_tick
+                and property.expires_tick <= game.tick then
+            due[#due + 1] = property
+        end
+    end
+    table.sort(due, function(a, b) return a.id < b.id end)
+    for _, property in ipairs(due) do expire_property(property) end
 end
 
 function M.admin_repair(player)
     if not (player and player.valid and player.admin) then
         return false, 'not-admin'
     end
-    M.ensure_defaults()
+    M.ensure()
     for _, property in ipairs(M.list()) do ensure_linked_chests(property) end
     bump_revision()
     return true, #M.list()
@@ -862,6 +861,6 @@ end
 events.on(defines.events.on_player_joined_game, refresh_owned_name_renderings)
 events.on(defines.events.on_player_locale_changed, refresh_owned_name_renderings)
 
-scheduler.every(config.property_supply_check_ticks, evaluate_supply)
+scheduler.every(config.property_lifecycle_ticks, expire_due_properties)
 
 return M

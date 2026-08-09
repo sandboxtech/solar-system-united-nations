@@ -20,6 +20,21 @@ function M.get(player_index)
     return account_data(player_index)
 end
 
+function M.amount(player_index, name)
+    return account_data(player_index)[name] or 0
+end
+
+function M.spend(player_index, name, amount)
+    if type(amount) ~= 'number' or amount < 0 or amount ~= math.floor(amount) then
+        return false
+    end
+    local data = account_data(player_index)
+    local available = data[name] or 0
+    if available < amount then return false end
+    data[name] = available - amount
+    return true
+end
+
 function M.contribution(amount)
     if amount < 1 then return 0 end
     return math.floor(math.log(amount, 10)) + 1

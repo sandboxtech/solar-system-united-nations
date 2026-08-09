@@ -10,9 +10,6 @@ function M.ensure()
     if storage.deleting_properties == nil then storage.deleting_properties = {} end
     if storage.property_delete_confirm == nil then storage.property_delete_confirm = {} end
     if storage.property_revision == nil then storage.property_revision = 0 end
-    if storage.property_supply == nil then
-        storage.property_supply = {expand_checks = 0, contract_checks = 0}
-    end
     if storage.property_name_translation_requests == nil then
         storage.property_name_translation_requests = {}
     end

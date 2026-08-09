@@ -14,7 +14,7 @@ function M.run()
     for _, name in ipairs(config.public_planets) do
         surfaces.ensure_hospice(name)
     end
-    properties.ensure_defaults()
+    properties.ensure()
     restrictions.ensure()
     ships.ensure()
     disasters.ensure()

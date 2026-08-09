@@ -334,7 +334,8 @@ function M.to_planet_origin(player, planet_name)
     return M.teleport_near(player, surface, {0, 0}, false)
 end
 
-function M.suicide(player)
+function M.suicide(player, planet_name)
+    if not public_planets[planet_name] then return false, 'invalid-planet' end
     local character = player.character
     if not (character and character.valid) then
         for _, candidate in pairs(player.get_associated_characters()) do
@@ -342,9 +343,10 @@ function M.suicide(player)
         end
     end
     if not (character and character.valid) then return false, 'no-character' end
-    storage.respawn_hospice_planets[player.index] =
-        M.context_planet(character.surface) or 'nauvis'
-    return character.die(game.forces.neutral)
+    storage.respawn_hospice_planets[player.index] = planet_name
+    local died = character.die(game.forces.neutral)
+    if not died then storage.respawn_hospice_planets[player.index] = nil end
+    return died
 end
 
 local function respawn_destination(player)

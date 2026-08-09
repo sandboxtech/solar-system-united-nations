@@ -9,13 +9,8 @@ M.ticks_per_hour = 60 * M.ticks_per_minute
 M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
 M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
-M.public_planet_reset_hours = {
-    nauvis = 2,
-    vulcanus = 3,
-    gleba = 4,
-    fulgora = 5,
-    aquilo = 7,
-}
+M.public_planet_reset_min_hours = 1
+M.public_planet_reset_random_hours = 4
 M.public_planet_initial_offset_minutes = {
     nauvis = 0,
     vulcanus = 10,
@@ -104,35 +99,29 @@ M.property_default_tax = 0.10
 M.property_solar_multiplier = 0.10
 M.property_min_brightness = 0.05
 M.property_link_id_unowned = 0
-M.property_max_size = 128
+M.property_max_size = 256
 M.property_sample_planets = M.public_planets
-M.property_side_lengths = {32, 64, 128}
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 2000
-M.default_properties = {
-    {sample_planet = 'nauvis', lease_type = 'short'},
-    {sample_planet = 'nauvis', lease_type = 'long'},
-    {sample_planet = 'vulcanus', lease_type = 'short'},
-    {sample_planet = 'vulcanus', lease_type = 'long'},
-    {sample_planet = 'gleba', lease_type = 'short'},
-    {sample_planet = 'gleba', lease_type = 'long'},
-    {sample_planet = 'fulgora', lease_type = 'short'},
-    {sample_planet = 'fulgora', lease_type = 'long'},
-    {sample_planet = 'aquilo', lease_type = 'short'},
-    {sample_planet = 'aquilo', lease_type = 'long'},
+M.property_build_experience_per_point = 1000
+M.property_build_pack_by_planet = {
+    nauvis = 'space-science-pack',
+    vulcanus = 'metallurgic-science-pack',
+    gleba = 'agricultural-science-pack',
+    fulgora = 'electromagnetic-science-pack',
+    aquilo = 'cryogenic-science-pack',
 }
-M.property_supply_check_ticks = M.ticks_per_hour
-M.property_supply_active_window_ticks = 30 * M.ticks_per_hour
-M.property_supply_stale_ticks = 30 * M.ticks_per_hour
-M.property_supply_confirmation_checks = 3
-M.property_supply_change_chance = 0.10
-M.property_supply_minimum = 3
-M.property_supply_minimum_per_planet = 2
-M.property_supply_per_active_player = 2
-M.property_supply_low_vacancy = 0.20
-M.property_supply_high_vacancy = 0.50
-M.property_supply_high_median_price = 100000
-M.property_supply_low_median_price = 500
+M.property_lifetime_options = {
+    {hours = 30, cost = 1},
+    {hours = 120, cost = 3},
+    {hours = 480, cost = 5},
+}
+M.property_size_options = {
+    {width = 64, height = 32, cost = 1},
+    {width = 128, height = 64, cost = 3},
+    {width = 256, height = 128, cost = 5},
+}
+M.property_lifecycle_ticks = M.ticks_per_minute
 
 M.ship_life_hours = 12
 M.ship_legacy_life_hours = 50
