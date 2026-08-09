@@ -18,7 +18,7 @@ local technology_decay = require('scripts.technology_decay')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 11
+local HUD_LAYOUT_VERSION = 12
 local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_MENU_NAME = 'un_hud_menu'
@@ -203,6 +203,7 @@ function M.ensure_button(player)
             and hud[HUD_MENU_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
         if complete then
+            hud[HUD_TITLE_NAME].caption = {'un.hud-title'}
             update_home_button(player, hud)
             return hud
         end
@@ -1975,18 +1976,18 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
     navigation.add{
         type = 'button',
-        name = NAV_PROPERTY_BUILD_NAME,
-        caption = {'un.page-property-build'},
-    }
-    navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
-    navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
-    navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
-    navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
-    navigation.add{
-        type = 'button',
         name = NAV_FACTIONS_NAME,
         caption = {'un.page-factions'},
     }
+    navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
+    navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
+    navigation.add{
+        type = 'button',
+        name = NAV_PROPERTY_BUILD_NAME,
+        caption = {'un.page-property-build'},
+    }
+    navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
+    navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
     if player.admin then
         navigation.add{type = 'button', name = NAV_ADMIN_NAME, caption = {'un.page-admin'}}
     end
