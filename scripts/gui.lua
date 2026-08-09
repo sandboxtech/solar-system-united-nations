@@ -26,6 +26,7 @@ local NAVIGATION_NAME = 'un_main_navigation'
 local NAV_HELP_NAME = 'un_nav_help'
 local NAV_UBI_NAME = 'un_nav_ubi'
 local NAV_PROPERTY_NAME = 'un_nav_property'
+local NAV_SHIPS_NAME = 'un_nav_ships'
 local NAV_PLAYERS_NAME = 'un_nav_players'
 local HELP_BRIEF_NAME = 'un_help_brief'
 local HELP_ADVANCED_NAME = 'un_help_advanced'
@@ -44,6 +45,7 @@ local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
+local SHIP_TABLE_NAME = 'un_ship_table'
 local PROPERTY_ACTIONS_NAME = 'un_property_actions'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
@@ -164,6 +166,10 @@ local function experience_amount_name(index)
     return 'un_experience_amount_' .. tostring(index)
 end
 
+local function ship_remaining_name(platform_index)
+    return 'un_ship_remaining_' .. tostring(platform_index)
+end
+
 local function set_frame_state(frame, page, property_revision)
     frame.tags = {
         page = page,
@@ -237,7 +243,8 @@ local function render_property_table(player, frame, content)
         list.add{
             type = 'label',
             name = property_price_name(property.id),
-            caption = format_integer(properties.current_price(property)),
+            caption = {'un.coin-amount',
+                format_integer(properties.current_price(property))},
         }
         local owns = property.owner_index == player.index
         local can_buy, buy_error
@@ -299,8 +306,18 @@ local function render_ubi_section(content)
     claim.style.horizontally_stretchable = true
 end
 
-local function render_ship_section(content)
-    content.add{type = 'label', name = SHIP_STATUS_NAME}
+local function render_suicide_section(content)
+    local suicide = content.add{
+        type = 'sprite-button',
+        name = SUICIDE_NAME,
+        sprite = 'utility/danger_icon',
+        tooltip = {'un.suicide'},
+    }
+    suicide.style.width = 40
+    suicide.style.height = 40
+end
+
+local function render_ship_actions(content)
     local ship_actions = content.add{
         type = 'flow',
         name = SHIP_ACTIONS_NAME,
@@ -316,14 +333,7 @@ local function render_ship_section(content)
         name = SHIP_SCUTTLE_NAME,
         caption = {'un.ship-scuttle'},
     }
-    local suicide = ship_actions.add{
-        type = 'sprite-button',
-        name = SUICIDE_NAME,
-        sprite = 'utility/danger_icon',
-        tooltip = {'un.suicide'},
-    }
-    suicide.style.width = 40
-    suicide.style.height = 40
+    content.add{type = 'label', name = SHIP_STATUS_NAME}
 end
 
 local function render_experience_section(content)
@@ -351,10 +361,63 @@ end
 local function render_overview_page(player, frame, content)
     render_ubi_section(content)
     content.add{type = 'line'}
-    render_ship_section(content)
+    render_suicide_section(content)
     content.add{type = 'line'}
     render_experience_section(content)
     set_frame_state(frame, 'overview')
+end
+
+
+local function ship_signature(list)
+    local parts = {}
+    for _, item in ipairs(list) do
+        parts[#parts + 1] = table.concat({
+            item.index,
+            item.owner_index,
+            item.record.built_tick or 0,
+            item.platform.name,
+        }, ':')
+    end
+    return table.concat(parts, ',')
+end
+
+local function render_ships_page(player, frame, content)
+    render_ship_actions(content)
+    content.add{type = 'line'}
+    local list_data = ships.list()
+    local list = content.add{
+        type = 'table',
+        name = SHIP_TABLE_NAME,
+        column_count = 3,
+    }
+    list.add{type = 'label', caption = {'un.ship-column-owner'}}
+    list.add{type = 'label', caption = {'un.ship-column-name'}}
+    list.add{type = 'label', caption = {'un.ship-column-remaining'}}
+    if #list_data == 0 then
+        list.add{type = 'label', caption = {'un.ship-list-empty'}}
+        list.add{type = 'label', caption = ''}
+        list.add{type = 'label', caption = ''}
+    else
+        for _, item in ipairs(list_data) do
+            local owner = game.get_player(item.owner_index)
+            local account = storage.players[item.owner_index]
+            list.add{
+                type = 'label',
+                caption = owner and owner.name
+                    or account and account.name
+                    or ('#' .. item.owner_index),
+            }
+            list.add{type = 'label', caption = item.platform.name}
+            list.add{
+                type = 'label',
+                name = ship_remaining_name(item.index),
+            }
+        end
+    end
+    set_frame_state(frame, 'ships')
+    local tags = frame.tags
+    tags.ship_signature = ship_signature(list_data)
+    frame.tags = tags
 end
 
 local function add_help_line(parent, caption, heading)
@@ -582,6 +645,8 @@ local function render_page(player, page)
         render_overview_page(player, frame, content)
     elseif page == 'property' then
         render_property_table(player, frame, content)
+    elseif page == 'ships' then
+        render_ships_page(player, frame, content)
     elseif page == 'players' then
         render_players_page(player, frame, content)
     else
@@ -593,6 +658,7 @@ local function render_page(player, page)
     navigation[NAV_HELP_NAME].enabled = page ~= 'help'
     navigation[NAV_UBI_NAME].enabled = page ~= 'overview'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
+    navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
 end
 
@@ -636,7 +702,8 @@ end
 local function update_property_row(player, property_table, property)
     local price = property_table[property_price_name(property.id)]
     if price and price.valid then
-        price.caption = format_integer(properties.current_price(property))
+        price.caption = {'un.coin-amount',
+            format_integer(properties.current_price(property))}
     end
 
     local owns = property.owner_index == player.index
@@ -670,6 +737,28 @@ local function update_property_row(player, property_table, property)
         enter.enabled = can_enter
         enter.tooltip = can_enter and {'un.property-enter'}
             or disabled_tooltip('enter', enter_error)
+    end
+end
+
+local function update_ship_actions(player, content)
+    local platform, record = ships.of(player.index)
+    local status = content[SHIP_STATUS_NAME]
+    local ship_actions = content[SHIP_ACTIONS_NAME]
+    if not (status and status.valid and ship_actions and ship_actions.valid) then
+        return
+    end
+    local create = ship_actions[SHIP_CREATE_NAME]
+    local scuttle = ship_actions[SHIP_SCUTTLE_NAME]
+    if platform then
+        local hours = math.ceil(math.max(0, ships.left_ticks(record))
+            / config.ticks_per_hour)
+        status.caption = {'un.ship-status', platform.name, hours}
+        create.enabled = false
+        scuttle.enabled = true
+    else
+        status.caption = {'un.ship-none'}
+        create.enabled = true
+        scuttle.enabled = false
     end
 end
 
@@ -707,22 +796,6 @@ local function update_frame(player)
                 format_integer(capacity),
             }
         end
-        local platform, record = ships.of(player.index)
-        local status = content[SHIP_STATUS_NAME]
-        local ship_actions = content[SHIP_ACTIONS_NAME]
-        local create = ship_actions[SHIP_CREATE_NAME]
-        local scuttle = ship_actions[SHIP_SCUTTLE_NAME]
-        if platform then
-            local hours = math.ceil(math.max(0, ships.left_ticks(record))
-                / config.ticks_per_hour)
-            status.caption = {'un.ship-status', platform.name, hours}
-            create.enabled = false
-            scuttle.enabled = true
-        else
-            status.caption = {'un.ship-none'}
-            create.enabled = true
-            scuttle.enabled = false
-        end
         local data = experience.get(player.index)
         local grid = content[EXPERIENCE_TABLE_NAME]
         for index, name in ipairs(config.science_pack_order) do
@@ -748,6 +821,28 @@ local function update_frame(player)
                 'un.experience-summary',
                 experience.total_level(player.index),
             }
+        end
+    elseif page == 'ships' then
+        local list_data = ships.list()
+        local signature = ship_signature(list_data)
+        if frame.tags.ship_signature ~= signature then
+            content.clear()
+            render_ships_page(player, frame, content)
+        else
+            update_ship_actions(player, content)
+            local list = content[SHIP_TABLE_NAME]
+            if list and list.valid then
+                for _, item in ipairs(list_data) do
+                    local remaining = list[ship_remaining_name(item.index)]
+                    if remaining and remaining.valid then
+                        local hours = math.ceil(
+                            math.max(0, ships.left_ticks(item.record))
+                                / config.ticks_per_hour
+                        )
+                        remaining.caption = {'un.ship-remaining-hours', hours}
+                    end
+                end
+            end
         end
     elseif page == 'property' then
         if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
@@ -844,6 +939,7 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_HELP_NAME, caption = {'un.page-help'}}
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
+    navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
 
     local tab_gap = frame.add{type = 'empty-widget'}
@@ -928,6 +1024,9 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_PROPERTY_NAME then
         render_page(player, 'property')
         update_frame(player)
+    elseif element.name == NAV_SHIPS_NAME then
+        render_page(player, 'ships')
+        update_frame(player)
     elseif element.name == NAV_PLAYERS_NAME then
         render_page(player, 'players')
         update_frame(player)
@@ -943,13 +1042,13 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == SHIP_CREATE_NAME then
         local platform, err = ships.create(player)
         if not platform then player.print(property_error(err)) end
-        render_page(player, 'overview')
+        render_page(player, 'ships')
         update_frame(player)
     elseif element.name == SHIP_SCUTTLE_NAME then
         if element.tags.action == 'ship-scuttle-confirm' then
             local ok, err = ships.scuttle(player)
             if not ok then player.print(property_error(err)) end
-            render_page(player, 'overview')
+            render_page(player, 'ships')
             update_frame(player)
         else
             element.caption = {'un.ship-scuttle-confirm'}

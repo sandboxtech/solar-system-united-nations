@@ -17,7 +17,14 @@ local function is_positive_integer(value)
 end
 
 function M.display_name(property)
-    return property.custom_name or {'un.property-default-name', property.id}
+    if property.custom_name then return property.custom_name end
+    if not property.owner_index then return {'un.property-surface-vacant'} end
+    local owner = game.get_player(property.owner_index)
+    local account = storage.players[property.owner_index]
+    local owner_name = owner and owner.name
+        or account and account.name
+        or ('#' .. property.owner_index)
+    return {'un.property-surface-owned', owner_name}
 end
 
 local function property_name_position(property)
@@ -89,13 +96,7 @@ function M.feature_description(property)
 end
 
 function M.surface_display_name(property)
-    if not property.owner_index then return {'un.property-surface-vacant'} end
-    local owner = game.get_player(property.owner_index)
-    local account = storage.players[property.owner_index]
-    local owner_name = owner and owner.name
-        or account and account.name
-        or ('#' .. property.owner_index)
-    return {'un.property-surface-owned', owner_name}
+    return M.display_name(property)
 end
 
 local function central_chest_positions()
@@ -261,7 +262,7 @@ function M.ensure_defaults()
                 property,
                 game.get_player(property.owner_index)
             )
-        elseif not property.rendered_name then
+        else
             local translator = first_connected_player()
             if translator then request_property_name_translation(property, translator) end
         end
@@ -332,6 +333,10 @@ function M.release_owner(player_index)
             property.owner_index = nil
             property.owner_cleanup_tick = game.tick
             ensure_linked_chests(property)
+            local translator = first_connected_player()
+            if translator then
+                request_property_name_translation(property, translator)
+            end
             changed = changed + 1
         end
     end
@@ -766,7 +771,7 @@ local function refresh_owned_name_renderings(event)
     for _, property in ipairs(M.list()) do
         if property.owner_index == player.index then
             request_property_name_translation(property, player)
-        elseif not property.owner_index and not property.rendered_name then
+        elseif not property.owner_index then
             request_property_name_translation(property, player)
         end
     end

@@ -87,6 +87,32 @@ function M.of(player_index)
     return best_platform, best_record
 end
 
+function M.list()
+    reconcile()
+    local result = {}
+    for index, record in pairs(records()) do
+        local platform = platform_of(index)
+        if not platform then
+            records()[index] = nil
+        elseif record.owner_index
+                and not (record.scuttled_tick or is_scheduled(platform)) then
+            result[#result + 1] = {
+                index = index,
+                platform = platform,
+                record = record,
+                owner_index = record.owner_index,
+            }
+        end
+    end
+    table.sort(result, function(a, b)
+        if a.owner_index ~= b.owner_index then
+            return a.owner_index < b.owner_index
+        end
+        return a.index < b.index
+    end)
+    return result
+end
+
 function M.enforce_lock()
     local force = game.forces.player
     if config.ship_lock_native_creation then
