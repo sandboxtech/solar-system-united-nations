@@ -127,6 +127,7 @@ M.property_supply_stale_ticks = 30 * M.ticks_per_hour
 M.property_supply_confirmation_checks = 3
 M.property_supply_change_chance = 0.10
 M.property_supply_minimum = 3
+M.property_supply_minimum_per_planet = 2
 M.property_supply_per_active_player = 2
 M.property_supply_low_vacancy = 0.20
 M.property_supply_high_vacancy = 0.50

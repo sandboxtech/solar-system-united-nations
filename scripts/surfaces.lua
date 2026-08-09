@@ -248,6 +248,12 @@ function M.create_property_surface(property_id, spec)
     local height = spec.height
     local half_width = width / 2
     local half_height = height / 2
+    local requested_planet = sample_planet_name(property_id, spec.sample_planet)
+    local reset = storage.public_planet_resets
+        and storage.public_planet_resets[requested_planet]
+    if reset and reset.state ~= 'open' then
+        return nil, nil, nil, nil, nil
+    end
     local name = config.property_surface_prefix .. tostring(property_id)
     local surface = game.surfaces[name]
     if not (surface and surface.valid) then
@@ -259,7 +265,7 @@ function M.create_property_surface(property_id, spec)
         property_id,
         half_width,
         half_height,
-        spec.sample_planet
+        requested_planet
     )
     if not sample_planet then return nil, nil, nil, nil, nil end
     M.sync_property_environment(surface, nil, sample_planet)

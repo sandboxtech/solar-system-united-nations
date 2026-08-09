@@ -655,12 +655,14 @@ local function median_price(list)
     return (prices[count / 2] + prices[count / 2 + 1]) / 2
 end
 
-local function choose_retirement_candidate(list)
+local function choose_retirement_candidate(list, planet_counts)
     local candidates = {}
     for _, property in ipairs(list) do
         local surface = game.surfaces[property.surface_name]
         local last_trade = property.purchased_tick or property.created_tick or game.tick
         if not property.owner_index
+                and (planet_counts[property.sample_planet] or 0)
+                    > config.property_supply_minimum_per_planet
                 and surface and surface.valid
                 and not deletion_blocker(property)
                 and game.tick - last_trade >= config.property_supply_stale_ticks then
@@ -696,8 +698,19 @@ local function evaluate_supply()
     local list = M.list()
     local total = #list
     local unowned = 0
+    local planet_counts = {}
     for _, property in ipairs(list) do
         if not property.owner_index then unowned = unowned + 1 end
+        planet_counts[property.sample_planet] =
+            (planet_counts[property.sample_planet] or 0) + 1
+    end
+    local deficit_planet = nil
+    for _, planet_name in ipairs(config.public_planets) do
+        if (planet_counts[planet_name] or 0)
+                < config.property_supply_minimum_per_planet then
+            deficit_planet = planet_name
+            break
+        end
     end
     local active = active_player_count()
     local target = math.max(
@@ -706,10 +719,10 @@ local function evaluate_supply()
     )
     local vacancy = total > 0 and unowned / total or 0
     local median = median_price(list)
-    local expand = total < target
+    local expand = deficit_planet ~= nil or total < target
         or (active > 0 and vacancy < config.property_supply_low_vacancy)
         or (active > 0 and median > config.property_supply_high_median_price)
-    local candidate = choose_retirement_candidate(list)
+    local candidate = choose_retirement_candidate(list, planet_counts)
     local contract = total > target
         and vacancy > config.property_supply_high_vacancy
         and median < config.property_supply_low_median_price
@@ -721,7 +734,7 @@ local function evaluate_supply()
         supply.contract_checks = 0
         if supply.expand_checks >= config.property_supply_confirmation_checks
                 and math.random() < config.property_supply_change_chance then
-            local property = M.create()
+            local property = M.create{sample_planet = deficit_planet}
             if property then supply.expand_checks = 0 end
         end
     elseif contract then

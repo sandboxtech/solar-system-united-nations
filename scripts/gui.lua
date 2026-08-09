@@ -783,6 +783,7 @@ local function render_help_page(frame, content, mode)
             config.property_supply_high_median_price,
             config.property_supply_high_vacancy * 100,
             config.property_supply_low_median_price,
+            config.property_supply_minimum_per_planet,
         })
         add_help_line(details, {
             'un.help-detail-world-randomization',

@@ -190,7 +190,7 @@ local function randomize_autoplace(map_settings, record)
     end
 end
 
-local function randomize_climate(map_settings, record)
+local function randomize_climate(name, map_settings, record)
     local expressions = map_settings.property_expression_names or {}
     record.climate = {
         moisture_bias = (math.random() - math.random()) * 0.5,
@@ -206,6 +206,12 @@ local function randomize_climate(map_settings, record)
     expressions['control:moisture:frequency'] = tostring(
         record.climate.moisture_frequency
     )
+    if name == 'aquilo' then
+        record.climate.aquilo_segmentation = power_of_two(3)
+        expressions.aquilo_segmentation_multiplier = tostring(
+            record.climate.aquilo_segmentation
+        )
+    end
     map_settings.property_expression_names = expressions
 end
 
@@ -238,7 +244,7 @@ local function prepare_new_round(name, surface, record)
     local map_settings = surface.map_gen_settings
     map_settings.seed = math.random(1, 2147483647)
     randomize_autoplace(map_settings, record)
-    randomize_climate(map_settings, record)
+    randomize_climate(name, map_settings, record)
     randomize_demolishers(map_settings, record)
     surface.map_gen_settings = map_settings
 
