@@ -41,6 +41,7 @@ M.transfer_min_amount = 1000
 M.transfer_fee_rate = 0.001
 M.transfer_min_fee = 100
 M.gui_refresh_ticks = M.ticks_per_second
+M.gui_list_refresh_ticks = 5 * M.ticks_per_second
 M.friend_limit = 10
 
 M.starter_resources = {

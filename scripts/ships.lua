@@ -185,6 +185,15 @@ function M.create(player, planet_name)
 
     if is_ready(platform) then record.built_tick = game.tick end
     apply_bounds(platform, player.index)
+    game.print({
+        'un.ship-built-broadcast',
+        player.name,
+        {
+            '',
+            '[planet=' .. planet_name .. '] ',
+            {'space-location-name.' .. planet_name},
+        },
+    })
     return platform
 end
 

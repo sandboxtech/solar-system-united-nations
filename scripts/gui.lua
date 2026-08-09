@@ -44,6 +44,7 @@ local HELP_ADMIN_NAME = 'un_help_admin'
 local HELP_DETAILS_NAME = 'un_help_details'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
+local PROPERTY_HEADER_NAME = 'un_property_header'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local STAMINA_NAME = 'un_stamina'
@@ -141,6 +142,27 @@ local function format_integer(value)
     local reversed = digits:reverse():gsub('(%d%d%d)', '%1,')
     local grouped = reversed:reverse():gsub('^,', '')
     return sign .. grouped
+end
+
+local function add_info_sprite(parent, tooltip)
+    local info = parent.add{
+        type = 'sprite',
+        sprite = 'info',
+        tooltip = tooltip,
+    }
+    info.style.width = 20
+    info.style.height = 20
+    return info
+end
+
+local function ship_create_tooltip()
+    return {
+        'un.ship-create-tooltip',
+        settings.get('ship_life_hours'),
+        config.ship_base_width,
+        config.ship_width_per_level,
+        config.ship_height,
+    }
 end
 
 local function sorted_players(viewer_index)
@@ -337,6 +359,7 @@ local function set_frame_state(frame, page, property_revision)
     local tags = frame.tags
     tags.page = page
     tags.property_revision = property_revision or -1
+    tags['list_refresh_' .. page] = nil
     frame.tags = tags
 end
 
@@ -381,10 +404,13 @@ local function render_property_access_section(player, content)
         right_label_caption = {'un.property-access-public'},
         switch_state = properties.all_open(player.index) and 'right' or 'left',
         allow_none_state = false,
+        tooltip = {'un.property-access-tooltip'},
     }
 end
 
 local function render_property_table(player, frame, content)
+    local old_header = content[PROPERTY_HEADER_NAME]
+    if old_header and old_header.valid then old_header.destroy() end
     local old_crime = content[CRIME_ACTIONS_NAME]
     if old_crime and old_crime.valid then old_crime.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
@@ -400,10 +426,17 @@ local function render_property_table(player, frame, content)
     local property_list = properties.list(selected)
     local sort_index = property_sort_index(frame)
     sort_properties(property_list, sort_index)
-    content.add{
+    local header = content.add{
+        type = 'flow',
+        name = PROPERTY_HEADER_NAME,
+        direction = 'horizontal',
+    }
+    header.style.vertical_align = 'center'
+    header.add{
         type = 'label',
         caption = {'un.property-current-faction', planet_label(selected)},
     }
+    add_info_sprite(header, {'un.property-page-tooltip'})
     local crime_actions = content.add{
         type = 'flow',
         name = CRIME_ACTIONS_NAME,
@@ -644,6 +677,21 @@ local function render_property_build_page(player, frame, content)
 end
 
 local function render_ubi_section(content)
+    local ubi_tooltip = {
+        'un.ubi-tooltip',
+        config.ubi_credit_per_second,
+        config.ubi_max_seconds / 3600,
+        config.ubi_max_seconds * config.ubi_credit_per_second,
+        settings.get('initial_coin'),
+    }
+    local stamina_tooltip = {
+        'un.stamina-tooltip',
+        config.stamina_per_second,
+        config.stamina_max,
+        config.fast_respawn_stamina_cost,
+        config.fast_respawn_seconds,
+        config.normal_respawn_seconds,
+    }
     local balance = content.add{
         type = 'table',
         name = BALANCE_TABLE_NAME,
@@ -652,19 +700,29 @@ local function render_ubi_section(content)
     }
     balance.add{type = 'label', caption = {'un.credit-label'}}
     balance.add{type = 'label', name = BALANCE_NAME}
-    balance.add{type = 'label', caption = {'un.stamina-label'}}
-    balance.add{type = 'label', name = STAMINA_NAME}
+    balance.add{
+        type = 'label',
+        caption = {'un.stamina-label'},
+        tooltip = stamina_tooltip,
+    }
+    balance.add{
+        type = 'label',
+        name = STAMINA_NAME,
+        tooltip = stamina_tooltip,
+    }
 
     local progress = content.add{
         type = 'progressbar',
         name = UBI_PROGRESS_NAME,
         value = 0,
+        tooltip = ubi_tooltip,
     }
     progress.style.width = 360
     local claim = content.add{
         type = 'button',
         name = UBI_CLAIM_NAME,
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
+        tooltip = ubi_tooltip,
     }
     claim.style.width = 360
 
@@ -698,6 +756,7 @@ local function render_ship_actions(player, content)
         type = 'button',
         name = SHIP_CREATE_NAME,
         caption = {'un.ship-create', format_integer(config.ship_stamina_cost)},
+        tooltip = ship_create_tooltip(),
     }
     ship_actions.add{
         type = 'button',
@@ -708,9 +767,10 @@ local function render_ship_actions(player, content)
 end
 
 local function render_experience_section(content)
-    content.add{type = 'label', caption = {'un.experience-help-1'}}
-    content.add{type = 'label', caption = {'un.experience-help-2'}}
-    content.add{type = 'label', caption = {'un.experience-help-3'}}
+    local heading = content.add{type = 'flow', direction = 'horizontal'}
+    heading.style.vertical_align = 'center'
+    heading.add{type = 'label', caption = {'un.experience-title'}}
+    add_info_sprite(heading, {'un.experience-tooltip'})
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
@@ -838,15 +898,13 @@ local function faction_element_name(kind, planet_name)
     return 'un_faction_' .. kind .. '_' .. planet_name
 end
 
-local function faction_statistics(planet_name, ship_list)
+local function faction_statistics(planet_name, ship_list, property_counts)
     local force = factions.of_planet(planet_name)
     local online = 0
     local total = 0
-    local online_ticks = 0
     if force and force.valid then
         for _, member in pairs(force.players) do
             total = total + 1
-            online_ticks = online_ticks + member.online_time
             if member.connected then online = online + 1 end
         end
     end
@@ -859,8 +917,7 @@ local function faction_statistics(planet_name, ship_list)
     return {
         online = online,
         total = total,
-        online_ticks = online_ticks,
-        properties = #properties.list(planet_name),
+        properties = property_counts[planet_name] or 0,
         ships = ship_count,
     }
 end
@@ -870,11 +927,15 @@ local function update_factions_page(player, content)
     if not (list and list.valid) then return end
     local current = factions.of_player(player)
     local ship_list = ships.list()
+    local property_counts = {}
+    for _, property in ipairs(properties.list()) do
+        local planet_name = property.sample_planet
+        property_counts[planet_name] = (property_counts[planet_name] or 0) + 1
+    end
     for _, planet_name in ipairs(config.public_planets) do
-        local data = faction_statistics(planet_name, ship_list)
+        local data = faction_statistics(planet_name, ship_list, property_counts)
         local status = list[faction_element_name('status', planet_name)]
         local population = list[faction_element_name('population', planet_name)]
-        local hours = list[faction_element_name('hours', planet_name)]
         local property_count = list[faction_element_name('properties', planet_name)]
         local ship_count = list[faction_element_name('ships', planet_name)]
         local button = list[FACTION_SWITCH_PREFIX .. planet_name]
@@ -885,12 +946,6 @@ local function update_factions_page(player, content)
         if population and population.valid then
             population.caption = {'un.faction-population', data.online, data.total}
         end
-        if hours and hours.valid then
-            hours.caption = string.format(
-                '%.1f',
-                math.max(0, data.online_ticks) / config.ticks_per_hour
-            )
-        end
         if property_count and property_count.valid then
             property_count.caption = tostring(data.properties)
         end
@@ -900,13 +955,24 @@ local function update_factions_page(player, content)
         if button and button.valid then
             button.enabled = current ~= planet_name
                 and stamina.get(player.index) >= config.suicide_stamina_cost
-            button.tooltip = current == planet_name
-                and {'un.faction-already-current'}
-                or button.enabled and {
+            if current == planet_name then
+                button.tooltip = {'un.faction-already-current'}
+            else
+                button.tooltip = {
+                    '',
+                    {
                     'un.faction-switch-tooltip',
                     planet_label(planet_name),
                     config.suicide_stamina_cost,
-                } or {'un.suicide-stamina-insufficient'}
+                    config.normal_respawn_seconds,
+                    },
+                    button.enabled and '' or {
+                        '',
+                        '\n',
+                        {'un.suicide-stamina-insufficient'},
+                    },
+                }
+            end
             if button.tags.action ~= 'faction-switch-confirm' then
                 button.caption = current == planet_name
                     and {'un.faction-current'} or {'un.faction-switch'}
@@ -920,6 +986,14 @@ local function update_factions_page(player, content)
 end
 
 local function render_factions_page(player, frame, content)
+    local current_planet = factions.of_player(player) or 'nauvis'
+    content.add{
+        type = 'label',
+        caption = {
+            'un.faction-current-summary',
+            factions.display_name(current_planet),
+        },
+    }
     local warning = content.add{
         type = 'label',
         caption = {'un.faction-page-warning', config.suicide_stamina_cost},
@@ -929,13 +1003,12 @@ local function render_factions_page(player, frame, content)
     local list = content.add{
         type = 'table',
         name = FACTION_TABLE_NAME,
-        column_count = 7,
+        column_count = 6,
         style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.faction-column-name'}}
     list.add{type = 'label', caption = {'un.faction-column-relation'}}
     list.add{type = 'label', caption = {'un.faction-column-population'}}
-    list.add{type = 'label', caption = {'un.faction-column-hours'}}
     list.add{type = 'label', caption = {'un.faction-column-properties'}}
     list.add{type = 'label', caption = {'un.faction-column-ships'}}
     list.add{type = 'label', caption = {'un.faction-column-action'}}
@@ -943,7 +1016,6 @@ local function render_factions_page(player, frame, content)
         list.add{type = 'label', caption = factions.display_name(planet_name)}
         list.add{type = 'label', name = faction_element_name('status', planet_name)}
         list.add{type = 'label', name = faction_element_name('population', planet_name)}
-        list.add{type = 'label', name = faction_element_name('hours', planet_name)}
         list.add{type = 'label', name = faction_element_name('properties', planet_name)}
         list.add{type = 'label', name = faction_element_name('ships', planet_name)}
         list.add{
@@ -982,8 +1054,18 @@ update_crime_action = function(player, content)
         count,
     } or crime_error_caption(err)
     button.enabled = available
-    button.tooltip = available and {'un.crime-button-tooltip'}
-        or crime_error_caption(err)
+    local details = {
+        'un.crime-button-tooltip',
+        config.crime_coin_cost,
+        config.crime_stamina_cost,
+        config.crime_price_scale,
+    }
+    button.tooltip = available and details or {
+        '',
+        crime_error_caption(err),
+        '\n\n',
+        details,
+    }
 end
 
 local function count_pairs(value)
@@ -1217,6 +1299,17 @@ local function render_help_page(player, frame, content, mode)
     details.style.minimal_width = 740
     details.style.maximal_height = 620
 
+    if mode == 'brief' or mode == 'advanced' or mode == 'full' then
+        local intro = details.add{
+            type = 'label',
+            caption = {'un.help-layer-' .. mode},
+        }
+        intro.style.single_line = false
+        intro.style.maximal_width = 700
+        intro.style.font_color = {0.72, 0.72, 0.72}
+        add_help_gap(details)
+    end
+
     if mode == 'story' then
         local background = add_help_card(details, {'un.help-card-story'})
         add_help_line(background, {'un.help-story-background'})
@@ -1239,28 +1332,10 @@ local function render_help_page(player, frame, content, mode)
         local travel = add_help_card(details, {'un.help-card-travel'})
         add_help_line(travel, {'un.help-brief-travel'})
         add_help_gap(details)
-        local crime_card = add_help_card(details, {'un.help-card-crime'})
-        add_help_line(crime_card, {
-            'un.help-brief-crime',
-            config.crime_coin_cost,
-            config.crime_stamina_cost,
-        })
-        add_help_gap(details)
         local project = add_help_card(details, {'un.help-card-project'})
         add_help_line(project, {'un.help-brief-project'})
     elseif mode == 'advanced' then
         local beginner = add_help_card(details, {'un.help-section-beginner'})
-        add_help_line(beginner, {
-            'un.help-detail-ubi',
-            config.ubi_credit_per_second,
-            config.ubi_max_seconds / 3600,
-            config.ubi_max_seconds * config.ubi_credit_per_second,
-            settings.get('initial_coin'),
-        })
-        add_help_line(beginner, {
-            'un.help-detail-starter',
-            config.starter_kit_stamina_cost,
-        })
         add_help_line(beginner, {'un.help-detail-linked-chest'})
         add_help_line(beginner, {
             'un.help-detail-science',
@@ -1287,35 +1362,7 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(property, {'un.help-detail-property-basic'})
         add_help_gap(details)
 
-        local growth = add_help_card(details, {'un.help-detail-growth-heading'})
-        add_help_line(growth, {'un.help-detail-experience'})
-        add_help_gap(details)
-
-        local cooperation = add_help_card(
-            details,
-            {'un.help-detail-cooperation-heading'}
-        )
-        add_help_line(cooperation, {
-            'un.help-detail-friends',
-            settings.get('friend_limit'),
-        })
-        add_help_line(cooperation, {
-            'un.help-detail-transfer',
-            config.transfer_min_amount,
-            config.transfer_fee_rate * 100,
-            config.transfer_min_fee,
-        })
-        add_help_gap(details)
-
         local travel = add_help_card(details, {'un.help-detail-ship-heading'})
-        add_help_line(travel, {
-            'un.help-detail-ship',
-            config.ship_stamina_cost,
-            settings.get('ship_life_hours'),
-            config.ship_base_width,
-            config.ship_width_per_level,
-            config.ship_height,
-        })
         add_help_line(travel, {
             'un.help-detail-travel',
             config.fast_respawn_stamina_cost,
@@ -1331,15 +1378,20 @@ local function render_help_page(player, frame, content, mode)
             settings.get('tech_leak_interval_hours'),
         })
     elseif mode == 'full' then
-        local formulas = add_help_card(details, {
-            'un.help-detail-formulas-heading',
+        local growth = add_help_card(details, {
+            'un.help-detail-growth-heading',
         })
-        add_help_line(formulas, {
+        add_help_line(growth, {
             'un.help-detail-experience-effects',
             config.ship_base_width,
             config.ship_width_per_level,
             settings.get('ship_life_hours'),
             settings.get('property_tax_percent'),
+        })
+        add_help_gap(details)
+
+        local formulas = add_help_card(details, {
+            'un.help-detail-formulas-heading',
         })
         add_help_line(formulas, {
             'un.help-detail-property-price',
@@ -1349,12 +1401,6 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(formulas, {
             'un.help-detail-property-trade',
             settings.get('property_tax_percent'),
-        })
-        add_help_line(formulas, {
-            'un.help-detail-crime',
-            config.crime_coin_cost,
-            config.crime_stamina_cost,
-            config.crime_price_scale,
         })
         add_help_gap(details)
 
@@ -1383,13 +1429,6 @@ local function render_help_page(player, frame, content, mode)
             'un.help-detail-tech-leak-formula',
             settings.get('tech_leak_max_percent'),
         })
-        add_help_gap(details)
-
-        local commands = add_help_card(details, {
-            'un.help-detail-commands-heading',
-        })
-        add_help_line(commands, {'un.help-detail-command-transfer'})
-        add_help_line(commands, {'un.help-detail-command-rename'})
     else
         local security = add_help_card(details, {
             'un.help-admin-security-heading',
@@ -1433,6 +1472,16 @@ local function format_hours(ticks)
     return string.format('%.1f', math.max(0, ticks) / config.ticks_per_hour)
 end
 
+local function list_refresh_due(frame, page)
+    local bucket = math.floor(game.tick / config.gui_list_refresh_ticks)
+    local key = 'list_refresh_' .. page
+    if frame.tags[key] == bucket then return false end
+    local tags = frame.tags
+    tags[key] = bucket
+    frame.tags = tags
+    return true
+end
+
 local function render_players_page(viewer, frame, content)
     local actions = content.add{
         type = 'flow',
@@ -1444,6 +1493,13 @@ local function render_players_page(viewer, frame, content)
         caption = {'un.friend-remove-offline'},
         tags = {action = 'friend-remove-offline'},
     }
+    add_info_sprite(actions, {
+        'un.player-social-tooltip',
+        settings.get('friend_limit'),
+        config.transfer_min_amount,
+        config.transfer_fee_rate * 100,
+        config.transfer_min_fee,
+    })
     local list = content.add{
         type = 'table',
         name = PLAYER_TABLE_NAME,
@@ -1637,8 +1693,12 @@ local function update_ship_actions(player, content)
     else
         status.caption = {'un.ship-none'}
         create.enabled = stamina.get(player.index) >= config.ship_stamina_cost
-        create.tooltip = create.enabled and {'un.ship-create-tooltip'}
-            or {'un.stamina-insufficient'}
+        create.tooltip = create.enabled and ship_create_tooltip() or {
+            '',
+            {'un.stamina-insufficient'},
+            '\n\n',
+            ship_create_tooltip(),
+        }
         scuttle.enabled = false
     end
 end
@@ -1709,31 +1769,33 @@ local function update_frame(player)
                 kit.tags = {action = 'starter-kit-buy'}
             end
         end
-        local data = experience.get(player.index)
-        local grid = content[EXPERIENCE_TABLE_NAME]
-        for index, name in ipairs(config.science_pack_order) do
-            local amount = data[name] or 0
-            local threshold = experience.next_threshold(amount)
-            local progress = grid[experience_progress_name(index)]
-            local label = grid[experience_amount_name(index)]
-            if progress and progress.valid then
-                progress.value = math.max(0, math.min(1, amount / threshold))
+        if list_refresh_due(frame, 'experience') then
+            local data = experience.get(player.index)
+            local grid = content[EXPERIENCE_TABLE_NAME]
+            for index, name in ipairs(config.science_pack_order) do
+                local amount = data[name] or 0
+                local threshold = experience.next_threshold(amount)
+                local progress = grid[experience_progress_name(index)]
+                local label = grid[experience_amount_name(index)]
+                if progress and progress.valid then
+                    progress.value = math.max(0, math.min(1, amount / threshold))
+                end
+                if label and label.valid then
+                    label.caption = {
+                        'un.experience-amount',
+                        format_integer(amount),
+                        format_integer(threshold),
+                        experience.contribution(amount),
+                    }
+                end
             end
-            if label and label.valid then
-                label.caption = {
-                    'un.experience-amount',
-                    format_integer(amount),
-                    format_integer(threshold),
-                    experience.contribution(amount),
+            local summary = content[EXPERIENCE_SUMMARY_NAME]
+            if summary and summary.valid then
+                summary.caption = {
+                    'un.experience-summary',
+                    experience.total_level(player.index),
                 }
             end
-        end
-        local summary = content[EXPERIENCE_SUMMARY_NAME]
-        if summary and summary.valid then
-            summary.caption = {
-                'un.experience-summary',
-                experience.total_level(player.index),
-            }
         end
     elseif page == 'property-build' then
         update_property_build_page(player, content)
@@ -1765,23 +1827,25 @@ local function update_frame(player)
             end
         end
     elseif page == 'ships' then
-        local list_data = ships.list()
-        local signature = ship_signature(list_data)
-        if frame.tags.ship_signature ~= signature then
-            content.clear()
-            render_ships_page(player, frame, content)
-        else
-            update_ship_actions(player, content)
-            local list = content[SHIP_TABLE_NAME]
-            if list and list.valid then
-                for _, item in ipairs(list_data) do
-                    local remaining = list[ship_remaining_name(item.index)]
-                    if remaining and remaining.valid then
-                        local hours = math.ceil(
-                            math.max(0, ships.left_ticks(item.record))
-                                / config.ticks_per_hour
-                        )
-                        remaining.caption = {'un.ship-remaining-hours', hours}
+        if list_refresh_due(frame, 'ships') then
+            local list_data = ships.list()
+            local signature = ship_signature(list_data)
+            if frame.tags.ship_signature ~= signature then
+                content.clear()
+                render_ships_page(player, frame, content)
+            else
+                update_ship_actions(player, content)
+                local list = content[SHIP_TABLE_NAME]
+                if list and list.valid then
+                    for _, item in ipairs(list_data) do
+                        local remaining = list[ship_remaining_name(item.index)]
+                        if remaining and remaining.valid then
+                            local hours = math.ceil(
+                                math.max(0, ships.left_ticks(item.record))
+                                    / config.ticks_per_hour
+                            )
+                            remaining.caption = {'un.ship-remaining-hours', hours}
+                        end
                     end
                 end
             end
@@ -1791,10 +1855,11 @@ local function update_frame(player)
         local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
         local price_sort_changed = sort_index >= 3
             and frame.tags.property_sort_bucket ~= sort_bucket
+        local refresh_rows = list_refresh_due(frame, 'property')
         if (frame.tags.property_revision or -1)
                 ~= (storage.property_revision or 0) or price_sort_changed then
             render_property_table(player, frame, content)
-        else
+        elseif refresh_rows then
             local property_table = content[PROPERTY_TABLE_NAME]
             if property_table and property_table.valid then
                 for _, property in ipairs(properties.list(
@@ -1803,53 +1868,59 @@ local function update_frame(player)
                     update_property_row(player, property_table, property)
                 end
             end
+            update_crime_action(player, content)
         end
-        update_crime_action(player, content)
     elseif page == 'factions' then
-        update_factions_page(player, content)
-    elseif page == 'players' then
-        if frame.tags.player_signature ~= player_signature() then
-            content.clear()
-            render_players_page(player, frame, content)
+        if list_refresh_due(frame, 'factions') then
+            update_factions_page(player, content)
         end
-        local list = content[PLAYER_TABLE_NAME]
-        if list and list.valid then
-            for _, listed_player in pairs(game.players) do
-                local status = list[player_element_name('status', listed_player.index)]
-                local online = list[player_element_name('online', listed_player.index)]
-                local offline = list[player_element_name('offline', listed_player.index)]
-                local locale = list[player_element_name('locale', listed_player.index)]
-                local coins = list[player_element_name('coins', listed_player.index)]
-                local level = list[player_element_name('level', listed_player.index)]
-                if status and status.valid then
-                    status.caption = listed_player.connected
-                        and {'un.player-online'} or {'un.player-offline'}
-                end
-                if online and online.valid then
-                    online.caption = format_hours(listed_player.online_time)
-                end
-                if offline and offline.valid then
-                    local account = economy.ensure_account(listed_player.index)
-                    local observed_ticks = math.max(
-                        0,
-                        game.tick - (account.created_tick or game.tick)
-                    )
-                    local offline_ticks = math.max(
-                        0,
-                        observed_ticks - listed_player.online_time
-                    )
-                    offline.caption = format_hours(offline_ticks)
-                end
-                if locale and locale.valid then locale.caption = listed_player.locale end
-                if coins and coins.valid then
-                    coins.caption = format_integer(
-                        economy.get_balance(listed_player.index)
-                    )
-                end
-                if level and level.valid then
-                    level.caption = format_integer(
-                        experience.total_level(listed_player.index)
-                    )
+    elseif page == 'players' then
+        if list_refresh_due(frame, 'players') then
+            if frame.tags.player_signature ~= player_signature() then
+                content.clear()
+                render_players_page(player, frame, content)
+            end
+            local list = content[PLAYER_TABLE_NAME]
+            if list and list.valid then
+                for _, listed_player in pairs(game.players) do
+                    local status = list[player_element_name('status', listed_player.index)]
+                    local online = list[player_element_name('online', listed_player.index)]
+                    local offline = list[player_element_name('offline', listed_player.index)]
+                    local locale = list[player_element_name('locale', listed_player.index)]
+                    local coins = list[player_element_name('coins', listed_player.index)]
+                    local level = list[player_element_name('level', listed_player.index)]
+                    if status and status.valid then
+                        status.caption = listed_player.connected
+                            and {'un.player-online'} or {'un.player-offline'}
+                    end
+                    if online and online.valid then
+                        online.caption = format_hours(listed_player.online_time)
+                    end
+                    if offline and offline.valid then
+                        local account = economy.ensure_account(listed_player.index)
+                        local observed_ticks = math.max(
+                            0,
+                            game.tick - (account.created_tick or game.tick)
+                        )
+                        local offline_ticks = math.max(
+                            0,
+                            observed_ticks - listed_player.online_time
+                        )
+                        offline.caption = format_hours(offline_ticks)
+                    end
+                    if locale and locale.valid then
+                        locale.caption = listed_player.locale
+                    end
+                    if coins and coins.valid then
+                        coins.caption = format_integer(
+                            economy.get_balance(listed_player.index)
+                        )
+                    end
+                    if level and level.valid then
+                        level.caption = format_integer(
+                            experience.total_level(listed_player.index)
+                        )
+                    end
                 end
             end
         end
@@ -2105,9 +2176,19 @@ events.on(defines.events.on_gui_click, function(event)
                 config.suicide_stamina_cost,
             }
             element.tooltip = {
-                'un.faction-switch-confirm',
-                planet_label(planet_name),
-                config.suicide_stamina_cost,
+                '',
+                {
+                    'un.faction-switch-confirm',
+                    planet_label(planet_name),
+                    config.suicide_stamina_cost,
+                },
+                '\n',
+                {
+                    'un.faction-switch-tooltip',
+                    planet_label(planet_name),
+                    config.suicide_stamina_cost,
+                    config.normal_respawn_seconds,
+                },
             }
             element.tags = {
                 action = 'faction-switch-confirm',

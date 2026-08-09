@@ -156,6 +156,11 @@ local function finish_switch(player)
         end
     end
     player.force = target_force
+    game.print({
+        'un.faction-switch-broadcast',
+        player.name,
+        M.display_name(pending.target_planet),
+    })
     return true
 end
 
