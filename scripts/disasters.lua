@@ -109,8 +109,10 @@ end
 
 local function roll_period_ticks()
     local random = math.random()
-    local hours = config.public_planet_reset_min_hours
-        + config.public_planet_reset_random_hours * random * random
+    local minimum = settings.get('planet_reset_min_hours')
+    local maximum = settings.get('planet_reset_max_hours')
+    local exponent = settings.get('planet_reset_exponent')
+    local hours = minimum + (maximum - minimum) * random ^ exponent
     return math.floor(hours * config.ticks_per_hour + 0.5)
 end
 
@@ -120,15 +122,13 @@ local function ensure_record(name)
     local record = records[name]
     local surface = ensure_surface(name)
     if not record then
-        local offset = (config.public_planet_initial_offset_minutes[name] or 0)
-            * config.ticks_per_minute
         record = {
             state = 'open',
             round = 0,
             period_ticks = roll_period_ticks(),
             warned = {},
         }
-        record.next_tick = game.tick + record.period_ticks + offset
+        record.next_tick = game.tick + record.period_ticks
         records[name] = record
     end
     if record.state == nil then record.state = 'open' end

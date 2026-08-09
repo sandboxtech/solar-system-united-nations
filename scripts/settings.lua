@@ -8,6 +8,21 @@ local DEFINITIONS = {
     friend_limit = {default = config.friend_limit, min = 0, max = 100, integer = true},
     ship_life_hours = {default = config.ship_life_hours, min = 1, max = 10000},
     cleanup_idle_hours = {default = config.player_cleanup_idle_hours, min = 1, max = 100000},
+    planet_reset_min_hours = {
+        default = config.public_planet_reset_min_hours,
+        min = 0.1,
+        max = 10000,
+    },
+    planet_reset_max_hours = {
+        default = config.public_planet_reset_max_hours,
+        min = 0.1,
+        max = 10000,
+    },
+    planet_reset_exponent = {
+        default = config.public_planet_reset_exponent,
+        min = 0.01,
+        max = 100,
+    },
     property_tax_percent = {default = config.property_default_tax * 100, min = 0, max = 100},
     property_price_factor = {
         default = config.property_price_factor,
@@ -119,6 +134,14 @@ function M.set(key, value)
                 or definition.exclusive_max and value == definition.max then
             return false, 'out-of-range'
         end
+    end
+    if key == 'planet_reset_min_hours'
+            and value > M.get('planet_reset_max_hours') then
+        return false, 'out-of-range'
+    end
+    if key == 'planet_reset_max_hours'
+            and value < M.get('planet_reset_min_hours') then
+        return false, 'out-of-range'
     end
     values()[key] = value
     return true, value

@@ -88,6 +88,9 @@ local ADMIN_NUMBER_SETTINGS = {
     {'friend_limit', 'un.admin-setting-friend-limit'},
     {'ship_life_hours', 'un.admin-setting-ship-life'},
     {'cleanup_idle_hours', 'un.admin-setting-cleanup-hours'},
+    {'planet_reset_min_hours', 'un.admin-setting-planet-reset-min'},
+    {'planet_reset_max_hours', 'un.admin-setting-planet-reset-max'},
+    {'planet_reset_exponent', 'un.admin-setting-planet-reset-exponent'},
     {'property_tax_percent', 'un.admin-setting-property-tax'},
     {'property_price_factor', 'un.admin-setting-property-factor'},
     {'technology_price_multiplier', 'un.admin-setting-technology-price'},
@@ -1029,6 +1032,9 @@ local function render_admin_page(player, frame, content)
             numeric = true,
             allow_decimal = key == 'ship_life_hours'
                 or key == 'cleanup_idle_hours'
+                or key == 'planet_reset_min_hours'
+                or key == 'planet_reset_max_hours'
+                or key == 'planet_reset_exponent'
                 or key == 'property_tax_percent'
                 or key == 'property_price_factor'
                 or key == 'technology_price_multiplier'
@@ -1369,6 +1375,9 @@ local function render_help_page(player, frame, content, mode)
         })
         add_help_line(world, {
             'un.help-detail-reset-schedule',
+            settings.get('planet_reset_min_hours'),
+            settings.get('planet_reset_max_hours'),
+            settings.get('planet_reset_exponent'),
         })
         add_help_line(world, {
             'un.help-detail-tech-leak-formula',
