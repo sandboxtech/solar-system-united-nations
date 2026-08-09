@@ -69,6 +69,8 @@ end
 local function ensure_linked_chests(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
+    surface.always_day = true
+    surface.solar_power_multiplier = property.solar or 1
     normalize_linked_chest_positions(property, surface)
     local link_id = property.owner_index or config.property_link_id_unowned
     for _, position in ipairs(property.linked_chest_positions) do
@@ -98,6 +100,8 @@ function M.create(spec)
     local tax = tonumber(spec.tax) or config.property_default_tax
     local shape = spec.shape or 'square'
     local solar = tonumber(spec.solar) or 1
+    local half_width = shape == 'long' and 2 * n or n
+    local half_height = n
     if not is_positive_integer(price) or price > config.property_price_cap then
         return nil, 'invalid-price'
     end
@@ -105,6 +109,10 @@ function M.create(spec)
         return nil, 'invalid-size'
     end
     if shape ~= 'square' and shape ~= 'long' then return nil, 'invalid-shape' end
+    if 2 * half_width > config.property_max_size
+            or 2 * half_height > config.property_max_size then
+        return nil, 'invalid-size'
+    end
     if solar < 0 then return nil, 'invalid-solar' end
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
@@ -116,6 +124,7 @@ function M.create(spec)
         water = spec.water == true,
         solar = solar,
         name = spec.name,
+        theme = spec.theme,
     })
     local property = {
         id = id,
@@ -134,6 +143,7 @@ function M.create(spec)
         shape = shape,
         water = spec.water == true,
         solar = solar,
+        theme = spec.theme,
         linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
     }

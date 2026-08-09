@@ -27,7 +27,43 @@ local function ensure_generated(surface, radius)
     surface.force_generate_chunk_requests()
 end
 
-local function apply_property_tiles(surface, half_width, half_height, has_water)
+local function themed_tile(theme, x, y)
+    local ax = math.abs(x)
+    local ay = math.abs(y)
+    if theme == 'dawn' then
+        if ax <= 4 and ay <= 4 then return 'lab-white' end
+        if x % 8 == 0 or y % 8 == 0 then return 'lab-white' end
+    elseif theme == 'moonlake' then
+        if ax + ay <= 7 then return 'lab-white' end
+        if (math.floor(x / 4) + math.floor(y / 4)) % 2 == 0 then
+            return 'lab-dark-1'
+        end
+    elseif theme == 'quietstar' then
+        if ax == ay or ax + ay == 8 then return 'lab-white' end
+        return (x + y) % 2 == 0 and 'lab-dark-1' or 'lab-dark-2'
+    elseif theme == 'longwind' then
+        if ay <= 2 then return 'lab-white' end
+        if x % 8 == 0 then return 'lab-dark-1' end
+    elseif theme == 'mirrorlight' then
+        if ay <= 3 then return 'lab-white' end
+        return math.floor(ax / 4) % 2 == 0 and TUTORIAL_GRID_NAME or 'lab-dark-1'
+    elseif theme == 'dusktide' then
+        if ay == 0 or x % 12 == 0 then return 'lab-white' end
+        return math.floor((x + y) / 4) % 2 == 0 and 'lab-dark-1' or 'lab-dark-2'
+    elseif theme == 'sunstone' then
+        if x % 16 == 0 or y % 16 == 0 then return 'lab-white' end
+    elseif theme == 'bluewater' then
+        if ay <= 4 or x % 16 == 0 then return 'lab-white' end
+    elseif theme == 'skyvault' then
+        if ax == ay or x % 32 == 0 or y % 32 == 0 then return 'lab-white' end
+        if (math.floor(x / 8) + math.floor(y / 8)) % 2 == 0 then
+            return 'lab-dark-1'
+        end
+    end
+    return TUTORIAL_GRID_NAME
+end
+
+local function apply_property_tiles(surface, half_width, half_height, has_water, theme)
     local tiles = {}
     local margin = config.property_water_margin
     for y = -half_height, half_height - 1 do
@@ -37,7 +73,7 @@ local function apply_property_tiles(surface, half_width, half_height, has_water)
                 or y < -half_height + margin or y >= half_height - margin
             )
             tiles[#tiles + 1] = {
-                name = water and 'water' or TUTORIAL_GRID_NAME,
+                name = water and 'water' or themed_tile(theme, x, y),
                 position = {x, y},
             }
         end
@@ -46,7 +82,7 @@ local function apply_property_tiles(surface, half_width, half_height, has_water)
 end
 
 local function apply_tutorial_grid(surface, half_size)
-    apply_property_tiles(surface, half_size, half_size, false)
+    apply_property_tiles(surface, half_size, half_size, false, nil)
 end
 
 function M.ensure_hospice()
@@ -84,7 +120,14 @@ function M.create_property_surface(property_id, spec)
         surface = game.create_surface(name, map_gen_settings(width, height))
     end
     ensure_generated(surface, math.max(1, math.ceil(math.max(width, height) / 64)))
-    apply_property_tiles(surface, half_width, half_height, spec.water == true)
+    apply_property_tiles(
+        surface,
+        half_width,
+        half_height,
+        spec.water == true,
+        spec.theme
+    )
+    surface.always_day = true
     surface.solar_power_multiplier = spec.solar
     surface.localised_name = spec.name or {'un.property-default-name', property_id}
     game.forces.player.set_spawn_position({0, 0}, surface)

@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 8
+M.schema_version = 9
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -64,16 +64,17 @@ M.property_surface_prefix = 'un-property-'
 M.property_default_tax = 0.10
 M.property_link_id_unowned = 0
 M.property_water_margin = 2
+M.property_max_size = 128
 M.default_properties = {
-    {name = {'un.property-name-dawn-court'}, price = 1000, n = 16, shape = 'square', water = false, solar = 2},
-    {name = {'un.property-name-lakeside-court'}, price = 1000, n = 16, shape = 'square', water = true, solar = 1},
-    {name = {'un.property-name-shade-court'}, price = 1000, n = 16, shape = 'square', water = false, solar = 0.5},
-    {name = {'un.property-name-longwind-lodge'}, price = 1000, n = 16, shape = 'long', water = false, solar = 1},
-    {name = {'un.property-name-mirrorwater-longhouse'}, price = 1000, n = 16, shape = 'long', water = true, solar = 2},
-    {name = {'un.property-name-dusktide-longhouse'}, price = 1000, n = 16, shape = 'long', water = true, solar = 0.5},
-    {name = {'un.property-name-sunstone-manor'}, price = 5000, n = 32, shape = 'square', water = false, solar = 2},
-    {name = {'un.property-name-bluewater-manor'}, price = 5000, n = 32, shape = 'long', water = true, solar = 1},
-    {name = {'un.property-name-skyvault-estate'}, price = 20000, n = 64, shape = 'square', water = true, solar = 2},
+    {name = {'un.property-name-dawn-court'}, price = 1000, n = 16, shape = 'square', water = false, solar = 2, theme = 'dawn'},
+    {name = {'un.property-name-lakeside-court'}, price = 1000, n = 16, shape = 'square', water = true, solar = 1, theme = 'moonlake'},
+    {name = {'un.property-name-shade-court'}, price = 1000, n = 16, shape = 'square', water = false, solar = 0.5, theme = 'quietstar'},
+    {name = {'un.property-name-longwind-lodge'}, price = 1000, n = 16, shape = 'long', water = false, solar = 1, theme = 'longwind'},
+    {name = {'un.property-name-mirrorwater-longhouse'}, price = 1000, n = 16, shape = 'long', water = true, solar = 2, theme = 'mirrorlight'},
+    {name = {'un.property-name-dusktide-longhouse'}, price = 1000, n = 16, shape = 'long', water = true, solar = 0.5, theme = 'dusktide'},
+    {name = {'un.property-name-sunstone-manor'}, price = 5000, n = 32, shape = 'square', water = false, solar = 2, theme = 'sunstone'},
+    {name = {'un.property-name-bluewater-manor'}, price = 5000, n = 32, shape = 'long', water = true, solar = 1, theme = 'bluewater'},
+    {name = {'un.property-name-skyvault-estate'}, price = 20000, n = 64, shape = 'square', water = true, solar = 2, theme = 'skyvault'},
 }
 
 M.ship_life_hours = 50

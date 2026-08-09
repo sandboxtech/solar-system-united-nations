@@ -10,7 +10,12 @@ local surfaces = require('scripts.surfaces')
 
 local M = {}
 
+local HUD_FLOW_NAME = 'un_hud_flow'
+local HUD_TITLE_NAME = 'un_hud_title'
 local BUTTON_NAME = 'un_main_button'
+local HUD_TRAVEL_NAME = 'un_hud_travel'
+local HUD_PROPERTY_NAME = 'un_hud_property'
+local HUD_EXPERIENCE_NAME = 'un_hud_experience'
 local FRAME_NAME = 'un_main_frame'
 local CLOSE_NAME = 'un_main_close'
 local CONTENT_NAME = 'un_main_content'
@@ -56,21 +61,42 @@ end
 
 function M.ensure_button(player)
     local root = player.gui.top
-    local button = root[BUTTON_NAME]
-    -- Migrate the old caption button in existing saves.
-    if button and button.valid and button.type ~= 'sprite-button' then
-        button.destroy()
-        button = nil
-    end
-    if not (button and button.valid) then
-        button = root.add{
+    local old = root[BUTTON_NAME]
+    if old and old.valid then old.destroy() end
+
+    local hud = root[HUD_FLOW_NAME]
+    if hud and hud.valid then return hud end
+    hud = root.add{
+        type = 'flow',
+        name = HUD_FLOW_NAME,
+        direction = 'horizontal',
+    }
+    hud.style.vertical_align = 'center'
+    local title = hud.add{
+        type = 'label',
+        name = HUD_TITLE_NAME,
+        caption = {'un.hud-title'},
+    }
+    title.style.font = 'default-large-bold'
+    title.style.right_margin = 8
+
+    local buttons = {
+        {BUTTON_NAME, 'item/coin', {'un.hud-ubi-tooltip'}},
+        {HUD_TRAVEL_NAME, 'item/linked-chest', {'un.hud-travel-tooltip'}},
+        {HUD_PROPERTY_NAME, 'item/stone-brick', {'un.hud-property-tooltip'}},
+        {HUD_EXPERIENCE_NAME, 'item/automation-science-pack', {'un.hud-experience-tooltip'}},
+    }
+    for _, spec in ipairs(buttons) do
+        local button = hud.add{
             type = 'sprite-button',
-            name = BUTTON_NAME,
-            sprite = 'item/coin',
-            tooltip = {'un.main-button-tooltip'},
+            name = spec[1],
+            sprite = spec[2],
+            tooltip = spec[3],
         }
+        button.style.width = 40
+        button.style.height = 40
     end
-    return button
+    return hud
 end
 
 local function property_price_name(property_id)
@@ -418,7 +444,7 @@ local function close_frame(player)
     if frame and frame.valid then frame.destroy() end
 end
 
-local function open_frame(player)
+local function open_frame(player, initial_page)
     close_frame(player)
     local frame = player.gui.screen.add{
         type = 'frame',
@@ -462,7 +488,7 @@ local function open_frame(player)
     }
     content.style.horizontally_stretchable = true
 
-    render_page(player, 'ubi')
+    render_page(player, initial_page or 'ubi')
     frame.force_auto_center()
     player.opened = frame
     open_players[player.index] = true
@@ -502,8 +528,13 @@ events.on(defines.events.on_gui_click, function(event)
     if not player then return end
     if element.name == BUTTON_NAME then
         M.ensure_button(player)
-        local frame = player.gui.screen[FRAME_NAME]
-        if frame and frame.valid then close_frame(player) else open_frame(player) end
+        open_frame(player, 'ubi')
+    elseif element.name == HUD_TRAVEL_NAME then
+        open_frame(player, 'travel')
+    elseif element.name == HUD_PROPERTY_NAME then
+        open_frame(player, 'property')
+    elseif element.name == HUD_EXPERIENCE_NAME then
+        open_frame(player, 'experience')
     elseif element.name == CLOSE_NAME then
         close_frame(player)
     elseif element.name == NAV_UBI_NAME then
