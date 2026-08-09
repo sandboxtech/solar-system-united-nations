@@ -40,6 +40,55 @@ local function next_available_property_id()
     return id
 end
 
+local function next_owner_property_number(owner_index, excluded_property_id)
+    local used = {}
+    for _, candidate in pairs(storage.properties) do
+        if candidate.status == 'active'
+                and (not candidate.expires_tick
+                    or candidate.expires_tick > game.tick)
+                and candidate.owner_index == owner_index
+                and candidate.id ~= excluded_property_id
+                and is_positive_integer(candidate.owner_property_number) then
+            used[candidate.owner_property_number] = true
+        end
+    end
+    local number = 1
+    while used[number] do number = number + 1 end
+    return number
+end
+
+local function assign_owner(property, owner_index)
+    if property.owner_index == owner_index then
+        if owner_index and not is_positive_integer(
+            property.owner_property_number
+        ) then
+            property.owner_property_number = next_owner_property_number(
+                owner_index,
+                property.id
+            )
+        end
+        return
+    end
+    property.owner_index = owner_index
+    property.owner_property_number = owner_index
+        and next_owner_property_number(owner_index, property.id) or nil
+end
+
+local function next_planet_property_number(planet_name, excluded_property_id)
+    local used = {}
+    for _, candidate in pairs(storage.properties) do
+        if candidate.permanent
+                and candidate.sample_planet == planet_name
+                and candidate.id ~= excluded_property_id
+                and is_positive_integer(candidate.planet_property_number) then
+            used[candidate.planet_property_number] = true
+        end
+    end
+    local number = 1
+    while used[number] do number = number + 1 end
+    return number
+end
+
 function M.display_name(property)
     if property.custom_name then return property.custom_name end
     if not property.owner_index then
@@ -47,7 +96,10 @@ function M.display_name(property)
             return {
                 '',
                 '[planet=' .. property.sample_planet .. '] ',
-                {'un.property-surface-vacant', property.id},
+                {
+                    'un.property-surface-vacant',
+                    property.planet_property_number,
+                },
             }
         end
         return {'un.property-surface-vacant', property.id}
@@ -57,7 +109,11 @@ function M.display_name(property)
     local owner_name = owner and owner.name
         or account and account.name
         or ('#' .. property.owner_index)
-    return {'un.property-surface-owned', owner_name, property.id}
+    return {
+        'un.property-surface-owned',
+        owner_name,
+        property.owner_property_number,
+    }
 end
 
 local function property_name_position(property)
@@ -114,6 +170,7 @@ local function request_property_name_translation(property, player)
         property_id = property.id,
         player_index = player.index,
         owner_token = property.owner_index or 0,
+        owner_property_number = property.owner_property_number or 0,
         created_tick = property.created_tick,
     }
     return true
@@ -261,7 +318,8 @@ local function create(spec)
         surface_name = surface.name,
         surface_index = surface.index,
         status = 'active',
-        owner_index = spec.owner_index,
+        owner_index = nil,
+        owner_property_number = nil,
         base_price = price,
         price_at_tick = game.tick,
         decay_ticks = decay_hours * config.ticks_per_hour,
@@ -277,8 +335,11 @@ local function create(spec)
         expires_tick = expires_tick,
         lifetime_hours = lifetime_hours,
         permanent = permanent,
+        planet_property_number = permanent
+            and next_planet_property_number(sample_planet, id) or nil,
         system_key = spec.system_key,
     }
+    assign_owner(property, spec.owner_index)
     storage.properties[id] = property
     sync_surface_visibility(property)
     ensure_property_name_rendering(property, property_rendering_fallback(property))
@@ -543,7 +604,7 @@ function M.release_owner(player_index)
     local changed = 0
     for _, property in ipairs(M.list()) do
         if property.owner_index == player_index then
-            property.owner_index = nil
+            assign_owner(property, nil)
             property.owner_cleanup_tick = game.tick
             ensure_linked_chests(property)
             sync_surface_visibility(property)
@@ -595,8 +656,7 @@ function M.buy(player, property_id, quoted_price)
     if not valid_surface(property) then return false, 'surface-missing' end
     local price = M.current_price(property)
     local seller_name = M.owner_name(property)
-    local transaction_name = property.custom_name
-        or {'un.property-default-name', property.id}
+    local transaction_name = M.display_name(property)
     if quoted_price and price > quoted_price then return false, 'price-increased', price end
     local payout = property.owner_index
         and math.floor(price * (1 - M.transaction_tax_rate(property))) or 0
@@ -610,7 +670,7 @@ function M.buy(player, property_id, quoted_price)
     )
     if not ok then return false, err end
 
-    property.owner_index = player.index
+    assign_owner(property, player.index)
     sync_surface_visibility(property)
     property.base_price = price
     property.price_at_tick = game.tick + property.decay_ticks
@@ -893,6 +953,10 @@ events.on(defines.events.on_string_translated, function(event)
     local owner_token = request.owner_token
     if owner_token == nil then owner_token = request.owner_index or 0 end
     if (property.owner_index or 0) ~= owner_token then return end
+    if (property.owner_property_number or 0)
+            ~= (request.owner_property_number or 0) then
+        return
+    end
     if type(property.custom_name) == 'string' then return end
     local player_index = request.player_index or request.owner_index
     if event.player_index ~= player_index or not event.translated then return end

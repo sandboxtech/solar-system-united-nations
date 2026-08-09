@@ -48,6 +48,8 @@ local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local SHIP_TABLE_NAME = 'un_ship_table'
 local PROPERTY_ACTIONS_NAME = 'un_property_actions'
+local PROPERTY_SORT_FLOW_NAME = 'un_property_sort_flow'
+local PROPERTY_SORT_NAME = 'un_property_sort'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_PLANET_NAME = 'un_property_build_planet'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
@@ -86,6 +88,13 @@ local ADMIN_NUMBER_SETTINGS = {
 -- game.tick only when queried or claimed.
 local open_players = {}
 
+local PROPERTY_SORT_OPTIONS = {
+    {'un.property-sort-expiry-ascending'},
+    {'un.property-sort-expiry-descending'},
+    {'un.property-sort-price-ascending'},
+    {'un.property-sort-price-descending'},
+}
+
 local function update_home_button(player, hud)
     hud = hud or player.gui.top[HUD_FLOW_NAME]
     local button = hud and hud.valid and hud[HUD_LAST_PROPERTY_NAME]
@@ -105,6 +114,32 @@ local function format_integer(value)
     local reversed = digits:reverse():gsub('(%d%d%d)', '%1,')
     local grouped = reversed:reverse():gsub('^,', '')
     return sign .. grouped
+end
+
+local function sorted_players(viewer_index)
+    local result = {}
+    for _, player in pairs(game.players) do result[#result + 1] = player end
+    table.sort(result, function(a, b)
+        local a_self = a.index == viewer_index
+        local b_self = b.index == viewer_index
+        if a_self ~= b_self then return a_self end
+        if a.connected ~= b.connected then return a.connected end
+        if not a.connected then
+            local a_account = storage.players[a.index]
+            local b_account = storage.players[b.index]
+            local a_seen = a_account and a_account.last_seen_tick
+                or a.last_online or 0
+            local b_seen = b_account and b_account.last_seen_tick
+                or b.last_online or 0
+            if a_seen ~= b_seen then return a_seen > b_seen end
+        end
+        local a_name = string.lower(a.name)
+        local b_name = string.lower(b.name)
+        if a_name ~= b_name then return a_name < b_name end
+        if a.name ~= b.name then return a.name < b.name end
+        return a.index < b.index
+    end)
+    return result
 end
 
 function M.ensure_button(player)
@@ -199,14 +234,22 @@ local function planet_traits_name(name)
     return 'un_planet_traits_' .. name
 end
 
-local function planet_traits_caption(item)
-    local text = {}
-    for index, trait_id in ipairs(item.traits) do
-        if index > 1 then text[#text + 1] = '\n' end
-        text[#text + 1] = {'un.planet-trait-' .. trait_id}
+local function render_planet_traits(container, item)
+    local signature = table.concat(item.traits, '|')
+    if container.tags.trait_signature == signature then return end
+    container.clear()
+    if #item.traits == 0 then
+        container.add{type = 'label', caption = {'un.planet-traits-pending'}}
+    else
+        for _, trait_id in ipairs(item.traits) do
+            container.add{
+                type = 'label',
+                caption = {'un.planet-trait-name-' .. trait_id},
+                tooltip = {'un.planet-trait-' .. trait_id},
+            }
+        end
     end
-    return #text > 0 and {'', table.unpack(text)}
-        or {'un.planet-traits-pending'}
+    container.tags = {trait_signature = signature}
 end
 
 local function admin_setting_input_name(key)
@@ -241,6 +284,32 @@ local function set_frame_state(frame, page, property_revision)
     frame.tags = tags
 end
 
+local function property_sort_index(frame)
+    local index = tonumber(frame.tags.property_sort) or 1
+    if index < 1 or index > #PROPERTY_SORT_OPTIONS then return 1 end
+    return math.floor(index)
+end
+
+local function sort_properties(property_list, sort_index)
+    local values = {}
+    local by_expiry = sort_index == 1 or sort_index == 2
+    for _, property in ipairs(property_list) do
+        values[property.id] = by_expiry
+            and (property.expires_tick or math.huge)
+            or properties.current_price(property)
+    end
+    local descending = sort_index == 2 or sort_index == 4
+    table.sort(property_list, function(a, b)
+        local a_value = values[a.id]
+        local b_value = values[b.id]
+        if a_value ~= b_value then
+            if descending then return a_value > b_value end
+            return a_value < b_value
+        end
+        return a.id < b.id
+    end)
+end
+
 local function render_property_access_section(player, content)
     local flow = content.add{
         type = 'flow',
@@ -264,6 +333,8 @@ local function render_property_table(player, frame, content)
     if old_actions and old_actions.valid then old_actions.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
     if old_access and old_access.valid then old_access.destroy() end
+    local old_sort = content[PROPERTY_SORT_FLOW_NAME]
+    if old_sort and old_sort.valid then old_sort.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
     local selected = frame.tags.property_planet
@@ -274,6 +345,8 @@ local function render_property_table(player, frame, content)
         frame.tags = tags
     end
     local property_list = properties.list(selected)
+    local sort_index = property_sort_index(frame)
+    sort_properties(property_list, sort_index)
     local actions = content.add{
         type = 'tabbed-pane',
         name = PROPERTY_ACTIONS_NAME,
@@ -293,6 +366,19 @@ local function render_property_table(player, frame, content)
         if planet_name == selected then selected_index = index end
     end
     actions.selected_tab_index = selected_index
+    local sort_flow = content.add{
+        type = 'flow',
+        name = PROPERTY_SORT_FLOW_NAME,
+        direction = 'horizontal',
+    }
+    sort_flow.style.vertical_align = 'center'
+    sort_flow.add{type = 'label', caption = {'un.property-sort-label'}}
+    sort_flow.add{
+        type = 'drop-down',
+        name = PROPERTY_SORT_NAME,
+        items = PROPERTY_SORT_OPTIONS,
+        selected_index = sort_index,
+    }
     if properties.owned_count(player.index) > 0 then
         render_property_access_section(player, content)
     end
@@ -356,6 +442,10 @@ local function render_property_table(player, frame, content)
         }
     end
     set_frame_state(frame, 'property', storage.property_revision or 0)
+    local tags = frame.tags
+    tags.property_sort = sort_index
+    tags.property_sort_bucket = math.floor(game.tick / config.ticks_per_minute)
+    frame.tags = tags
 end
 
 local function property_build_planet(form)
@@ -511,13 +601,13 @@ local function render_ubi_section(content)
         name = UBI_PROGRESS_NAME,
         value = 0,
     }
-    progress.style.horizontally_stretchable = true
+    progress.style.width = 360
     local claim = content.add{
         type = 'button',
         name = UBI_CLAIM_NAME,
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
     }
-    claim.style.horizontally_stretchable = true
+    claim.style.width = 360
 end
 
 local function render_suicide_section(content)
@@ -659,13 +749,12 @@ local function render_planets_page(frame, content)
     for _, item in ipairs(disasters.list()) do
         list.add{type = 'label', caption = planet_label(item.name)}
         list.add{type = 'label', name = planet_countdown_name(item.name)}
-        local label = list.add{
-            type = 'label',
+        local traits = list.add{
+            type = 'flow',
             name = planet_traits_name(item.name),
-            caption = planet_traits_caption(item),
+            direction = 'vertical',
         }
-        label.style.single_line = false
-        label.style.maximal_width = 440
+        render_planet_traits(traits, item)
     end
     local note = content.add{type = 'label', caption = {'un.planet-page-note'}}
     note.style.single_line = false
@@ -790,7 +879,7 @@ local function render_admin_page(player, frame, content)
     player_table.add{type = 'label', caption = {'un.player-column-name'}}
     player_table.add{type = 'label', caption = {'un.credit-label'}}
     player_table.add{type = 'label', caption = {'un.admin-operation'}}
-    for _, listed_player in pairs(game.players) do
+    for _, listed_player in ipairs(sorted_players(player.index)) do
         player_table.add{type = 'label', caption = listed_player.name}
         local balance = player_table.add{
             type = 'textfield',
@@ -1033,14 +1122,7 @@ local function render_players_page(viewer, frame, content)
     list.add{type = 'label', caption = {'un.player-column-locale'}}
     list.add{type = 'label', caption = {'un.player-column-friend'}}
 
-    local players = {}
-    for _, player in pairs(game.players) do players[#players + 1] = player end
-    table.sort(players, function(a, b)
-        if a.connected ~= b.connected then return a.connected end
-        if a.name ~= b.name then return a.name < b.name end
-        return a.index < b.index
-    end)
-    for _, player in ipairs(players) do
+    for _, player in ipairs(sorted_players(viewer.index)) do
         list.add{type = 'label', name = player_element_name('status', player.index)}
         list.add{type = 'label', caption = player.name}
         list.add{type = 'label', name = player_element_name('online', player.index)}
@@ -1300,7 +1382,7 @@ local function update_frame(player)
                 end
                 local traits = list[planet_traits_name(item.name)]
                 if traits and traits.valid then
-                    traits.caption = planet_traits_caption(item)
+                    render_planet_traits(traits, item)
                 end
             end
         end
@@ -1327,7 +1409,12 @@ local function update_frame(player)
             end
         end
     elseif page == 'property' then
-        if (frame.tags.property_revision or -1) ~= (storage.property_revision or 0) then
+        local sort_index = property_sort_index(frame)
+        local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
+        local price_sort_changed = sort_index >= 3
+            and frame.tags.property_sort_bucket ~= sort_bucket
+        if (frame.tags.property_revision or -1)
+                ~= (storage.property_revision or 0) or price_sort_changed then
             render_property_table(player, frame, content)
         else
             local property_table = content[PROPERTY_TABLE_NAME]
@@ -1751,14 +1838,23 @@ end)
 events.on(defines.events.on_gui_selection_state_changed, function(event)
     local element = event.element
     if not (element and element.valid) then return end
+    local player = game.get_player(event.player_index)
+    local frame = player and player.gui.screen[FRAME_NAME]
+    local content = frame and frame.valid and frame[CONTENT_NAME]
+    if element.name == PROPERTY_SORT_NAME then
+        if not (player and content and content.valid) then return end
+        local tags = frame.tags
+        tags.property_sort = element.selected_index
+        frame.tags = tags
+        render_property_table(player, frame, content)
+        update_frame(player)
+        return
+    end
     if element.name ~= PROPERTY_BUILD_PLANET_NAME
             and element.name ~= PROPERTY_BUILD_LIFETIME_NAME
             and element.name ~= PROPERTY_BUILD_SIZE_NAME then
         return
     end
-    local player = game.get_player(event.player_index)
-    local frame = player and player.gui.screen[FRAME_NAME]
-    local content = frame and frame.valid and frame[CONTENT_NAME]
     local form = content and content.valid and content[PROPERTY_BUILD_FORM_NAME]
     local button = form and form.valid and form[PROPERTY_BUILD_BUTTON_NAME]
     if not (player and button and button.valid) then return end
