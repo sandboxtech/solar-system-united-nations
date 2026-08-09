@@ -214,7 +214,7 @@ local function safe_position(surface, center)
     return surface.find_non_colliding_position('character', center, 64, 1)
 end
 
-local function can_start_public_travel(surface)
+function M.can_start_public_travel(surface)
     if not (surface and surface.valid) then return false end
     if public_planets[surface.name] then return true end
     if surface.name == config.hospice_surface_name then return true end
@@ -233,7 +233,7 @@ function M.teleport_near(player, surface, center, allow_vehicle)
 end
 
 function M.teleport(player, surface)
-    if not can_start_public_travel(player.physical_surface) then
+    if not M.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
     end
     return M.teleport_near(player, surface, {0, 0}, false)
@@ -245,7 +245,7 @@ end
 
 function M.to_planet(player)
     local source = player.physical_surface
-    if not can_start_public_travel(source) then
+    if not M.can_start_public_travel(source) then
         return false, 'travel-restricted'
     end
     local dropoff = linked_inventory.get_active_dropoff(player.index)

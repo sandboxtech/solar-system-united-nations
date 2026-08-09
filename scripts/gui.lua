@@ -29,6 +29,7 @@ local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLAYERS_NAME = 'un_nav_players'
 local HELP_MODE_NAME = 'un_help_mode'
 local HELP_DETAILS_NAME = 'un_help_details'
+local PROPERTY_ACCESS_NAME = 'un_property_access'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
@@ -123,6 +124,34 @@ local function property_price_name(property_id)
     return 'un_property_price_' .. tostring(property_id)
 end
 
+local function property_buy_name(property_id)
+    return 'un_property_buy_' .. tostring(property_id)
+end
+
+local function property_enter_name(property_id)
+    return 'un_property_enter_' .. tostring(property_id)
+end
+
+local function disabled_tooltip(action, err)
+    if err == 'surface-missing' or err == 'missing' then
+        return {'un.property-error-unavailable'}
+    end
+    if err == 'insufficient-credit' then return {'un.property-error-credit'} end
+    if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
+    if err == 'travel-restricted' then return {'un.travel-restricted'} end
+    if err == 'renew-limit' then return {'un.property-error-renew-limit'} end
+    if action == 'buy' and err == 'already-owner' then
+        return {'un.property-buy-disabled-owner'}
+    end
+    if action == 'enter' and err == 'not-owner' then
+        return {'un.property-enter-disabled-private'}
+    end
+    if action == 'renew' and err == 'not-owner' then
+        return {'un.property-renew-disabled-owner'}
+    end
+    return {'un.property-error-unavailable'}
+end
+
 local function experience_progress_name(index)
     return 'un_experience_progress_' .. tostring(index)
 end
@@ -161,8 +190,8 @@ local function render_property_table(player, frame, content)
     list.add{type = 'label', caption = {'un.property-column-name'}}
     list.add{type = 'label', caption = {'un.property-column-owner'}}
     list.add{type = 'label', caption = {'un.property-column-price'}}
-    list.add{type = 'label', caption = ''}
-    list.add{type = 'label', caption = ''}
+    list.add{type = 'label', caption = {'un.property-column-buy-renew'}}
+    list.add{type = 'label', caption = {'un.property-enter'}}
 
     for _, property in ipairs(properties.list()) do
         list.add{
@@ -180,43 +209,39 @@ local function render_property_table(player, frame, content)
             name = property_price_name(property.id),
             caption = format_integer(properties.current_price(property)),
         }
-        if property.owner_index == player.index then
-            local enter = list.add{
-                type = 'sprite-button',
-                sprite = 'utility/enter',
-                tooltip = {'un.property-enter'},
-                tags = {action = 'property-enter', property_id = property.id},
-            }
-            enter.style.width = 32
-            enter.style.height = 32
-            list.add{
-                type = 'button',
-                caption = {
-                    'un.property-renew',
-                    format_integer(properties.renew_fee(property)),
-                },
-                tags = {action = 'property-renew', property_id = property.id},
-            }
+        local owns = property.owner_index == player.index
+        local can_buy, buy_error
+        if owns then
+            can_buy, buy_error = properties.renew_availability(player, property)
         else
-            list.add{
-                type = 'button',
-                caption = {'un.property-buy'},
-                tags = {action = 'property-buy', property_id = property.id},
-            }
-            if player.admin or social.are_mutual(player.index, property.owner_index) then
-                local enter = list.add{
-                    type = 'sprite-button',
-                    sprite = 'utility/enter',
-                    tooltip = player.admin and {'un.property-enter-admin'}
-                        or {'un.property-enter-friend'},
-                    tags = {action = 'property-enter', property_id = property.id},
-                }
-                enter.style.width = 32
-                enter.style.height = 32
-            else
-                list.add{type = 'label', caption = ''}
-            end
+            can_buy, buy_error = properties.buy_availability(player, property)
         end
+        list.add{
+            type = 'button',
+            name = property_buy_name(property.id),
+            caption = owns and {
+                'un.property-renew',
+                format_integer(properties.renew_fee(property)),
+            } or {'un.property-buy'},
+            tooltip = can_buy and (owns and {'un.property-renew-tooltip'}
+                or {'un.property-buy'})
+                or disabled_tooltip(owns and 'renew' or 'buy', buy_error),
+            enabled = can_buy,
+            tags = {
+                action = owns and 'property-renew' or 'property-buy',
+                property_id = property.id,
+            },
+        }
+        local can_enter, enter_error = properties.enter_availability(player, property)
+        list.add{
+            type = 'button',
+            name = property_enter_name(property.id),
+            caption = {'un.property-enter'},
+            tooltip = can_enter and {'un.property-enter'}
+                or disabled_tooltip('enter', enter_error),
+            enabled = can_enter,
+            tags = {action = 'property-enter', property_id = property.id},
+        }
     end
     set_frame_state(frame, 'property', storage.property_revision or 0)
 end
@@ -242,6 +267,20 @@ local function render_ubi_section(content)
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
     }
     claim.style.horizontally_stretchable = true
+end
+
+local function render_property_access_section(player, content)
+    local flow = content.add{type = 'flow', direction = 'horizontal'}
+    flow.style.vertical_align = 'center'
+    flow.add{type = 'label', caption = {'un.property-access-label'}}
+    flow.add{
+        type = 'switch',
+        name = PROPERTY_ACCESS_NAME,
+        left_label_caption = {'un.property-access-private'},
+        right_label_caption = {'un.property-access-public'},
+        switch_state = properties.all_open(player.index) and 'right' or 'left',
+        allow_none_state = false,
+    }
 end
 
 local function render_ship_section(content)
@@ -293,8 +332,10 @@ local function render_experience_section(content)
     content.add{type = 'label', name = EXPERIENCE_SUMMARY_NAME}
 end
 
-local function render_overview_page(frame, content)
+local function render_overview_page(player, frame, content)
     render_ubi_section(content)
+    content.add{type = 'line'}
+    render_property_access_section(player, content)
     content.add{type = 'line'}
     render_ship_section(content)
     content.add{type = 'line'}
@@ -499,7 +540,7 @@ local function render_page(player, page)
     if page == 'help' then
         render_help_page(frame, content)
     elseif page == 'overview' then
-        render_overview_page(frame, content)
+        render_overview_page(player, frame, content)
     elseif page == 'property' then
         render_property_table(player, frame, content)
     elseif page == 'players' then

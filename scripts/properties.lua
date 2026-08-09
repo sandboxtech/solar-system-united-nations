@@ -306,9 +306,67 @@ function M.owner_name(property)
     return account and account.name or ('#' .. property.owner_index)
 end
 
+function M.all_open(player_index)
+    if not player_index then return false end
+    return economy.ensure_account(player_index).all_properties_open == true
+end
+
+function M.set_all_open(player_index, enabled)
+    local account = economy.ensure_account(player_index)
+    local value = enabled == true
+    if account.all_properties_open == value then return false end
+    account.all_properties_open = value
+    bump_revision()
+    return true
+end
+
+local function valid_surface(property)
+    local surface = property and game.surfaces[property.surface_name]
+    return surface and surface.valid or false
+end
+
+function M.buy_availability(player, property)
+    if not property then return false, 'missing' end
+    if not valid_surface(property) then return false, 'surface-missing' end
+    if property.owner_index == player.index then return false, 'already-owner' end
+    if economy.get_balance(player.index) < M.current_price(property) then
+        return false, 'insufficient-credit'
+    end
+    return true
+end
+
+function M.enter_availability(player, property)
+    if not property then return false, 'missing' end
+    if not valid_surface(property) then return false, 'surface-missing' end
+    if player.admin then return true end
+    if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
+    if not surfaces.can_start_public_travel(player.physical_surface) then
+        return false, 'travel-restricted'
+    end
+    if property.owner_index == player.index then return true end
+    if M.all_open(property.owner_index) then return true end
+    if social.are_mutual(player.index, property.owner_index) then return true end
+    return false, 'not-owner'
+end
+
+function M.renew_availability(player, property)
+    if not property then return false, 'missing' end
+    if not valid_surface(property) then return false, 'surface-missing' end
+    if property.owner_index ~= player.index then return false, 'not-owner' end
+    if property.price_at_tick + property.decay_ticks
+            > game.tick + config.property_max_future_ticks then
+        return false, 'renew-limit'
+    end
+    if economy.get_balance(player.index) < M.renew_fee(property) then
+        return false, 'insufficient-credit'
+    end
+    return true
+end
+
 function M.buy(player, property_id, quoted_price)
     local property = M.get(property_id)
     if not property then return false, 'missing' end
+    if not valid_surface(property) then return false, 'surface-missing' end
     if property.owner_index == player.index then return false, 'already-owner' end
 
     local price = M.current_price(property)
@@ -343,6 +401,7 @@ end
 function M.renew(player, property_id)
     local property = M.get(property_id)
     if not property then return false, 'missing' end
+    if not valid_surface(property) then return false, 'surface-missing' end
     if property.owner_index ~= player.index then return false, 'not-owner' end
     local next_tick = property.price_at_tick + property.decay_ticks
     if next_tick > game.tick + config.property_max_future_ticks then
@@ -360,11 +419,8 @@ end
 function M.enter(player, property_id)
     local property = M.get(property_id)
     if not property then return false, 'missing' end
-    if property.owner_index ~= player.index
-            and not player.admin
-            and not social.are_mutual(player.index, property.owner_index) then
-        return false, 'not-owner'
-    end
+    local allowed, availability_error = M.enter_availability(player, property)
+    if not allowed then return false, availability_error end
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
     ensure_linked_chests(property)
