@@ -1259,11 +1259,6 @@ local function render_help_page(player, frame, content, mode)
     }
     title.style.font = 'default-large-bold'
     local modes = content.add{type = 'flow', direction = 'horizontal'}
-    local story = modes.add{
-        type = 'button',
-        name = HELP_STORY_NAME,
-        caption = {'un.help-mode-story'},
-    }
     local brief = modes.add{
         type = 'button',
         name = HELP_BRIEF_NAME,
@@ -1278,6 +1273,11 @@ local function render_help_page(player, frame, content, mode)
         type = 'button',
         name = HELP_FULL_NAME,
         caption = {'un.help-mode-full'},
+    }
+    local story = modes.add{
+        type = 'button',
+        name = HELP_STORY_NAME,
+        caption = {'un.help-mode-story'},
     }
     local admin
     if player.admin then
