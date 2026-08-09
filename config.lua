@@ -16,7 +16,7 @@ M.property_price_cap = 1000000000
 
 M.initial_credit = 0
 M.ubi_credit_per_second = 1
-M.ubi_max_seconds = 100000
+M.ubi_max_seconds = 30 * 60 * 60
 M.ledger_record_limit = 2000
 M.gui_refresh_ticks = M.ticks_per_second
 M.friend_limit = 10
