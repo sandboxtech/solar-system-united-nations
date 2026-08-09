@@ -5,7 +5,7 @@
   "author": "虚无群友",
   "contact": "Q群293280221",
   "homepage": "https://github.com/sandboxtech/solar-system-united-nations",
-  "description": "在五颗周期重建的公共星球上开发，在各星球的联合国难民营与限时私人房产之间经营自己的太空生活。\n\n· 低保按游戏时间积累，离线也有效，最多保存 30 小时。\n· 在 [planet=nauvis] 手动放置木箱建立个人关联库存；投入科技瓶可换取金币并累计经验。\n· 玩家消耗对应星球的科技瓶经验，选择 30/120/480 小时寿命与三档尺寸建造房产。\n· 房产复制所属星球的自然地貌，可交易或向好友开放；到期撤离玩家并自动删除。\n· 玩家可直接转账；总等级决定新飞船宽度、寿命及房产交易税率。\n· 五颗公共星球以随机资源、地貌、气候和昼夜换种重建，科技进度保留。\n\n支持简体中文与英文。交流群 293280221。\n\nUnited Nations of Sol is a Space Age multiplayer scenario with lazy offline coin UBI, science-pack experience, player-built limited-life properties using planet-specific science experience, level-scaled ships, direct transfers, and randomized public-planet resets that preserve technology. The interface supports Simplified Chinese and English.",
+  "description": "在五颗周期重建的公共星球上开发，在各星球的联合国难民营与限时私人房产之间经营自己的太空生活。\n\n· 低保按游戏时间积累，离线也有效，最多保存 30 小时。\n· 在 [planet=nauvis] 手动放置木箱建立个人关联库存；所有科技瓶均可按每瓶 1 金币出售并累计经验。\n· 玩家消耗对应星球的科技瓶经验与等额金币，选择 30/120/480 小时寿命与三档尺寸建造房产；每次成功建造后冷却 20 小时。\n· 房产复制所属星球的自然地貌，可交易或向好友开放；到期撤离玩家并自动删除。\n· 玩家可直接转账；总等级决定新飞船宽度、寿命及房产交易税率。\n· 五颗公共星球以随机资源、地貌、气候、昼夜和每轮三个特色词条换种重建，科技进度保留。\n\n支持简体中文与英文。交流群 293280221。\n\nUnited Nations of Sol is a Space Age multiplayer scenario with lazy offline coin UBI, science packs selling for one coin each, player-built limited-life properties that spend planet-specific experience plus equal coins and use a 20-hour build cooldown, level-scaled ships, direct transfers, and randomized public-planet resets with three traits per round. Technology is preserved; the interface supports Simplified Chinese and English.",
   "dependencies": [
     "base >= 2.0.0",
     "elevated-rails >= 2.0.0",

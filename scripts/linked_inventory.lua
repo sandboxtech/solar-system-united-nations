@@ -160,7 +160,6 @@ local function appraise_and_remove(inventory)
     for _, item in ipairs(entries) do
         local base = config.science_pack_credit[item.name]
         if base then
-            local multiplier = config.quality_credit_multiplier[item.quality] or 1
             local removed = inventory.remove{
                 name = item.name,
                 count = item.count,
@@ -173,7 +172,7 @@ local function appraise_and_remove(inventory)
                     count = removed,
                 }
                 total_items = total_items + removed
-                total_credit = total_credit + removed * base * multiplier
+                total_credit = total_credit + removed * base
             end
         end
     end

@@ -55,6 +55,9 @@ local PROPERTY_BUILD_LIFETIME_NAME = 'un_property_build_lifetime'
 local PROPERTY_BUILD_SIZE_NAME = 'un_property_build_size'
 local PROPERTY_BUILD_COST_NAME = 'un_property_build_cost'
 local PROPERTY_BUILD_AVAILABLE_NAME = 'un_property_build_available'
+local PROPERTY_BUILD_COIN_COST_NAME = 'un_property_build_coin_cost'
+local PROPERTY_BUILD_COIN_AVAILABLE_NAME = 'un_property_build_coin_available'
+local PROPERTY_BUILD_COOLDOWN_NAME = 'un_property_build_cooldown'
 local PROPERTY_BUILD_BUTTON_NAME = 'un_property_build_button'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
@@ -190,6 +193,20 @@ end
 
 local function planet_countdown_name(name)
     return 'un_planet_countdown_' .. name
+end
+
+local function planet_traits_name(name)
+    return 'un_planet_traits_' .. name
+end
+
+local function planet_traits_caption(item)
+    local text = {}
+    for index, trait_id in ipairs(item.traits) do
+        if index > 1 then text[#text + 1] = '\n' end
+        text[#text + 1] = {'un.planet-trait-' .. trait_id}
+    end
+    return #text > 0 and {'', table.unpack(text)}
+        or {'un.planet-traits-pending'}
 end
 
 local function admin_setting_input_name(key)
@@ -353,9 +370,13 @@ local function update_property_build_page(player, content)
     local size = form[PROPERTY_BUILD_SIZE_NAME]
     local cost_label = form[PROPERTY_BUILD_COST_NAME]
     local available_label = form[PROPERTY_BUILD_AVAILABLE_NAME]
+    local coin_cost_label = form[PROPERTY_BUILD_COIN_COST_NAME]
+    local coin_available_label = form[PROPERTY_BUILD_COIN_AVAILABLE_NAME]
+    local cooldown_label = form[PROPERTY_BUILD_COOLDOWN_NAME]
     local button = form[PROPERTY_BUILD_BUTTON_NAME]
     if not (planet_name and lifetime and size and cost_label
-            and available_label and button) then return end
+            and available_label and coin_cost_label and coin_available_label
+            and cooldown_label and button) then return end
     local can_build, err, requirement = properties.build_availability(
         player,
         planet_name,
@@ -376,9 +397,18 @@ local function update_property_build_page(player, content)
         pack_name,
         format_integer(experience.amount(player.index, requirement.pack)),
     }
+    coin_cost_label.caption = {'un.coin-amount',
+        format_integer(requirement.coin_cost)}
+    coin_available_label.caption = {'un.coin-amount',
+        format_integer(economy.get_balance(player.index))}
+    local cooldown = properties.build_cooldown_left_ticks(player.index)
+    cooldown_label.caption = cooldown > 0
+        and format_countdown(cooldown) or {'un.property-build-ready'}
     button.enabled = can_build
     button.tooltip = can_build and {'un.property-build'}
+        or err == 'build-cooldown' and {'un.property-build-cooldown-active'}
         or err == 'planet-closed' and {'un.travel-planet-closed'}
+        or err == 'insufficient-credit' and {'un.property-error-credit'}
         or {'un.property-build-insufficient-experience'}
     if button.tags.action ~= 'property-build-confirm' then
         button.caption = {'un.property-build'}
@@ -445,6 +475,12 @@ local function render_property_build_page(player, frame, content)
     form.add{type = 'label', name = PROPERTY_BUILD_COST_NAME}
     form.add{type = 'label', caption = {'un.property-build-owned'}}
     form.add{type = 'label', name = PROPERTY_BUILD_AVAILABLE_NAME}
+    form.add{type = 'label', caption = {'un.property-build-coin-required'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_COIN_COST_NAME}
+    form.add{type = 'label', caption = {'un.property-build-coin-owned'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_COIN_AVAILABLE_NAME}
+    form.add{type = 'label', caption = {'un.property-build-cooldown'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_COOLDOWN_NAME}
     form.add{type = 'label', caption = ''}
     form.add{
         type = 'button',
@@ -609,13 +645,21 @@ local function render_planets_page(frame, content)
     local list = content.add{
         type = 'table',
         name = PLANET_TABLE_NAME,
-        column_count = 2,
+        column_count = 3,
     }
     list.add{type = 'label', caption = {'un.planet-column-name'}}
     list.add{type = 'label', caption = {'un.planet-column-countdown'}}
+    list.add{type = 'label', caption = {'un.planet-column-traits'}}
     for _, item in ipairs(disasters.list()) do
         list.add{type = 'label', caption = planet_label(item.name)}
         list.add{type = 'label', name = planet_countdown_name(item.name)}
+        local label = list.add{
+            type = 'label',
+            name = planet_traits_name(item.name),
+            caption = planet_traits_caption(item),
+        }
+        label.style.single_line = false
+        label.style.maximal_width = 440
     end
     local note = content.add{type = 'label', caption = {'un.planet-page-note'}}
     note.style.single_line = false
@@ -756,9 +800,24 @@ end
 local function add_help_line(parent, caption, heading)
     local label = parent.add{type = 'label', caption = caption}
     label.style.single_line = false
-    label.style.maximal_width = 720
+    label.style.maximal_width = 690
     if heading then label.style.font = 'default-bold' end
     return label
+end
+
+local function add_help_card(parent, title)
+    local card = parent.add{type = 'frame', direction = 'vertical'}
+    card.style.horizontally_stretchable = true
+    card.style.padding = 12
+    local heading = card.add{type = 'label', caption = title}
+    heading.style.font = 'default-large-bold'
+    heading.style.bottom_margin = 6
+    return card
+end
+
+local function add_help_gap(parent)
+    local gap = parent.add{type = 'empty-widget'}
+    gap.style.height = 8
 end
 
 local function render_help_page(frame, content, mode)
@@ -798,31 +857,62 @@ local function render_help_page(frame, content, mode)
     details.style.maximal_height = 620
 
     if mode == 'brief' then
-        add_help_line(details, {'un.help-brief-start'})
-        add_help_line(details, {'un.help-brief-property'})
-        add_help_line(details, {'un.help-brief-travel'})
+        local income = add_help_card(details, {'un.help-card-income'})
+        add_help_line(income, {'un.help-brief-start'})
+        add_help_gap(details)
+        local property = add_help_card(details, {'un.help-card-property'})
+        add_help_line(property, {'un.help-brief-property'})
+        add_help_gap(details)
+        local travel = add_help_card(details, {'un.help-card-travel'})
+        add_help_line(travel, {'un.help-brief-travel'})
     elseif mode == 'advanced' then
-        add_help_line(details, {'un.help-detail-property-heading'}, true)
-        add_help_line(details, {
+        local beginner = add_help_card(details, {'un.help-section-beginner'})
+        add_help_line(beginner, {
+            'un.help-detail-ubi',
+            config.ubi_credit_per_second,
+            config.ubi_max_seconds / 3600,
+            config.ubi_max_seconds * config.ubi_credit_per_second,
+            settings.get('initial_credit'),
+        })
+        add_help_line(beginner, {'un.help-detail-linked-chest'})
+        add_help_line(beginner, {
+            'un.help-detail-science',
+            config.science_conversion_ticks / config.ticks_per_minute,
+        })
+        add_help_gap(details)
+
+        local property = add_help_card(details, {'un.help-detail-property-heading'})
+        add_help_line(property, {
             'un.help-detail-property-build',
             config.property_build_experience_per_point,
+            config.property_build_cooldown_hours,
+            config.property_build_price_per_experience,
         })
-        add_help_line(details, {'un.help-detail-property-basic'})
+        add_help_line(property, {'un.help-detail-property-basic'})
+        add_help_gap(details)
 
-        add_help_line(details, {'un.help-detail-growth-heading'}, true)
-        add_help_line(details, {'un.help-detail-experience'})
+        local growth = add_help_card(details, {'un.help-detail-growth-heading'})
+        add_help_line(growth, {'un.help-detail-experience'})
+        add_help_gap(details)
 
-        add_help_line(details, {'un.help-detail-cooperation-heading'}, true)
-        add_help_line(details, {'un.help-detail-friends', settings.get('friend_limit')})
-        add_help_line(details, {
+        local cooperation = add_help_card(
+            details,
+            {'un.help-detail-cooperation-heading'}
+        )
+        add_help_line(cooperation, {
+            'un.help-detail-friends',
+            settings.get('friend_limit'),
+        })
+        add_help_line(cooperation, {
             'un.help-detail-transfer',
             config.transfer_min_amount,
             config.transfer_fee_rate * 100,
             config.transfer_min_fee,
         })
+        add_help_gap(details)
 
-        add_help_line(details, {'un.help-detail-ship-heading'}, true)
-        add_help_line(details, {
+        local travel = add_help_card(details, {'un.help-detail-ship-heading'})
+        add_help_line(travel, {
             'un.help-detail-ship',
             settings.get('ship_cost'),
             settings.get('ship_life_hours'),
@@ -830,29 +920,35 @@ local function render_help_page(frame, content, mode)
             config.ship_width_per_level,
             config.ship_height,
         })
-        add_help_line(details, {'un.help-detail-travel'})
+        add_help_line(travel, {'un.help-detail-travel'})
+        add_help_gap(details)
 
-        add_help_line(details, {'un.help-detail-world-heading'}, true)
-        add_help_line(details, {'un.help-detail-resets'})
+        local world = add_help_card(details, {'un.help-detail-world-heading'})
+        add_help_line(world, {'un.help-detail-resets'})
     else
-        add_help_line(details, {'un.help-detail-formulas-heading'}, true)
-        add_help_line(details, {
+        local formulas = add_help_card(details, {
+            'un.help-detail-formulas-heading',
+        })
+        add_help_line(formulas, {
             'un.help-detail-experience-effects',
             config.ship_base_width,
             config.ship_width_per_level,
             settings.get('ship_life_hours'),
             settings.get('property_tax_percent'),
         })
-        add_help_line(details, {
+        add_help_line(formulas, {
             'un.help-detail-property-price',
             config.property_price_cap,
             settings.get('property_price_factor'),
         })
-        add_help_line(details, {
+        add_help_line(formulas, {
             'un.help-detail-property-trade',
             settings.get('property_tax_percent'),
         })
-        add_help_line(details, {
+        add_help_gap(details)
+
+        local world = add_help_card(details, {'un.help-detail-world-heading'})
+        add_help_line(world, {
             'un.help-detail-world-randomization',
             config.public_planet_resource_base.frequency,
             config.public_planet_resource_base.size,
@@ -866,13 +962,17 @@ local function render_help_page(frame, content, mode)
             settings.get('spoil_time_modifier'),
             settings.get('asteroid_spawning_rate'),
         })
-        add_help_line(details, {
+        add_help_line(world, {
             'un.help-detail-reset-schedule',
             settings.get('cleanup_idle_hours'),
         })
-        add_help_line(details, {'un.help-detail-commands-heading'}, true)
-        add_help_line(details, {'un.help-detail-command-transfer'})
-        add_help_line(details, {'un.help-detail-command-rename'})
+        add_help_gap(details)
+
+        local commands = add_help_card(details, {
+            'un.help-detail-commands-heading',
+        })
+        add_help_line(commands, {'un.help-detail-command-transfer'})
+        add_help_line(commands, {'un.help-detail-command-rename'})
     end
     set_frame_state(frame, 'help')
 end
@@ -1011,6 +1111,9 @@ local function property_error(err)
     end
     if err == 'invalid-build-option' then
         return {'un.property-build-invalid'}
+    end
+    if err == 'build-cooldown' then
+        return {'un.property-build-cooldown-active'}
     end
     return {'un.property-error-unavailable'}
 end
@@ -1179,6 +1282,10 @@ local function update_frame(player)
                         or item.left_ticks
                         and format_countdown(item.left_ticks)
                         or {'un.planet-countdown-rebuilding'}
+                end
+                local traits = list[planet_traits_name(item.name)]
+                if traits and traits.valid then
+                    traits.caption = planet_traits_caption(item)
                 end
             end
         end
@@ -1536,6 +1643,7 @@ events.on(defines.events.on_gui_click, function(event)
             element.caption = {
                 'un.property-build-confirm',
                 format_integer(requirement.experience_cost),
+                format_integer(requirement.coin_cost),
             }
             element.tags = {
                 action = 'property-build-confirm',

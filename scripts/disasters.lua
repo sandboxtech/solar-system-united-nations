@@ -8,6 +8,82 @@ local surfaces = require('scripts.surfaces')
 
 local M = {}
 
+local PLANET_TRAITS = {
+    nauvis = {
+        {id = 'nauvis-iron-rich', kind = 'control', controls = {'iron-ore'},
+            frequency = 4, size = 4, richness = 16},
+        {id = 'nauvis-copper-rich', kind = 'control', controls = {'copper-ore'},
+            frequency = 4, size = 4, richness = 16},
+        {id = 'nauvis-oil-rich', kind = 'control', controls = {'crude-oil'},
+            frequency = 2, size = 4, richness = 16},
+        {id = 'nauvis-uranium-rich', kind = 'control', controls = {'uranium-ore'},
+            frequency = 2, size = 2, richness = 16},
+        {id = 'nauvis-lush', kind = 'climate', moisture = 0.35},
+        {id = 'nauvis-swarm', kind = 'category', category = 'enemy',
+            frequency = 4, size = 4, richness = 1},
+        {id = 'nauvis-bright-sun', kind = 'solar', factor = 2},
+        {id = 'nauvis-long-day', kind = 'day', factor = 1.5},
+    },
+    vulcanus = {
+        {id = 'vulcanus-tungsten-rich', kind = 'control',
+            controls = {'tungsten-ore'}, frequency = 4, size = 4, richness = 16},
+        {id = 'vulcanus-coal-rich', kind = 'control', controls = {'coal'},
+            frequency = 4, size = 4, richness = 16},
+        {id = 'vulcanus-calcite-rich', kind = 'control', controls = {'calcite'},
+            frequency = 4, size = 4, richness = 16},
+        {id = 'vulcanus-acid-rich', kind = 'control',
+            controls = {'sulfuric-acid-geyser'},
+            frequency = 4, size = 4, richness = 16},
+        {id = 'vulcanus-fractured', kind = 'cliffs', interval = 0.25,
+            richness = 4},
+        {id = 'vulcanus-hot', kind = 'climate', temperature = 15},
+        {id = 'vulcanus-bright-sun', kind = 'solar', factor = 2},
+        {id = 'vulcanus-long-day', kind = 'day', factor = 1.5},
+    },
+    gleba = {
+        {id = 'gleba-lush', kind = 'category', category = 'terrain',
+            frequency = 2, size = 4, richness = 4},
+        {id = 'gleba-wet', kind = 'climate', group = 'gleba-moisture',
+            moisture = 0.4},
+        {id = 'gleba-dry', kind = 'climate', group = 'gleba-moisture',
+            moisture = -0.4},
+        {id = 'gleba-warm', kind = 'climate', temperature = 12},
+        {id = 'gleba-enemies', kind = 'category', category = 'enemy',
+            frequency = 4, size = 4, richness = 1},
+        {id = 'gleba-broad-biomes', kind = 'climate-frequency',
+            moisture_frequency = 0.25},
+    },
+    fulgora = {
+        {id = 'fulgora-scrap-rich', kind = 'control', controls = {'scrap'},
+            frequency = 4, size = 4, richness = 16},
+        {id = 'fulgora-resources', kind = 'category', category = 'resource',
+            frequency = 2, size = 4, richness = 8},
+        {id = 'fulgora-large-islands', kind = 'category', category = 'terrain',
+            group = 'fulgora-islands', frequency = 0.5, size = 4, richness = 1},
+        {id = 'fulgora-small-islands', kind = 'category', category = 'terrain',
+            group = 'fulgora-islands', frequency = 4, size = 0.5, richness = 1},
+        {id = 'fulgora-dry', kind = 'climate', moisture = -0.4},
+        {id = 'fulgora-fractured', kind = 'cliffs', interval = 0.25,
+            richness = 4},
+        {id = 'fulgora-solar-storm', kind = 'solar', factor = 2},
+        {id = 'fulgora-long-day', kind = 'day', factor = 1.5},
+    },
+    aquilo = {
+        {id = 'aquilo-lithium-rich', kind = 'control',
+            controls = {'lithium-brine'}, frequency = 4, size = 4, richness = 16},
+        {id = 'aquilo-fluorine-rich', kind = 'control',
+            controls = {'fluorine-vent'}, frequency = 4, size = 4, richness = 16},
+        {id = 'aquilo-resources', kind = 'category', category = 'resource',
+            frequency = 2, size = 4, richness = 8},
+        {id = 'aquilo-broad-ice', kind = 'category', category = 'terrain',
+            frequency = 0.5, size = 4, richness = 1},
+        {id = 'aquilo-deep-cold', kind = 'climate', temperature = -15},
+        {id = 'aquilo-broad-climate', kind = 'climate-frequency',
+            moisture_frequency = 0.25},
+        {id = 'aquilo-pale-sun', kind = 'solar', factor = 0.5},
+    },
+}
+
 local STATISTIC_GETTERS = {
     'get_item_production_statistics',
     'get_fluid_production_statistics',
@@ -244,20 +320,111 @@ local function randomize_demolishers(map_settings, record)
     end
 end
 
+local function multiply_control(control, trait)
+    control.frequency = (control.frequency or 1) * (trait.frequency or 1)
+    control.size = (control.size or 1) * (trait.size or 1)
+    control.richness = (control.richness or 1) * (trait.richness or 1)
+end
+
+local function apply_trait(map_settings, record, trait)
+    local controls = map_settings.autoplace_controls or {}
+    local applied = false
+    if trait.kind == 'control' then
+        for _, name in ipairs(trait.controls) do
+            local control = controls[name]
+            if control then
+                multiply_control(control, trait)
+                applied = true
+                break
+            end
+        end
+    elseif trait.kind == 'category' then
+        for _, name in ipairs(sorted_control_names(map_settings)) do
+            local prototype = prototypes.autoplace_control[name]
+            if prototype and prototype.category == trait.category then
+                multiply_control(controls[name], trait)
+                applied = true
+            end
+        end
+    elseif trait.kind == 'cliffs' then
+        local cliffs = map_settings.cliff_settings
+        if cliffs then
+            cliffs.cliff_elevation_interval = math.max(
+                1,
+                (cliffs.cliff_elevation_interval or 40) * trait.interval
+            )
+            cliffs.richness = (cliffs.richness or 1) * trait.richness
+            applied = true
+        end
+    elseif trait.kind == 'climate' then
+        record.climate.moisture_bias = record.climate.moisture_bias
+            + (trait.moisture or 0)
+        record.climate.temperature_bias = record.climate.temperature_bias
+            + (trait.temperature or 0)
+        local expressions = map_settings.property_expression_names or {}
+        expressions['control:moisture:bias'] = tostring(
+            record.climate.moisture_bias
+        )
+        expressions['control:temperature:bias'] = tostring(
+            record.climate.temperature_bias
+        )
+        map_settings.property_expression_names = expressions
+        applied = true
+    elseif trait.kind == 'climate-frequency' then
+        record.climate.moisture_frequency = record.climate.moisture_frequency
+            * trait.moisture_frequency
+        local expressions = map_settings.property_expression_names or {}
+        expressions['control:moisture:frequency'] = tostring(
+            record.climate.moisture_frequency
+        )
+        map_settings.property_expression_names = expressions
+        applied = true
+    elseif trait.kind == 'solar' then
+        record.solar_factor = record.solar_factor * trait.factor
+        applied = true
+    elseif trait.kind == 'day' then
+        record.day_factor = record.day_factor * trait.factor
+        applied = true
+    end
+    return applied
+end
+
+local function roll_traits(name, map_settings, record)
+    local pool = PLANET_TRAITS[name] or {}
+    local order = {}
+    for index = 1, #pool do order[index] = index end
+    for index = #order, 2, -1 do
+        local other = math.random(1, index)
+        order[index], order[other] = order[other], order[index]
+    end
+    record.traits = {}
+    local selected_groups = {}
+    for _, index in ipairs(order) do
+        local trait = pool[index]
+        if (not trait.group or not selected_groups[trait.group])
+                and apply_trait(map_settings, record, trait) then
+            record.traits[#record.traits + 1] = trait.id
+            if trait.group then selected_groups[trait.group] = true end
+            if #record.traits == 3 then break end
+        end
+    end
+end
+
 local function prepare_new_round(name, surface, record)
     local planet = game.planets[name]
     if planet and planet.valid then planet.reset_map_gen_settings() end
     local map_settings = surface.map_gen_settings
     map_settings.seed = math.random(1, 2147483647)
+    record.solar_factor = choose(config.public_planet_solar_factors)
+    record.day_factor = choose(config.public_planet_day_factors)
     randomize_autoplace(map_settings, record)
     randomize_climate(name, map_settings, record)
     randomize_demolishers(map_settings, record)
+    roll_traits(name, map_settings, record)
     surface.map_gen_settings = map_settings
 
     record.round = record.round + 1
     record.seed = map_settings.seed
-    record.solar_factor = choose(config.public_planet_solar_factors)
-    record.day_factor = choose(config.public_planet_day_factors)
     record.evolution = name == 'nauvis' and math.random() ^ 2 or nil
     record.min_brightness = math.random() * 0.2
     record.peaceful = math.random() < config.public_planet_peaceful_chance
@@ -270,6 +437,28 @@ local function prepare_new_round(name, surface, record)
         morning = 1 - evening,
         dawn = 1 - half_day,
     }
+end
+
+local function apply_round_environment(name, surface, record)
+    pcall(function()
+        surface.solar_power_multiplier = (record.base_solar or 1)
+            * (record.solar_factor or 1)
+    end)
+    pcall(function()
+        surface.ticks_per_day = math.max(
+            1,
+            math.floor((record.base_day or surface.ticks_per_day)
+                * (record.day_factor or 1))
+        )
+    end)
+    pcall(function()
+        surface.daytime_parameters = record.daytime_parameters
+        surface.min_brightness = record.min_brightness
+        surface.peaceful_mode = record.peaceful == true
+    end)
+    if name == 'nauvis' and record.evolution then
+        game.forces.enemy.set_evolution_factor(record.evolution, surface)
+    end
 end
 
 local function begin_reset(name, surface, record)
@@ -317,25 +506,7 @@ end
 
 local function finish_reset(name, surface, record)
     clear_statistics(surface)
-    pcall(function()
-        surface.solar_power_multiplier = (record.base_solar or 1)
-            * (record.solar_factor or 1)
-    end)
-    pcall(function()
-        surface.ticks_per_day = math.max(
-            1,
-            math.floor((record.base_day or surface.ticks_per_day)
-                * (record.day_factor or 1))
-        )
-    end)
-    pcall(function()
-        surface.daytime_parameters = record.daytime_parameters
-        surface.min_brightness = record.min_brightness
-        surface.peaceful_mode = record.peaceful == true
-    end)
-    if name == 'nauvis' and record.evolution then
-        game.forces.enemy.set_evolution_factor(record.evolution, surface)
-    end
+    apply_round_environment(name, surface, record)
     surfaces.sync_all_property_environments()
     game.forces.player.set_spawn_position({0, 0}, surface)
     surface.request_to_generate_chunks({0, 0}, 1)
@@ -393,6 +564,7 @@ function M.list()
             left_ticks = record.state == 'open' and record.next_tick
                 and math.max(0, record.next_tick - game.tick)
                 or record.paused_left_ticks,
+            traits = record.traits or {},
         }
     end
     return result
@@ -418,7 +590,13 @@ end
 
 function M.ensure()
     M.apply_global_settings()
-    for _, name in ipairs(config.public_planets) do ensure_record(name) end
+    for _, name in ipairs(config.public_planets) do
+        local record, surface = ensure_record(name)
+        if record.round == 0 and surface and surface.valid then
+            prepare_new_round(name, surface, record)
+            apply_round_environment(name, surface, record)
+        end
+    end
     if not settings.get('planet_resets_enabled') then M.apply_enabled(false) end
 end
 

@@ -14,10 +14,10 @@ function M.run()
     for _, name in ipairs(config.public_planets) do
         surfaces.ensure_hospice(name)
     end
+    disasters.ensure()
     properties.ensure()
     restrictions.ensure()
     ships.ensure()
-    disasters.ensure()
     gui.ensure_all()
 end
 

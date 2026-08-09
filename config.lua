@@ -63,13 +63,6 @@ M.science_pack_credit = {
     ['cryogenic-science-pack'] = 1,
     ['promethium-science-pack'] = 1,
 }
-M.quality_credit_multiplier = {
-    normal = 1,
-    uncommon = 2,
-    rare = 4,
-    epic = 8,
-    legendary = 16,
-}
 M.science_pack_order = {
     'automation-science-pack',
     'logistic-science-pack',
@@ -97,8 +90,11 @@ M.property_sample_planets = M.public_planets
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 2000
 M.property_build_experience_per_point = 1000
+M.property_build_coin_per_experience = 1
+M.property_build_price_per_experience = 10
+M.property_build_cooldown_hours = 20
 M.property_build_pack_by_planet = {
-    nauvis = 'space-science-pack',
+    nauvis = 'automation-science-pack',
     vulcanus = 'metallurgic-science-pack',
     gleba = 'agricultural-science-pack',
     fulgora = 'electromagnetic-science-pack',

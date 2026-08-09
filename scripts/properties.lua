@@ -375,7 +375,15 @@ function M.build_requirements(planet_name, lifetime_index, size_index)
         size = size,
         experience_cost = config.property_build_experience_per_point
             * lifetime.cost * size.cost,
+        coin_cost = config.property_build_experience_per_point
+            * lifetime.cost * size.cost
+            * config.property_build_coin_per_experience,
     }
+end
+
+function M.build_cooldown_left_ticks(player_index)
+    local account = economy.ensure_account(player_index)
+    return math.max(0, (account.property_build_ready_tick or 0) - game.tick)
 end
 
 function M.build_availability(player, planet_name, lifetime_index, size_index)
@@ -385,12 +393,18 @@ function M.build_availability(player, planet_name, lifetime_index, size_index)
         size_index
     )
     if not requirement then return false, 'invalid-build-option' end
+    if M.build_cooldown_left_ticks(player.index) > 0 then
+        return false, 'build-cooldown', requirement
+    end
     if not surfaces.is_public_planet_open(planet_name) then
         return false, 'planet-closed', requirement
     end
     if experience.amount(player.index, requirement.pack)
             < requirement.experience_cost then
         return false, 'insufficient-experience', requirement
+    end
+    if economy.get_balance(player.index) < requirement.coin_cost then
+        return false, 'insufficient-credit', requirement
     end
     return true, nil, requirement
 end
@@ -410,9 +424,23 @@ function M.build(player, planet_name, lifetime_index, size_index)
     ) then
         return nil, 'insufficient-experience', requirement
     end
+    local paid = economy.change(
+        player.index,
+        -requirement.coin_cost,
+        'property-build'
+    )
+    if not paid then
+        experience.record(player.index, {{
+            name = requirement.pack,
+            count = requirement.experience_cost,
+        }})
+        return nil, 'insufficient-credit', requirement
+    end
     local ok, property, create_err = pcall(create, {
         owner_index = player.index,
         sample_planet = planet_name,
+        price = requirement.experience_cost
+            * config.property_build_price_per_experience,
         lifetime_hours = requirement.lifetime.hours,
         decay_hours = requirement.lifetime.decay_hours,
         width = requirement.size.width,
@@ -423,12 +451,19 @@ function M.build(player, planet_name, lifetime_index, size_index)
             name = requirement.pack,
             count = requirement.experience_cost,
         }})
+        economy.change(
+            player.index,
+            requirement.coin_cost,
+            'property-build-refund'
+        )
         if not ok then
             log('[un] property construction failed: ' .. tostring(property))
             create_err = 'surface-create-failed'
         end
         return nil, create_err, requirement
     end
+    economy.ensure_account(player.index).property_build_ready_tick = game.tick
+        + config.property_build_cooldown_hours * config.ticks_per_hour
     game.print({
         'un.property-built-broadcast',
         player.name,
