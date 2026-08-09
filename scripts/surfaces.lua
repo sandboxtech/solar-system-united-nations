@@ -60,17 +60,23 @@ local function sample_center(source, property_id, half_width, half_height)
     }
 end
 
-local function in_core(x, y)
-    return x >= -3 and x < 3 and y >= -3 and y < 3
+local function core_half_size(half_width, half_height)
+    if half_width == half_height then return half_width / 2 end
+    return math.min(half_width, half_height)
+end
+
+local function in_core(x, y, core_half)
+    return x >= -core_half and x < core_half
+        and y >= -core_half and y < core_half
 end
 
 local function copy_sample_tiles(
-        source, center, destination, half_width, half_height)
+        source, center, destination, half_width, half_height, core_half)
     local tiles = {}
     for y = -half_height, half_height - 1 do
         for x = -half_width, half_width - 1 do
             tiles[#tiles + 1] = {
-                name = in_core(x, y) and TUTORIAL_GRID_NAME
+                name = in_core(x, y, core_half) and TUTORIAL_GRID_NAME
                     or source.get_tile(center.x + x, center.y + y).name,
                 position = {x, y},
             }
@@ -92,7 +98,7 @@ local function is_rock(entity)
 end
 
 local function copy_sample_entities(
-        source, center, destination, half_width, half_height)
+        source, center, destination, half_width, half_height, core_half)
     local entities = source.find_entities_filtered{
         area = {
             {center.x - half_width, center.y - half_height},
@@ -111,7 +117,7 @@ local function copy_sample_entities(
                 x = entity.position.x - center.x,
                 y = entity.position.y - center.y,
             }
-            if not in_core(position.x, position.y) then
+            if not in_core(position.x, position.y, core_half) then
                 destination.create_entity{
                     name = entity.name,
                     position = position,
@@ -137,8 +143,13 @@ local function apply_natural_sample(surface, property_id, half_width, half_heigh
     )
     source.request_to_generate_chunks(center, radius)
     source.force_generate_chunk_requests()
-    copy_sample_tiles(source, center, surface, half_width, half_height)
-    copy_sample_entities(source, center, surface, half_width, half_height)
+    local core_half = core_half_size(half_width, half_height)
+    copy_sample_tiles(
+        source, center, surface, half_width, half_height, core_half
+    )
+    copy_sample_entities(
+        source, center, surface, half_width, half_height, core_half
+    )
     return planet_name, center
 end
 
@@ -178,7 +189,7 @@ function M.ensure_hospice()
     return surface
 end
 
-function M.sync_property_environment(surface)
+function M.sync_property_environment(surface, min_brightness)
     if not (surface and surface.valid) then return false end
     local nauvis = game.surfaces.nauvis
     if not (nauvis and nauvis.valid) then return false end
@@ -188,6 +199,7 @@ function M.sync_property_environment(surface)
     surface.always_day = nauvis.always_day
     surface.freeze_daytime = nauvis.freeze_daytime
     surface.solar_power_multiplier = config.property_solar_multiplier
+    surface.min_brightness = min_brightness or config.property_min_brightness
     return true
 end
 

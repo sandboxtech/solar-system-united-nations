@@ -226,7 +226,7 @@ local function render_property_table(player, frame, content)
     for _, property in ipairs(property_list) do
         list.add{
             type = 'label',
-            caption = properties.display_name(property),
+            caption = properties.surface_display_name(property),
             tooltip = properties.feature_description(property),
         }
         local owner = properties.owner_name(property)
@@ -394,15 +394,6 @@ local function render_help_page(frame, content, mode)
     advanced.enabled = mode ~= 'advanced'
     full.enabled = mode ~= 'full'
 
-    if mode == 'brief' then
-        add_help_line(content, {'un.help-step-linked-chest'})
-        add_help_line(content, {'un.help-step-science'})
-        add_help_line(content, {'un.help-step-property'})
-        add_help_line(content, {'un.help-ubi'})
-        set_frame_state(frame, 'help')
-        return
-    end
-
     local details = content.add{
         type = 'scroll-pane',
         name = HELP_DETAILS_NAME,
@@ -410,49 +401,56 @@ local function render_help_page(frame, content, mode)
     details.style.minimal_width = 740
     details.style.maximal_height = 620
 
-    add_help_line(details, {'un.help-detail-economy-heading'}, true)
-    add_help_line(details, {
-        'un.help-detail-ubi',
-        config.ubi_credit_per_second,
-        config.ubi_max_seconds / 3600,
-        economy.get_ubi_capacity(),
-    })
-    add_help_line(details, {'un.help-detail-linked-chest'})
-    add_help_line(details, {
-        'un.help-detail-science',
-        config.science_conversion_ticks / config.ticks_per_minute,
-        config.quality_credit_multiplier.normal,
-        config.quality_credit_multiplier.uncommon,
-        config.quality_credit_multiplier.rare,
-        config.quality_credit_multiplier.epic,
-        config.quality_credit_multiplier.legendary,
-    })
-    add_help_line(details, {'un.help-detail-experience'})
+    if mode == 'brief' then
+        add_help_line(details, {'un.help-section-beginner'}, true)
+        add_help_line(details, {'un.help-detail-linked-chest'})
+        add_help_line(details, {
+            'un.help-detail-science',
+            config.science_conversion_ticks / config.ticks_per_minute,
+            config.quality_credit_multiplier.normal,
+            config.quality_credit_multiplier.uncommon,
+            config.quality_credit_multiplier.rare,
+            config.quality_credit_multiplier.epic,
+            config.quality_credit_multiplier.legendary,
+        })
+        add_help_line(details, {
+            'un.help-detail-ubi',
+            config.ubi_credit_per_second,
+            config.ubi_max_seconds / 3600,
+            economy.get_ubi_capacity(),
+            config.initial_credit,
+        })
+    elseif mode == 'advanced' then
+        add_help_line(details, {'un.help-detail-property-heading'}, true)
+        add_help_line(details, {'un.help-detail-property-basic'})
+        add_help_line(details, {
+            'un.help-detail-property-generation',
+            config.property_initial_price_min,
+            config.property_initial_price_max,
+            config.property_min_brightness,
+        })
 
-    add_help_line(details, {'un.help-detail-property-heading'}, true)
-    add_help_line(details, {
-        'un.help-detail-property-generation',
-        config.property_initial_price_min,
-        config.property_initial_price_max,
-    })
+        add_help_line(details, {'un.help-detail-growth-heading'}, true)
+        add_help_line(details, {'un.help-detail-experience'})
 
-    add_help_line(details, {'un.help-detail-cooperation-heading'}, true)
-    add_help_line(details, {'un.help-detail-friends', config.friend_limit})
-    add_help_line(details, {'un.help-detail-transfer'})
+        add_help_line(details, {'un.help-detail-cooperation-heading'}, true)
+        add_help_line(details, {'un.help-detail-friends', config.friend_limit})
+        add_help_line(details, {'un.help-detail-transfer'})
 
-    add_help_line(details, {'un.help-detail-ship-heading'}, true)
-    add_help_line(details, {
-        'un.help-detail-ship',
-        config.ship_credit_cost,
-        config.ship_life_hours,
-        config.ship_base_width,
-        config.ship_width_per_level,
-        config.ship_height,
-    })
-    add_help_line(details, {'un.help-detail-travel'})
-    add_help_line(details, {'un.help-detail-resets'})
+        add_help_line(details, {'un.help-detail-ship-heading'}, true)
+        add_help_line(details, {
+            'un.help-detail-ship',
+            config.ship_credit_cost,
+            config.ship_life_hours,
+            config.ship_base_width,
+            config.ship_width_per_level,
+            config.ship_height,
+        })
+        add_help_line(details, {'un.help-detail-travel'})
 
-    if mode == 'full' then
+        add_help_line(details, {'un.help-detail-world-heading'}, true)
+        add_help_line(details, {'un.help-detail-resets'})
+    else
         add_help_line(details, {'un.help-detail-formulas-heading'}, true)
         add_help_line(details, {
             'un.help-detail-property-price',

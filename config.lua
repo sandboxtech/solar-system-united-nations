@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 17
+M.schema_version = 19
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -36,7 +36,7 @@ M.property_decay_ticks = 2 * M.ticks_per_hour
 M.property_max_future_ticks = 30 * M.ticks_per_hour
 M.property_price_cap = 1000000000
 
-M.initial_credit = 0
+M.initial_credit = 1000
 M.ubi_credit_per_second = 1
 M.ubi_max_seconds = 30 * 60 * 60
 M.ledger_record_limit = 2000
@@ -86,6 +86,7 @@ M.hospice_surface_size = 64
 M.property_surface_prefix = 'un-property-'
 M.property_default_tax = 0.10
 M.property_solar_multiplier = 0.10
+M.property_min_brightness = 0.05
 M.property_link_id_unowned = 0
 M.property_max_size = 128
 M.property_sample_planets = {'nauvis', 'gleba'}

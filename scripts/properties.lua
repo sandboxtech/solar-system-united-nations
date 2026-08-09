@@ -81,24 +81,21 @@ end
 function M.feature_description(property)
     local width = property.width or property.size or 0
     local height = property.height or property.size or 0
-    local shape = property.shape == 'square'
-        and {'un.property-shape-square'}
-        or property.shape == 'long' and {'un.property-shape-long'}
-        or {'un.property-shape-rectangle'}
-    local sample_planet = property.sample_planet
-    local sample_description = sample_planet and {
-        '',
-        '[planet=' .. sample_planet .. '] ',
-        {'space-location-name.' .. sample_planet},
-    } or {'un.property-sample-legacy'}
     return {
         'un.property-features',
         width,
         height,
-        shape,
-        sample_description,
-        math.floor((property.solar or 1) * 100 + 0.5),
     }
+end
+
+function M.surface_display_name(property)
+    if not property.owner_index then return {'un.property-surface-vacant'} end
+    local owner = game.get_player(property.owner_index)
+    local account = storage.players[property.owner_index]
+    local owner_name = owner and owner.name
+        or account and account.name
+        or ('#' .. property.owner_index)
+    return {'un.property-surface-owned', owner_name}
 end
 
 local function central_chest_positions()
@@ -135,19 +132,10 @@ end
 local function ensure_linked_chests(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
-    local owner_name = nil
-    if property.owner_index then
-        local owner = game.get_player(property.owner_index)
-        local account = storage.players[property.owner_index]
-        owner_name = owner and owner.name
-            or account and account.name
-            or ('#' .. property.owner_index)
-    end
-    surface.localised_name = owner_name
-        and {'un.property-surface-owned', owner_name}
-        or {'un.property-surface-vacant'}
+    surface.localised_name = M.surface_display_name(property)
     property.solar = config.property_solar_multiplier
-    surfaces.sync_property_environment(surface)
+    property.min_brightness = config.property_min_brightness
+    surfaces.sync_property_environment(surface, property.min_brightness)
     normalize_linked_chest_positions(property, surface)
     local link_id = property.owner_index or config.property_link_id_unowned
     for _, position in ipairs(property.linked_chest_positions) do
@@ -188,7 +176,6 @@ function M.create(spec)
         or sides[math.random(1, #sides)]
     local height = tonumber(spec.height)
         or sides[math.random(1, #sides)]
-    local shape = width == height and 'square' or 'rectangle'
     if not is_positive_integer(price) or price > config.property_price_cap then
         return nil, 'invalid-price'
     end
@@ -208,6 +195,7 @@ function M.create(spec)
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
     local id = storage.next_property_id
+    local min_brightness = config.property_min_brightness
     local surface, half_width, half_height, sample_planet, sample_position
         = surfaces.create_property_surface(id, {
         width = width,
@@ -229,8 +217,8 @@ function M.create(spec)
         tax = tax,
         width = width,
         height = height,
-        shape = shape,
         solar = solar,
+        min_brightness = min_brightness,
         sample_planet = sample_planet,
         sample_position = sample_position,
         linked_chest_positions = central_chest_positions(),
