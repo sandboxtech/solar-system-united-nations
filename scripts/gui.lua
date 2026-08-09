@@ -9,7 +9,9 @@ local settings = require('scripts.settings')
 local ships = require('scripts.ships')
 local social = require('scripts.social')
 local stamina = require('scripts.stamina')
+local starter = require('scripts.starter')
 local surfaces = require('scripts.surfaces')
+local technology_decay = require('scripts.technology_decay')
 
 local M = {}
 
@@ -41,6 +43,7 @@ local BALANCE_NAME = 'un_ubi_balance'
 local STAMINA_NAME = 'un_stamina'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
+local STARTER_KIT_NAME = 'un_starter_kit'
 local SUICIDE_PREFIX = 'un_suicide_'
 local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
@@ -66,6 +69,7 @@ local EXPERIENCE_TABLE_NAME = 'un_experience_table'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
 local PLANET_TABLE_NAME = 'un_planet_table'
+local TECH_LEAK_COUNTDOWN_NAME = 'un_tech_leak_countdown'
 local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
 local ADMIN_PLAYER_TABLE_NAME = 'un_admin_player_table'
@@ -82,6 +86,9 @@ local ADMIN_NUMBER_SETTINGS = {
     {'technology_price_multiplier', 'un.admin-setting-technology-price'},
     {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
     {'asteroid_spawning_rate', 'un.admin-setting-asteroid-rate'},
+    {'property_limit_per_planet', 'un.admin-setting-property-limit'},
+    {'tech_leak_interval_hours', 'un.admin-setting-tech-leak-interval'},
+    {'tech_leak_max_percent', 'un.admin-setting-tech-leak-strength'},
 }
 
 -- GUI-only state. UBI itself never depends on this table and is calculated from
@@ -498,6 +505,7 @@ local function update_property_build_page(player, content)
     button.enabled = can_build
     button.tooltip = can_build and {'un.property-build'}
         or err == 'build-cooldown' and {'un.property-build-cooldown-active'}
+        or err == 'property-limit' and {'un.property-build-limit'}
         or err == 'planet-closed' and {'un.travel-planet-closed'}
         or err == 'insufficient-credit' and {'un.property-error-credit'}
         or {'un.property-build-insufficient-experience'}
@@ -608,12 +616,26 @@ local function render_ubi_section(content)
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
     }
     claim.style.width = 360
+
+    local kit = content.add{
+        type = 'button',
+        name = STARTER_KIT_NAME,
+        caption = {
+            'un.starter-kit-buy',
+            config.starter_kit_equipment[2].count,
+            config.starter_kit_items[1].count,
+            config.starter_kit_cost,
+        },
+        tooltip = {'un.starter-kit-tooltip'},
+        tags = {action = 'starter-kit-buy'},
+    }
+    kit.style.width = 360
 end
 
 local function render_suicide_section(content)
     local actions = content.add{
-        type = 'flow',
-        direction = 'horizontal',
+        type = 'table',
+        column_count = 3,
     }
     for _, planet_name in ipairs(config.public_planets) do
         local suicide = actions.add{
@@ -737,6 +759,16 @@ local function render_ships_page(player, frame, content)
 end
 
 local function render_planets_page(frame, content)
+    local leak_left = technology_decay.left_ticks()
+    content.add{
+        type = 'label',
+        name = TECH_LEAK_COUNTDOWN_NAME,
+        caption = leak_left and {
+            'un.tech-leak-countdown',
+            format_countdown(leak_left),
+        } or {'un.tech-leak-paused'},
+        tooltip = {'un.tech-leak-tooltip'},
+    }
     local list = content.add{
         type = 'table',
         name = PLANET_TABLE_NAME,
@@ -977,6 +1009,10 @@ local function render_help_page(frame, content, mode)
             config.ubi_max_seconds * config.ubi_credit_per_second,
             settings.get('initial_coin'),
         })
+        add_help_line(beginner, {
+            'un.help-detail-starter',
+            config.starter_kit_cost,
+        })
         add_help_line(beginner, {'un.help-detail-linked-chest'})
         add_help_line(beginner, {
             'un.help-detail-science',
@@ -1028,6 +1064,10 @@ local function render_help_page(frame, content, mode)
 
         local world = add_help_card(details, {'un.help-detail-world-heading'})
         add_help_line(world, {'un.help-detail-resets'})
+        add_help_line(world, {
+            'un.help-detail-tech-leak',
+            config.tech_leak_interval_ticks / config.ticks_per_hour,
+        })
     else
         local formulas = add_help_card(details, {
             'un.help-detail-formulas-heading',
@@ -1068,6 +1108,10 @@ local function render_help_page(frame, content, mode)
         add_help_line(world, {
             'un.help-detail-reset-schedule',
             settings.get('cleanup_idle_hours'),
+        })
+        add_help_line(world, {
+            'un.help-detail-tech-leak-formula',
+            config.tech_leak_coefficient_max_percent,
         })
         add_help_gap(details)
 
@@ -1339,6 +1383,24 @@ local function update_frame(player)
                 format_integer(capacity),
             }
         end
+        local kit = content[STARTER_KIT_NAME]
+        if kit and kit.valid then
+            local can_buy, buy_error = starter.can_buy(player)
+            kit.enabled = can_buy
+            kit.tooltip = can_buy and {'un.starter-kit-tooltip'}
+                or buy_error == 'insufficient-credit'
+                    and {'un.starter-kit-insufficient'}
+                    or {'un.starter-kit-unavailable'}
+            if kit.tags.action ~= 'starter-kit-confirm' then
+                kit.caption = {
+                    'un.starter-kit-buy',
+                    config.starter_kit_equipment[2].count,
+                    config.starter_kit_items[1].count,
+                    config.starter_kit_cost,
+                }
+                kit.tags = {action = 'starter-kit-buy'}
+            end
+        end
         local data = experience.get(player.index)
         local grid = content[EXPERIENCE_TABLE_NAME]
         for index, name in ipairs(config.science_pack_order) do
@@ -1368,6 +1430,13 @@ local function update_frame(player)
     elseif page == 'property-build' then
         update_property_build_page(player, content)
     elseif page == 'planets' then
+        local leak = content[TECH_LEAK_COUNTDOWN_NAME]
+        if leak and leak.valid then
+            leak.caption = {
+                'un.tech-leak-countdown',
+                format_countdown(technology_decay.left_ticks()),
+            }
+        end
         local list = content[PLANET_TABLE_NAME]
         if list and list.valid then
             for _, item in ipairs(disasters.list()) do
@@ -1633,6 +1702,25 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
+    elseif element.name == STARTER_KIT_NAME then
+        if element.tags.action == 'starter-kit-confirm' then
+            local ok, err = starter.buy(player)
+            if ok then
+                player.print({'un.starter-kit-purchased'})
+            elseif err == 'insufficient-credit' then
+                player.print({'un.starter-kit-insufficient'})
+            else
+                player.print({'un.starter-kit-unavailable'})
+            end
+            render_page(player, 'overview')
+            update_frame(player)
+        else
+            element.caption = {
+                'un.starter-kit-confirm',
+                config.starter_kit_cost,
+            }
+            element.tags = {action = 'starter-kit-confirm'}
+        end
     elseif element.name == SHIP_CREATE_NAME then
         local platform, err = ships.create(player)
         if not platform then player.print(property_error(err)) end

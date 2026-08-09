@@ -16,7 +16,7 @@ M.public_planet_initial_offset_minutes = {
     fulgora = 30,
     aquilo = 40,
 }
-M.public_planet_warning_minutes = {30, 5, 1}
+M.public_planet_warning_minutes = {5}
 M.public_planet_check_ticks = 60 * 60
 M.public_planet_solar_factors = {0.75, 1, 1.25}
 M.public_planet_day_factors = {0.75, 1, 1.5}
@@ -46,6 +46,26 @@ M.transfer_fee_rate = 0.001
 M.transfer_min_fee = 100
 M.gui_refresh_ticks = M.ticks_per_second
 M.friend_limit = 10
+
+M.starter_resources = {
+    {name = 'iron-plate', count = 500},
+    {name = 'copper-plate', count = 200},
+    {name = 'stone', count = 100},
+    {name = 'wood', count = 100},
+}
+M.starter_kit_cost = 1000
+M.starter_kit_armor = 'modular-armor'
+M.starter_kit_equipment = {
+    {name = 'personal-roboport-equipment', count = 1},
+    {name = 'solar-panel-equipment', count = 6},
+}
+M.starter_kit_items = {
+    {name = 'construction-robot', count = 5},
+}
+
+M.property_limit_per_planet = 100
+M.tech_leak_interval_hours = 1
+M.tech_leak_coefficient_max_percent = 0.25
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute

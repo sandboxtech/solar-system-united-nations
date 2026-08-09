@@ -1,9 +1,11 @@
 -- Require-time registration is deterministic. Each engine event is registered
 -- once through scripts.events, while feature modules add their own handlers.
 require('scripts.economy')
+require('scripts.starter')
 require('scripts.linked_inventory')
 require('scripts.properties')
 require('scripts.restrictions')
+require('scripts.technology_decay')
 require('scripts.social')
 require('scripts.ships')
 require('scripts.disasters')

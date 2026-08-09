@@ -6,6 +6,7 @@ local ships = require('scripts.ships')
 local disasters = require('scripts.disasters')
 local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
+local technology_decay = require('scripts.technology_decay')
 
 local M = {}
 
@@ -15,6 +16,7 @@ function M.run()
         surfaces.ensure_hospice(name)
     end
     disasters.ensure()
+    technology_decay.ensure()
     properties.ensure()
     restrictions.ensure()
     ships.ensure()

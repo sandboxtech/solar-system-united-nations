@@ -32,7 +32,24 @@ local DEFINITIONS = {
         min = 0,
         max = 1000,
     },
+    property_limit_per_planet = {
+        default = config.property_limit_per_planet,
+        min = 0,
+        max = 10000,
+        integer = true,
+    },
+    tech_leak_interval_hours = {
+        default = config.tech_leak_interval_hours,
+        min = 0.1,
+        max = 10000,
+    },
+    tech_leak_max_percent = {
+        default = config.tech_leak_coefficient_max_percent,
+        min = 0,
+        max = 100,
+    },
     planet_resets_enabled = {default = true, boolean = true},
+    tech_leak_enabled = {default = true, boolean = true},
     admin_property_access = {default = false, boolean = true},
 }
 

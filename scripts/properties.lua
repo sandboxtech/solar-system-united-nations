@@ -468,6 +468,9 @@ function M.build_availability(player, planet_name, lifetime_index, size_index)
     if M.build_cooldown_left_ticks(player.index) > 0 then
         return false, 'build-cooldown', requirement
     end
+    if #M.list(planet_name) >= settings.get('property_limit_per_planet') then
+        return false, 'property-limit', requirement
+    end
     if not surfaces.is_public_planet_open(planet_name) then
         return false, 'planet-closed', requirement
     end
