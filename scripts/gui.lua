@@ -314,11 +314,17 @@ local function planet_traits_name(name)
 end
 
 local function render_planet_traits(container, item)
-    local signature = table.concat(item.traits, '|')
+    local signature = tostring(item.round or 0)
+        .. ':' .. table.concat(item.traits, '|')
     if container.tags.trait_signature == signature then return end
     container.clear()
     if #item.traits == 0 then
-        container.add{type = 'label', caption = {'un.planet-traits-pending'}}
+        container.add{
+            type = 'label',
+            caption = item.round and item.round > 0
+                and {'un.planet-traits-none'}
+                or {'un.planet-traits-pending'},
+        }
     else
         for _, trait_id in ipairs(item.traits) do
             container.add{

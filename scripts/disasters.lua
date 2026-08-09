@@ -12,79 +12,212 @@ local M = {}
 local PLANET_TRAITS = {
     nauvis = {
         {id = 'nauvis-iron-rich', kind = 'control', controls = {'iron-ore'},
+            group = 'nauvis-iron', weight = 6,
             frequency = 4, size = 4, richness = 16},
+        {id = 'nauvis-iron-megafields', kind = 'control',
+            controls = {'iron-ore'}, group = 'nauvis-iron', weight = 6,
+            frequency = 0.25, size = 16, richness = 0.125},
         {id = 'nauvis-copper-rich', kind = 'control', controls = {'copper-ore'},
+            group = 'nauvis-copper', weight = 6,
             frequency = 4, size = 4, richness = 16},
+        {id = 'nauvis-copper-megafields', kind = 'control',
+            controls = {'copper-ore'}, group = 'nauvis-copper', weight = 6,
+            frequency = 0.25, size = 16, richness = 0.125},
+        {id = 'nauvis-coal-rich', kind = 'control', controls = {'coal'},
+            weight = 6, frequency = 4, size = 4, richness = 16},
+        {id = 'nauvis-stone-rich', kind = 'control', controls = {'stone'},
+            weight = 6, frequency = 4, size = 4, richness = 16},
         {id = 'nauvis-oil-rich', kind = 'control', controls = {'crude-oil'},
+            group = 'nauvis-oil', weight = 6,
             frequency = 2, size = 4, richness = 16},
+        {id = 'nauvis-deep-oil', kind = 'control', controls = {'crude-oil'},
+            group = 'nauvis-oil', weight = 6,
+            frequency = 0.125, size = 0.5, richness = 64},
         {id = 'nauvis-uranium-rich', kind = 'control', controls = {'uranium-ore'},
-            frequency = 2, size = 2, richness = 16},
-        {id = 'nauvis-lush', kind = 'climate', moisture = 1},
+            weight = 6, frequency = 2, size = 2, richness = 16},
+        {id = 'nauvis-lush', kind = 'climate', group = 'nauvis-climate',
+            weight = 1, moisture = 1},
+        {id = 'nauvis-red-desert', kind = 'climate',
+            group = 'nauvis-climate', weight = 1, moisture = -1, aux = 1},
         {id = 'nauvis-swarm', kind = 'category', category = 'enemy',
+            group = 'nauvis-enemies', weight = 4,
             frequency = 4, size = 4, richness = 1},
-        {id = 'nauvis-bright-sun', kind = 'solar', factor = 10},
-        {id = 'nauvis-long-day', kind = 'day', factor = 10},
+        {id = 'nauvis-quiet-wilds', kind = 'category', category = 'enemy',
+            group = 'nauvis-enemies', weight = 4,
+            frequency = 0.125, size = 0.25, richness = 1},
+        {id = 'nauvis-bright-sun', kind = 'solar',
+            group = 'nauvis-solar', weight = 4, factor = 10},
+        {id = 'nauvis-dim-sun', kind = 'solar',
+            group = 'nauvis-solar', weight = 4, factor = 0.1},
+        {id = 'nauvis-long-day', kind = 'day',
+            group = 'nauvis-day', weight = 1, factor = 10},
+        {id = 'nauvis-rapid-day', kind = 'day',
+            group = 'nauvis-day', weight = 1, factor = 0.1},
     },
     vulcanus = {
         {id = 'vulcanus-tungsten-rich', kind = 'control',
-            controls = {'tungsten_ore'}, frequency = 4, size = 4, richness = 16},
+            controls = {'tungsten_ore'}, group = 'vulcanus-tungsten',
+            weight = 6, frequency = 4, size = 4, richness = 16},
+        {id = 'vulcanus-tungsten-megafields', kind = 'control',
+            controls = {'tungsten_ore'}, group = 'vulcanus-tungsten',
+            weight = 6, frequency = 0.25, size = 16, richness = 0.125},
         {id = 'vulcanus-coal-rich', kind = 'control',
-            controls = {'vulcanus_coal'},
-            frequency = 4, size = 4, richness = 16},
+            controls = {'vulcanus_coal'}, group = 'vulcanus-coal',
+            weight = 6, frequency = 4, size = 4, richness = 16},
+        {id = 'vulcanus-coal-seams', kind = 'control',
+            controls = {'vulcanus_coal'}, group = 'vulcanus-coal',
+            weight = 6, frequency = 0.25, size = 16, richness = 0.125},
         {id = 'vulcanus-calcite-rich', kind = 'control', controls = {'calcite'},
+            group = 'vulcanus-calcite', weight = 6,
             frequency = 4, size = 4, richness = 16},
+        {id = 'vulcanus-calcite-clusters', kind = 'control',
+            controls = {'calcite'}, group = 'vulcanus-calcite',
+            weight = 6, frequency = 0.25, size = 16, richness = 0.125},
         {id = 'vulcanus-acid-rich', kind = 'control',
-            controls = {'sulfuric_acid_geyser'},
+            controls = {'sulfuric_acid_geyser'}, group = 'vulcanus-acid',
+            weight = 6,
             frequency = 4, size = 4, richness = 16},
-        {id = 'vulcanus-fractured', kind = 'cliffs', interval = 0.1,
-            richness = 10},
-        {id = 'vulcanus-hot', kind = 'climate', temperature = 50},
-        {id = 'vulcanus-bright-sun', kind = 'solar', factor = 10},
-        {id = 'vulcanus-long-day', kind = 'day', factor = 10},
+        {id = 'vulcanus-acid-pressure', kind = 'control',
+            controls = {'sulfuric_acid_geyser'}, group = 'vulcanus-acid',
+            weight = 6, frequency = 0.125, size = 0.5, richness = 64},
+        {id = 'vulcanus-fractured', kind = 'cliffs',
+            group = 'vulcanus-cliffs', weight = 3,
+            interval = 0.1, richness = 10},
+        {id = 'vulcanus-open-plains', kind = 'cliffs',
+            group = 'vulcanus-cliffs', weight = 3,
+            interval = 10, richness = 0.1},
+        {id = 'vulcanus-hot', kind = 'climate',
+            group = 'vulcanus-temperature', weight = 1, temperature = 50},
+        {id = 'vulcanus-cold-ash', kind = 'climate',
+            group = 'vulcanus-temperature', weight = 1, temperature = -50},
+        {id = 'vulcanus-bright-sun', kind = 'solar',
+            group = 'vulcanus-solar', weight = 4, factor = 10},
+        {id = 'vulcanus-dim-sun', kind = 'solar',
+            group = 'vulcanus-solar', weight = 4, factor = 0.1},
+        {id = 'vulcanus-long-day', kind = 'day',
+            group = 'vulcanus-day', weight = 1, factor = 10},
+        {id = 'vulcanus-rapid-day', kind = 'day',
+            group = 'vulcanus-day', weight = 1, factor = 0.1},
     },
     gleba = {
         {id = 'gleba-lush', kind = 'category', category = 'terrain',
+            group = 'gleba-terrain', weight = 4,
             frequency = 4, size = 10, richness = 10},
-        {id = 'gleba-wet', kind = 'climate', group = 'gleba-moisture',
-            moisture = 1},
-        {id = 'gleba-dry', kind = 'climate', group = 'gleba-moisture',
-            moisture = -1},
-        {id = 'gleba-warm', kind = 'climate', temperature = 50},
-        {id = 'gleba-enemies', kind = 'category', category = 'enemy',
+        {id = 'gleba-stone-rich', kind = 'control', controls = {'gleba_stone'},
+            group = 'gleba-stone', weight = 6,
+            frequency = 4, size = 4, richness = 16},
+        {id = 'gleba-stone-megafields', kind = 'control',
+            controls = {'gleba_stone'}, group = 'gleba-stone', weight = 6,
+            frequency = 0.25, size = 16, richness = 0.125},
+        {id = 'gleba-plant-boom', kind = 'control',
+            controls = {'gleba_plants'}, group = 'gleba-plants', weight = 6,
+            frequency = 4, size = 4, richness = 4},
+        {id = 'gleba-plant-continents', kind = 'control',
+            controls = {'gleba_plants'}, group = 'gleba-plants', weight = 6,
+            frequency = 0.25, size = 16, richness = 0.5},
+        {id = 'gleba-flooded', kind = 'control',
+            controls = {'gleba_water'}, group = 'gleba-water', weight = 3,
             frequency = 4, size = 4, richness = 1},
+        {id = 'gleba-drylands', kind = 'control',
+            controls = {'gleba_water'}, group = 'gleba-water', weight = 3,
+            frequency = 0.25, size = 0.25, richness = 1},
+        {id = 'gleba-wet', kind = 'climate', group = 'gleba-moisture',
+            weight = 1, moisture = 1},
+        {id = 'gleba-dry', kind = 'climate', group = 'gleba-moisture',
+            weight = 1, moisture = -1},
+        {id = 'gleba-warm', kind = 'climate',
+            group = 'gleba-temperature', weight = 1, temperature = 50},
+        {id = 'gleba-cool', kind = 'climate',
+            group = 'gleba-temperature', weight = 1, temperature = -50},
+        {id = 'gleba-enemies', kind = 'category', category = 'enemy',
+            group = 'gleba-enemies', weight = 4,
+            frequency = 4, size = 4, richness = 1},
+        {id = 'gleba-quiet', kind = 'category', category = 'enemy',
+            group = 'gleba-enemies', weight = 4,
+            frequency = 0.125, size = 0.25, richness = 1},
         {id = 'gleba-broad-biomes', kind = 'climate-frequency',
-            moisture_frequency = 0.1},
+            group = 'gleba-biomes', weight = 1, moisture_frequency = 0.1},
+        {id = 'gleba-patchwork-biomes', kind = 'climate-frequency',
+            group = 'gleba-biomes', weight = 1, moisture_frequency = 10},
     },
     fulgora = {
         {id = 'fulgora-scrap-rich', kind = 'control', controls = {'scrap'},
+            group = 'fulgora-scrap', weight = 6,
             frequency = 4, size = 4, richness = 16},
+        {id = 'fulgora-scrap-megafields', kind = 'control',
+            controls = {'scrap'}, group = 'fulgora-scrap', weight = 6,
+            frequency = 0.25, size = 16, richness = 0.125},
+        {id = 'fulgora-deep-scrap', kind = 'control', controls = {'scrap'},
+            group = 'fulgora-scrap', weight = 6,
+            frequency = 0.125, size = 0.5, richness = 64},
         {id = 'fulgora-resources', kind = 'category', category = 'resource',
+            group = 'fulgora-scrap', weight = 6,
             frequency = 2, size = 4, richness = 8},
         {id = 'fulgora-large-islands', kind = 'category', category = 'terrain',
-            group = 'fulgora-islands', frequency = 0.1, size = 10,
+            group = 'fulgora-islands', weight = 3, frequency = 0.1, size = 10,
             richness = 1},
         {id = 'fulgora-small-islands', kind = 'category', category = 'terrain',
-            group = 'fulgora-islands', frequency = 10, size = 0.1,
+            group = 'fulgora-islands', weight = 3, frequency = 10, size = 0.1,
             richness = 1},
-        {id = 'fulgora-dry', kind = 'climate', moisture = -1},
-        {id = 'fulgora-fractured', kind = 'cliffs', interval = 0.1,
-            richness = 10},
-        {id = 'fulgora-solar-storm', kind = 'solar', factor = 10},
-        {id = 'fulgora-long-day', kind = 'day', factor = 10},
+        {id = 'fulgora-dry', kind = 'climate',
+            group = 'fulgora-climate', weight = 1, moisture = -1},
+        {id = 'fulgora-oxidized', kind = 'climate',
+            group = 'fulgora-climate', weight = 1, moisture = 1, aux = 1},
+        {id = 'fulgora-fractured', kind = 'cliffs',
+            group = 'fulgora-cliffs', weight = 3,
+            interval = 0.1, richness = 10},
+        {id = 'fulgora-open-coasts', kind = 'cliffs',
+            group = 'fulgora-cliffs', weight = 3,
+            interval = 10, richness = 0.1},
+        {id = 'fulgora-solar-storm', kind = 'solar',
+            group = 'fulgora-solar', weight = 4, factor = 10},
+        {id = 'fulgora-weak-sun', kind = 'solar',
+            group = 'fulgora-solar', weight = 4, factor = 0.1},
+        {id = 'fulgora-long-day', kind = 'day',
+            group = 'fulgora-day', weight = 2, factor = 10},
+        {id = 'fulgora-rapid-storms', kind = 'day',
+            group = 'fulgora-day', weight = 2, factor = 0.1},
     },
     aquilo = {
         {id = 'aquilo-lithium-rich', kind = 'control',
-            controls = {'lithium_brine'}, frequency = 4, size = 4, richness = 16},
+            controls = {'lithium_brine'}, group = 'aquilo-lithium',
+            weight = 6, frequency = 4, size = 4, richness = 16},
+        {id = 'aquilo-lithium-basins', kind = 'control',
+            controls = {'lithium_brine'}, group = 'aquilo-lithium',
+            weight = 6, frequency = 0.25, size = 16, richness = 0.125},
         {id = 'aquilo-fluorine-rich', kind = 'control',
-            controls = {'fluorine_vent'}, frequency = 4, size = 4, richness = 16},
+            controls = {'fluorine_vent'}, group = 'aquilo-fluorine',
+            weight = 6, frequency = 4, size = 4, richness = 16},
+        {id = 'aquilo-fluorine-fields', kind = 'control',
+            controls = {'fluorine_vent'}, group = 'aquilo-fluorine',
+            weight = 6, frequency = 0.25, size = 16, richness = 0.125},
+        {id = 'aquilo-oil-rich', kind = 'control',
+            controls = {'aquilo_crude_oil'}, group = 'aquilo-oil',
+            weight = 6, frequency = 4, size = 4, richness = 16},
+        {id = 'aquilo-deep-oil', kind = 'control',
+            controls = {'aquilo_crude_oil'}, group = 'aquilo-oil',
+            weight = 6, frequency = 0.125, size = 0.5, richness = 64},
         {id = 'aquilo-resources', kind = 'category', category = 'resource',
+            group = 'aquilo-all-resources', weight = 6,
             frequency = 2, size = 4, richness = 8},
-        {id = 'aquilo-broad-ice', kind = 'category', category = 'terrain',
-            frequency = 0.1, size = 10, richness = 1},
-        {id = 'aquilo-deep-cold', kind = 'climate', temperature = -50},
-        {id = 'aquilo-broad-climate', kind = 'climate-frequency',
+        {id = 'aquilo-broad-ice', kind = 'climate-frequency',
+            group = 'aquilo-climate-scale', weight = 1,
             moisture_frequency = 0.1},
-        {id = 'aquilo-pale-sun', kind = 'solar', factor = 0.1},
+        {id = 'aquilo-shattered-ice', kind = 'climate-frequency',
+            group = 'aquilo-climate-scale', weight = 1,
+            moisture_frequency = 10},
+        {id = 'aquilo-deep-cold', kind = 'climate',
+            group = 'aquilo-temperature', weight = 1, temperature = -50},
+        {id = 'aquilo-warm-front', kind = 'climate',
+            group = 'aquilo-temperature', weight = 1, temperature = 50},
+        {id = 'aquilo-pale-sun', kind = 'solar',
+            group = 'aquilo-solar', weight = 4, factor = 0.1},
+        {id = 'aquilo-bright-sun', kind = 'solar',
+            group = 'aquilo-solar', weight = 4, factor = 10},
+        {id = 'aquilo-long-day', kind = 'day',
+            group = 'aquilo-day', weight = 1, factor = 10},
+        {id = 'aquilo-rapid-day', kind = 'day',
+            group = 'aquilo-day', weight = 1, factor = 0.1},
     },
 }
 
@@ -363,6 +496,8 @@ local function apply_trait(map_settings, record, trait)
     elseif trait.kind == 'climate' then
         record.climate.moisture_bias = record.climate.moisture_bias
             + (trait.moisture or 0)
+        record.climate.aux_bias = record.climate.aux_bias
+            + (trait.aux or 0)
         record.climate.temperature_bias = record.climate.temperature_bias
             + (trait.temperature or 0)
         local expressions = map_settings.property_expression_names or {}
@@ -372,6 +507,7 @@ local function apply_trait(map_settings, record, trait)
         expressions['control:temperature:bias'] = tostring(
             record.climate.temperature_bias
         )
+        expressions['control:aux:bias'] = tostring(record.climate.aux_bias)
         map_settings.property_expression_names = expressions
         applied = true
     elseif trait.kind == 'climate-frequency' then
@@ -396,20 +532,27 @@ end
 local function roll_traits(name, map_settings, record)
     local pool = PLANET_TRAITS[name] or {}
     local order = {}
-    for index = 1, #pool do order[index] = index end
-    for index = #order, 2, -1 do
-        local other = math.random(1, index)
-        order[index], order[other] = order[other], order[index]
+    for index, trait in ipairs(pool) do
+        order[#order + 1] = {
+            index = index,
+            priority = math.random() ^ (1 / (trait.weight or 1)),
+        }
     end
+    table.sort(order, function(a, b)
+        if a.priority ~= b.priority then return a.priority > b.priority end
+        return a.index < b.index
+    end)
     record.traits = {}
+    local target_count = math.random(0, 5)
+    if target_count == 0 then return end
     local selected_groups = {}
-    for _, index in ipairs(order) do
-        local trait = pool[index]
+    for _, candidate in ipairs(order) do
+        local trait = pool[candidate.index]
         if (not trait.group or not selected_groups[trait.group])
                 and apply_trait(map_settings, record, trait) then
             record.traits[#record.traits + 1] = trait.id
             if trait.group then selected_groups[trait.group] = true end
-            if #record.traits == 3 then break end
+            if #record.traits == target_count then break end
         end
     end
 end

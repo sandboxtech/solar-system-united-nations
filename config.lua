@@ -17,10 +17,10 @@ M.public_planet_check_ticks = 60 * 60
 M.public_planet_solar_factors = {0.75, 1, 1.25}
 M.public_planet_day_factors = {0.75, 1, 1.5}
 M.public_planet_resource_base = {frequency = 2, size = 2, richness = 0.25}
-M.public_planet_resource_spread = 3
-M.public_planet_terrain_spread = 3
-M.public_planet_cliff_spread = 2
-M.public_planet_enemy_spread = 4
+M.public_planet_resource_spread = 1
+M.public_planet_terrain_spread = 1
+M.public_planet_cliff_spread = 1
+M.public_planet_enemy_spread = 2
 M.public_planet_peaceful_chance = 0.01
 M.technology_price_multiplier = 2
 M.spoil_time_modifier = 1

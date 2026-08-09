@@ -1,6 +1,5 @@
 local config = require('config')
 local economy = require('scripts.economy')
-local factions = require('scripts.factions')
 local properties = require('scripts.properties')
 local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
@@ -28,8 +27,8 @@ local function context(player)
     if not surfaces.can_start_public_travel(surface) then
         return nil, 'invalid-location'
     end
-    local planet_name = factions.of_player(player)
-    if not planet_name then return nil, 'invalid-faction' end
+    local planet_name = surfaces.context_planet(surface)
+    if not planet_name then return nil, 'invalid-location' end
     return planet_name
 end
 
