@@ -988,19 +988,23 @@ end
 
 local function render_factions_page(player, frame, content)
     local current_planet = factions.of_player(player) or 'nauvis'
-    content.add{
+    local summary = content.add{
+        type = 'flow',
+        direction = 'horizontal',
+    }
+    summary.style.vertical_align = 'center'
+    summary.add{
         type = 'label',
         caption = {
             'un.faction-current-summary',
             factions.display_name(current_planet),
         },
     }
-    local warning = content.add{
-        type = 'label',
-        caption = {'un.faction-page-warning', config.suicide_stamina_cost},
-    }
-    warning.style.single_line = false
-    warning.style.maximal_width = 760
+    add_info_sprite(summary, {
+        'un.faction-page-tooltip',
+        config.suicide_stamina_cost,
+        config.normal_respawn_seconds,
+    })
     local list = content.add{
         type = 'table',
         name = FACTION_TABLE_NAME,
