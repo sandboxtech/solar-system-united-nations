@@ -19,6 +19,9 @@ function M.ensure()
     if storage.respawn_hospice_planets == nil then
         storage.respawn_hospice_planets = {}
     end
+    if storage.pending_faction_switches == nil then
+        storage.pending_faction_switches = {}
+    end
     if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then
         storage.ledger = {first_id = 1, next_id = 1, records = {}}

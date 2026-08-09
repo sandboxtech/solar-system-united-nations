@@ -1,4 +1,5 @@
 local config = require('config')
+local factions = require('scripts.factions')
 local gui = require('scripts.gui')
 local properties = require('scripts.properties')
 local restrictions = require('scripts.restrictions')
@@ -12,6 +13,7 @@ local M = {}
 
 function M.run()
     state.ensure()
+    factions.ensure()
     for _, name in ipairs(config.public_planets) do
         surfaces.ensure_hospice(name)
     end

@@ -1,16 +1,18 @@
 local config = require('config')
 local economy = require('scripts.economy')
+local factions = require('scripts.factions')
 local properties = require('scripts.properties')
 local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
 
-local function targets(planet_name)
+local function targets(planet_name, player_index)
     local result = {}
     for _, property in ipairs(properties.list(planet_name)) do
         local surface = game.surfaces[property.surface_name]
-        if property.owner_index and surface and surface.valid then
+        if property.owner_index and property.owner_index ~= player_index
+                and surface and surface.valid then
             result[#result + 1] = property
         end
     end
@@ -23,15 +25,15 @@ local function context(player)
     if not (surface and surface.valid) then return nil, 'invalid-location' end
     if surface.platform then return nil, 'in-space' end
     if player.vehicle and player.vehicle.valid then return nil, 'in-vehicle' end
-    local planet_name = surfaces.context_planet(surface)
-    if not planet_name then return nil, 'invalid-location' end
+    local planet_name = factions.of_player(player)
+    if not planet_name then return nil, 'invalid-faction' end
     return planet_name
 end
 
 function M.availability(player)
     local planet_name, err = context(player)
     if not planet_name then return false, err end
-    local candidates = targets(planet_name)
+    local candidates = targets(planet_name, player.index)
     if #candidates == 0 then return false, 'no-targets', planet_name, 0 end
     if economy.get_balance(player.index) < config.crime_coin_cost then
         return false, 'insufficient-credit', planet_name, #candidates
@@ -51,7 +53,7 @@ end
 function M.attempt(player)
     local available, err, planet_name = M.availability(player)
     if not available then return false, err end
-    local candidates = targets(planet_name)
+    local candidates = targets(planet_name, player.index)
     if #candidates == 0 then return false, 'no-targets' end
     local property = candidates[math.random(#candidates)]
     local price = properties.current_price(property)

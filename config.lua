@@ -7,6 +7,8 @@ M.ticks_per_hour = 60 * M.ticks_per_minute
 M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
 M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
+M.faction_force_prefix = 'un-faction-'
+M.public_planet_arrival_radius = 64
 M.public_planet_reset_min_hours = 1
 M.public_planet_reset_random_hours = 4
 M.public_planet_initial_offset_minutes = {
@@ -125,10 +127,10 @@ M.property_build_price_per_experience = 10
 M.property_build_cooldown_hours = 20
 M.property_build_pack_by_planet = {
     nauvis = 'automation-science-pack',
-    vulcanus = 'metallurgic-science-pack',
-    gleba = 'agricultural-science-pack',
-    fulgora = 'electromagnetic-science-pack',
-    aquilo = 'cryogenic-science-pack',
+    vulcanus = 'automation-science-pack',
+    gleba = 'automation-science-pack',
+    fulgora = 'automation-science-pack',
+    aquilo = 'automation-science-pack',
 }
 M.property_lifetime_options = {
     {hours = 30, cost = 1, decay_hours = 3},
@@ -142,13 +144,14 @@ M.property_size_options = {
 }
 M.property_lifecycle_ticks = M.ticks_per_minute
 M.property_permanent_defaults = {
-    {count = 3, width = 64, height = 32, decay_hours = 3},
-    {count = 1, width = 128, height = 64, decay_hours = 12},
+    {count = 1, width = 64, height = 32, decay_hours = 3},
+    {count = 1, width = 128, height = 64, decay_hours = 3},
+    {count = 1, width = 256, height = 128, decay_hours = 3},
 }
 
 M.stamina_max = 100000
 M.stamina_per_second = 1
-M.suicide_stamina_cost = 100
+M.suicide_stamina_cost = 1000
 
 M.ship_life_hours = 12
 M.ship_stamina_cost = 10000

@@ -2,6 +2,7 @@ local config = require('config')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
+local factions = require('scripts.factions')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local social = require('scripts.social')
@@ -234,6 +235,8 @@ local function ensure_linked_chests(property)
         property.sample_planet
     )
     normalize_linked_chest_positions(property, surface)
+    local force = factions.of_planet(property.sample_planet)
+    if not (force and force.valid) then return false end
     local link_id = property.owner_index or config.property_link_id_unowned
     for _, position in ipairs(property.linked_chest_positions) do
         local chest = surface.find_entity(config.linked_chest_name, position)
@@ -241,7 +244,7 @@ local function ensure_linked_chests(property)
             chest = surface.create_entity{
                 name = config.linked_chest_name,
                 position = position,
-                force = game.forces.player,
+                force = force,
                 raise_built = false,
             }
         end
@@ -256,9 +259,10 @@ end
 
 local function sync_surface_visibility(property)
     local surface = game.surfaces[property.surface_name]
-    local force = game.forces.player
-    if not (surface and surface.valid and force and force.valid) then return false end
-    force.set_surface_hidden(surface, true)
+    if not (surface and surface.valid) then return false end
+    for _, entry in ipairs(factions.all()) do
+        entry.force.set_surface_hidden(surface, true)
+    end
     return true
 end
 
@@ -476,6 +480,9 @@ function M.build_availability(player, planet_name, lifetime_index, size_index)
         size_index
     )
     if not requirement then return false, 'invalid-build-option' end
+    if factions.of_player(player) ~= planet_name then
+        return false, 'wrong-faction', requirement
+    end
     if M.build_cooldown_left_ticks(player.index) > 0 then
         return false, 'build-cooldown', requirement
     end
@@ -628,6 +635,26 @@ function M.release_owner(player_index)
     return changed
 end
 
+function M.release_owner_in_faction(player_index, planet_name)
+    state.ensure()
+    local changed = 0
+    for _, property in ipairs(M.list(planet_name)) do
+        if property.owner_index == player_index then
+            assign_owner(property, nil)
+            property.owner_cleanup_tick = game.tick
+            ensure_linked_chests(property)
+            sync_surface_visibility(property)
+            local translator = first_connected_player()
+            if translator then
+                request_property_name_translation(property, translator)
+            end
+            changed = changed + 1
+        end
+    end
+    if changed > 0 then bump_revision() end
+    return changed
+end
+
 local function valid_surface(property)
     local surface = property and game.surfaces[property.surface_name]
     return surface and surface.valid or false
@@ -636,6 +663,9 @@ end
 function M.buy_availability(player, property)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
+    if factions.of_player(player) ~= property.sample_planet then
+        return false, 'wrong-faction'
+    end
     local price = M.current_price(property)
     local required = property.owner_index == player.index
         and M.transaction_tax(property, price) or price
@@ -649,6 +679,9 @@ function M.enter_availability(player, property)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
     if player.admin and settings.get('admin_property_access') then return true end
+    if factions.of_player(player) ~= property.sample_planet then
+        return false, 'wrong-faction'
+    end
     if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
     if not surfaces.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
@@ -663,6 +696,9 @@ function M.buy(player, property_id, quoted_price)
     local property = M.get(property_id)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
+    if factions.of_player(player) ~= property.sample_planet then
+        return false, 'wrong-faction'
+    end
     local price = M.current_price(property)
     local seller_name = M.owner_name(property)
     local transaction_name = M.display_name(property)
@@ -756,7 +792,7 @@ end
 
 function M.home_travel(player)
     local source = player.physical_surface
-    local planet_name = surfaces.context_planet(source)
+    local planet_name = factions.of_player(player)
     if not planet_name then return false, 'travel-restricted' end
     if source.name == planet_name then
         local property = owned_home(player.index, planet_name)
@@ -989,6 +1025,10 @@ end
 
 events.on(defines.events.on_player_joined_game, refresh_owned_name_renderings)
 events.on(defines.events.on_player_locale_changed, refresh_owned_name_renderings)
+
+factions.on_switch_cleanup(function(player, source_planet)
+    M.release_owner_in_faction(player.index, source_planet)
+end)
 
 scheduler.every(config.property_lifecycle_ticks, expire_due_properties)
 

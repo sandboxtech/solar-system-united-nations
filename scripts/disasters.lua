@@ -1,5 +1,6 @@
 local config = require('config')
 local events = require('scripts.events')
+local factions = require('scripts.factions')
 local linked_inventory = require('scripts.linked_inventory')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
@@ -511,7 +512,8 @@ local function finish_reset(name, surface, record)
     clear_statistics(surface)
     apply_round_environment(name, surface, record)
     surfaces.sync_all_property_environments()
-    game.forces.player.set_spawn_position({0, 0}, surface)
+    local force = factions.of_planet(name)
+    if force and force.valid then force.set_spawn_position({0, 0}, surface) end
     surface.request_to_generate_chunks({0, 0}, 1)
     surface.force_generate_chunk_requests()
 

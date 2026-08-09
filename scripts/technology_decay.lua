@@ -1,4 +1,5 @@
 local config = require('config')
+local factions = require('scripts.factions')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 
@@ -48,8 +49,7 @@ local function sorted_technology_names(force)
     return names
 end
 
-function M.run()
-    local force = game.forces.player
+local function run_force(force)
     if not (force and force.valid) then return 0 end
     local coefficient = math.random()
         * settings.get('tech_leak_max_percent')
@@ -80,20 +80,28 @@ function M.run()
     end
 
     if #lost > 0 then
-        game.print({
+        force.print({
             'un.tech-leak-lost',
             #lost,
             table.concat(lost, ' '),
         })
     end
     if #downgraded > 0 then
-        game.print({
+        force.print({
             'un.tech-leak-downgraded',
             #downgraded,
             table.concat(downgraded, ' '),
         })
     end
     return #lost + #downgraded
+end
+
+function M.run()
+    local total = 0
+    for _, entry in ipairs(factions.all()) do
+        total = total + run_force(entry.force)
+    end
+    return total
 end
 
 function M.ensure()

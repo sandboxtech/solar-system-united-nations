@@ -1,4 +1,5 @@
 local events = require('scripts.events')
+local factions = require('scripts.factions')
 
 local M = {}
 
@@ -9,7 +10,9 @@ local function disable_logistic_robot_recipe(force)
 end
 
 function M.ensure()
-    disable_logistic_robot_recipe(game.forces.player)
+    for _, entry in ipairs(factions.all()) do
+        disable_logistic_robot_recipe(entry.force)
+    end
 end
 
 events.on(defines.events.on_research_finished, function(event)

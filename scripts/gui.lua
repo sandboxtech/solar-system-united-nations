@@ -4,6 +4,7 @@ local disasters = require('scripts.disasters')
 local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
+local factions = require('scripts.factions')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
@@ -34,7 +35,9 @@ local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
 local NAV_PLAYERS_NAME = 'un_nav_players'
 local NAV_CRIME_NAME = 'un_nav_crime'
+local NAV_FACTIONS_NAME = 'un_nav_factions'
 local NAV_ADMIN_NAME = 'un_nav_admin'
+local HELP_STORY_NAME = 'un_help_story'
 local HELP_BRIEF_NAME = 'un_help_brief'
 local HELP_ADVANCED_NAME = 'un_help_advanced'
 local HELP_FULL_NAME = 'un_help_full'
@@ -76,6 +79,8 @@ local PLANET_TABLE_NAME = 'un_planet_table'
 local TECH_LEAK_COUNTDOWN_NAME = 'un_tech_leak_countdown'
 local CRIME_STATUS_NAME = 'un_crime_status'
 local CRIME_BUTTON_NAME = 'un_crime_button'
+local FACTION_TABLE_NAME = 'un_faction_table'
+local FACTION_SWITCH_PREFIX = 'un_faction_switch_'
 local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
 local ADMIN_PLAYER_TABLE_NAME = 'un_admin_player_table'
@@ -255,6 +260,7 @@ local function disabled_tooltip(action, err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
+    if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
     if action == 'enter' and err == 'not-owner' then
         return {'un.property-enter-disabled-private'}
     end
@@ -384,35 +390,17 @@ local function render_property_table(player, frame, content)
     if old_sort and old_sort.valid then old_sort.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
-    local selected = frame.tags.property_planet
-    if not selected then
-        selected = surfaces.context_planet(player.physical_surface) or 'nauvis'
-        local tags = frame.tags
-        tags.property_planet = selected
-        frame.tags = tags
-    end
+    local selected = factions.of_player(player) or 'nauvis'
+    local tags = frame.tags
+    tags.property_planet = selected
+    frame.tags = tags
     local property_list = properties.list(selected)
     local sort_index = property_sort_index(frame)
     sort_properties(property_list, sort_index)
-    local actions = content.add{
-        type = 'tabbed-pane',
-        name = PROPERTY_ACTIONS_NAME,
+    content.add{
+        type = 'label',
+        caption = {'un.property-current-faction', planet_label(selected)},
     }
-    local selected_index = 1
-    for index, planet_name in ipairs(config.public_planets) do
-        local tab = actions.add{
-            type = 'tab',
-            caption = {
-                '',
-                '[planet=' .. planet_name .. '] ',
-                {'space-location-name.' .. planet_name},
-            },
-        }
-        local tab_content = actions.add{type = 'flow', direction = 'vertical'}
-        actions.add_tab(tab, tab_content)
-        if planet_name == selected then selected_index = index end
-    end
-    actions.selected_tab_index = selected_index
     local sort_flow = content.add{
         type = 'flow',
         name = PROPERTY_SORT_FLOW_NAME,
@@ -512,15 +500,14 @@ local function render_property_table(player, frame, content)
     frame.tags = tags
 end
 
-local function property_build_planet(form)
-    local dropdown = form and form.valid and form[PROPERTY_BUILD_PLANET_NAME]
-    return dropdown and config.public_planets[dropdown.selected_index] or nil
+local function property_build_planet(player)
+    return factions.of_player(player)
 end
 
 local function update_property_build_page(player, content)
     local form = content[PROPERTY_BUILD_FORM_NAME]
     if not (form and form.valid) then return end
-    local planet_name = property_build_planet(form)
+    local planet_name = property_build_planet(player)
     local lifetime = form[PROPERTY_BUILD_LIFETIME_NAME]
     local size = form[PROPERTY_BUILD_SIZE_NAME]
     local cost_label = form[PROPERTY_BUILD_COST_NAME]
@@ -584,19 +571,8 @@ local function render_property_build_page(player, frame, content)
         style = 'bordered_table',
     }
     form.add{type = 'label', caption = {'un.property-build-planet'}}
-    local planet_items = {}
-    local selected_planet = surfaces.context_planet(player.physical_surface)
-    local selected_planet_index = 1
-    for index, planet_name in ipairs(config.public_planets) do
-        planet_items[#planet_items + 1] = planet_label(planet_name)
-        if planet_name == selected_planet then selected_planet_index = index end
-    end
-    form.add{
-        type = 'drop-down',
-        name = PROPERTY_BUILD_PLANET_NAME,
-        items = planet_items,
-        selected_index = selected_planet_index,
-    }
+    local selected_planet = factions.of_player(player) or 'nauvis'
+    form.add{type = 'label', caption = planet_label(selected_planet)}
     form.add{type = 'label', caption = {'un.property-build-lifetime'}}
     local lifetime_items = {}
     for _, option in ipairs(properties.build_lifetime_options()) do
@@ -687,42 +663,16 @@ local function render_ubi_section(content)
     kit.style.width = 360
 end
 
-local function render_suicide_section(content)
-    local actions = content.add{
-        type = 'table',
-        column_count = 3,
-    }
-    for _, planet_name in ipairs(config.public_planets) do
-        local suicide = actions.add{
-            type = 'button',
-            name = SUICIDE_PREFIX .. planet_name,
-            caption = {'un.suicide', planet_label(planet_name)},
-            tooltip = {
-                'un.suicide-tooltip',
-                planet_label(planet_name),
-                config.suicide_stamina_cost,
-            },
-            tags = {action = 'suicide', planet = planet_name},
-        }
-        suicide.style.height = 40
-    end
-end
-
-local function render_ship_actions(content)
+local function render_ship_actions(player, content)
     local ship_actions = content.add{
         type = 'flow',
         name = SHIP_ACTIONS_NAME,
         direction = 'horizontal',
     }
-    local planet_items = {}
-    for _, planet_name in ipairs(config.public_planets) do
-        planet_items[#planet_items + 1] = planet_label(planet_name)
-    end
     ship_actions.add{
-        type = 'drop-down',
-        name = SHIP_PLANET_NAME,
-        items = planet_items,
-        selected_index = 1,
+        type = 'label',
+        caption = {'un.ship-faction-orbit',
+            planet_label(factions.of_player(player) or 'nauvis')},
     }
     ship_actions.add{
         type = 'button',
@@ -763,8 +713,6 @@ end
 local function render_overview_page(player, frame, content)
     render_ubi_section(content)
     content.add{type = 'line'}
-    render_suicide_section(content)
-    content.add{type = 'line'}
     render_experience_section(content)
     set_frame_state(frame, 'overview')
 end
@@ -784,7 +732,7 @@ local function ship_signature(list)
 end
 
 local function render_ships_page(player, frame, content)
-    render_ship_actions(content)
+    render_ship_actions(player, content)
     content.add{type = 'line'}
     local list_data = ships.list()
     local list = content.add{
@@ -864,6 +812,129 @@ local function render_planets_page(frame, content)
     note.style.single_line = false
     note.style.maximal_width = 640
     set_frame_state(frame, 'planets')
+end
+
+local function faction_element_name(kind, planet_name)
+    return 'un_faction_' .. kind .. '_' .. planet_name
+end
+
+local function faction_statistics(planet_name, ship_list)
+    local force = factions.of_planet(planet_name)
+    local online = 0
+    local total = 0
+    local online_ticks = 0
+    if force and force.valid then
+        for _, member in pairs(force.players) do
+            total = total + 1
+            online_ticks = online_ticks + member.online_time
+            if member.connected then online = online + 1 end
+        end
+    end
+    local ship_count = 0
+    for _, item in ipairs(ship_list) do
+        if item.record.force_name == (force and force.name) then
+            ship_count = ship_count + 1
+        end
+    end
+    return {
+        online = online,
+        total = total,
+        online_ticks = online_ticks,
+        properties = #properties.list(planet_name),
+        ships = ship_count,
+    }
+end
+
+local function update_factions_page(player, content)
+    local list = content[FACTION_TABLE_NAME]
+    if not (list and list.valid) then return end
+    local current = factions.of_player(player)
+    local ship_list = ships.list()
+    for _, planet_name in ipairs(config.public_planets) do
+        local data = faction_statistics(planet_name, ship_list)
+        local status = list[faction_element_name('status', planet_name)]
+        local population = list[faction_element_name('population', planet_name)]
+        local hours = list[faction_element_name('hours', planet_name)]
+        local property_count = list[faction_element_name('properties', planet_name)]
+        local ship_count = list[faction_element_name('ships', planet_name)]
+        local button = list[FACTION_SWITCH_PREFIX .. planet_name]
+        if status and status.valid then
+            status.caption = current == planet_name
+                and {'un.faction-current'} or {'un.faction-hostile'}
+        end
+        if population and population.valid then
+            population.caption = {'un.faction-population', data.online, data.total}
+        end
+        if hours and hours.valid then
+            hours.caption = string.format(
+                '%.1f',
+                math.max(0, data.online_ticks) / config.ticks_per_hour
+            )
+        end
+        if property_count and property_count.valid then
+            property_count.caption = tostring(data.properties)
+        end
+        if ship_count and ship_count.valid then
+            ship_count.caption = tostring(data.ships)
+        end
+        if button and button.valid then
+            button.enabled = current ~= planet_name
+                and stamina.get(player.index) >= config.suicide_stamina_cost
+            button.tooltip = current == planet_name
+                and {'un.faction-already-current'}
+                or button.enabled and {
+                    'un.faction-switch-tooltip',
+                    planet_label(planet_name),
+                    config.suicide_stamina_cost,
+                } or {'un.suicide-stamina-insufficient'}
+            if button.tags.action ~= 'faction-switch-confirm' then
+                button.caption = current == planet_name
+                    and {'un.faction-current'} or {'un.faction-switch'}
+                button.tags = {
+                    action = 'faction-switch',
+                    planet = planet_name,
+                }
+            end
+        end
+    end
+end
+
+local function render_factions_page(player, frame, content)
+    local warning = content.add{
+        type = 'label',
+        caption = {'un.faction-page-warning', config.suicide_stamina_cost},
+    }
+    warning.style.single_line = false
+    warning.style.maximal_width = 760
+    local list = content.add{
+        type = 'table',
+        name = FACTION_TABLE_NAME,
+        column_count = 7,
+        style = 'bordered_table',
+    }
+    list.add{type = 'label', caption = {'un.faction-column-name'}}
+    list.add{type = 'label', caption = {'un.faction-column-relation'}}
+    list.add{type = 'label', caption = {'un.faction-column-population'}}
+    list.add{type = 'label', caption = {'un.faction-column-hours'}}
+    list.add{type = 'label', caption = {'un.faction-column-properties'}}
+    list.add{type = 'label', caption = {'un.faction-column-ships'}}
+    list.add{type = 'label', caption = {'un.faction-column-action'}}
+    for _, planet_name in ipairs(config.public_planets) do
+        list.add{type = 'label', caption = factions.display_name(planet_name)}
+        list.add{type = 'label', name = faction_element_name('status', planet_name)}
+        list.add{type = 'label', name = faction_element_name('population', planet_name)}
+        list.add{type = 'label', name = faction_element_name('hours', planet_name)}
+        list.add{type = 'label', name = faction_element_name('properties', planet_name)}
+        list.add{type = 'label', name = faction_element_name('ships', planet_name)}
+        list.add{
+            type = 'button',
+            name = FACTION_SWITCH_PREFIX .. planet_name,
+            caption = {'un.faction-switch'},
+            tags = {action = 'faction-switch', planet = planet_name},
+        }
+    end
+    set_frame_state(frame, 'factions')
+    update_factions_page(player, content)
 end
 
 local function crime_error_caption(err)
@@ -1099,12 +1170,18 @@ local function render_help_page(frame, content, mode)
     mode = mode or 'brief'
     local title = content.add{
         type = 'label',
-        caption = mode == 'full' and {'un.help-full-title'}
+        caption = mode == 'story' and {'un.help-story-title'}
+            or mode == 'full' and {'un.help-full-title'}
             or mode == 'advanced' and {'un.help-advanced-title'}
             or {'un.help-title'},
     }
     title.style.font = 'default-large-bold'
     local modes = content.add{type = 'flow', direction = 'horizontal'}
+    local story = modes.add{
+        type = 'button',
+        name = HELP_STORY_NAME,
+        caption = {'un.help-mode-story'},
+    }
     local brief = modes.add{
         type = 'button',
         name = HELP_BRIEF_NAME,
@@ -1120,6 +1197,7 @@ local function render_help_page(frame, content, mode)
         name = HELP_FULL_NAME,
         caption = {'un.help-mode-full'},
     }
+    story.enabled = mode ~= 'story'
     brief.enabled = mode ~= 'brief'
     advanced.enabled = mode ~= 'advanced'
     full.enabled = mode ~= 'full'
@@ -1131,7 +1209,16 @@ local function render_help_page(frame, content, mode)
     details.style.minimal_width = 740
     details.style.maximal_height = 620
 
-    if mode == 'brief' then
+    if mode == 'story' then
+        local background = add_help_card(details, {'un.help-card-story'})
+        add_help_line(background, {'un.help-story-background'})
+        add_help_gap(details)
+        local forces = add_help_card(details, {'un.help-card-factions'})
+        add_help_line(forces, {
+            'un.help-story-factions',
+            config.suicide_stamina_cost,
+        })
+    elseif mode == 'brief' then
         local income = add_help_card(details, {'un.help-card-income'})
         add_help_line(income, {'un.help-brief-start'})
         add_help_gap(details)
@@ -1388,6 +1475,8 @@ local function render_page(player, page)
         render_players_page(player, frame, content)
     elseif page == 'crime' then
         render_crime_page(player, frame, content)
+    elseif page == 'factions' then
+        render_factions_page(player, frame, content)
     elseif page == 'admin' then
         render_admin_page(player, frame, content)
     else
@@ -1404,6 +1493,7 @@ local function render_page(player, page)
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
     navigation[NAV_CRIME_NAME].enabled = page ~= 'crime'
+    navigation[NAV_FACTIONS_NAME].enabled = page ~= 'factions'
     local admin = navigation[NAV_ADMIN_NAME]
     if admin and admin.valid then admin.enabled = page ~= 'admin' end
 end
@@ -1417,6 +1507,7 @@ local function property_error(err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
+    if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
     if err == 'ship-invalid-planet' then return {'un.ship-invalid-planet'} end
     if err == 'ship-already-have' then return {'un.ship-already-have'} end
     if err == 'ship-missing' then return {'un.ship-missing'} end
@@ -1503,21 +1594,18 @@ local function update_ship_actions(player, content)
         return
     end
     local create = ship_actions[SHIP_CREATE_NAME]
-    local planet = ship_actions[SHIP_PLANET_NAME]
     local scuttle = ship_actions[SHIP_SCUTTLE_NAME]
     if platform then
         local hours = math.ceil(math.max(0, ships.left_ticks(record))
             / config.ticks_per_hour)
         status.caption = {'un.ship-status', platform.name, hours}
         create.enabled = false
-        planet.enabled = false
         scuttle.enabled = true
     else
         status.caption = {'un.ship-none'}
         create.enabled = stamina.get(player.index) >= config.ship_stamina_cost
         create.tooltip = create.enabled and {'un.ship-create-tooltip'}
             or {'un.stamina-insufficient'}
-        planet.enabled = true
         scuttle.enabled = false
     end
 end
@@ -1676,13 +1764,17 @@ local function update_frame(player)
         else
             local property_table = content[PROPERTY_TABLE_NAME]
             if property_table and property_table.valid then
-                for _, property in ipairs(properties.list()) do
+                for _, property in ipairs(properties.list(
+                    factions.of_player(player)
+                )) do
                     update_property_row(player, property_table, property)
                 end
             end
         end
     elseif page == 'crime' then
         update_crime_page(player, content)
+    elseif page == 'factions' then
+        update_factions_page(player, content)
     elseif page == 'players' then
         if frame.tags.player_signature ~= player_signature() then
             content.clear()
@@ -1788,6 +1880,11 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
     navigation.add{type = 'button', name = NAV_CRIME_NAME, caption = {'un.page-crime'}}
+    navigation.add{
+        type = 'button',
+        name = NAV_FACTIONS_NAME,
+        caption = {'un.page-factions'},
+    }
     if player.admin then
         navigation.add{type = 'button', name = NAV_ADMIN_NAME, caption = {'un.page-admin'}}
     end
@@ -1870,11 +1967,13 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == HELP_BRIEF_NAME
             or element.name == HELP_ADVANCED_NAME
-            or element.name == HELP_FULL_NAME then
+            or element.name == HELP_FULL_NAME
+            or element.name == HELP_STORY_NAME then
         local frame = player.gui.screen[FRAME_NAME]
         local content = frame and frame.valid and frame[CONTENT_NAME]
         if not (content and content.valid) then return end
-        local mode = element.name == HELP_FULL_NAME and 'full'
+        local mode = element.name == HELP_STORY_NAME and 'story'
+            or element.name == HELP_FULL_NAME and 'full'
             or element.name == HELP_ADVANCED_NAME and 'advanced' or 'brief'
         content.clear()
         render_help_page(frame, content, mode)
@@ -1899,6 +1998,9 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == NAV_CRIME_NAME then
         render_page(player, 'crime')
+        update_frame(player)
+    elseif element.name == NAV_FACTIONS_NAME then
+        render_page(player, 'factions')
         update_frame(player)
     elseif element.name == NAV_ADMIN_NAME then
         if player.admin then
@@ -1928,10 +2030,7 @@ events.on(defines.events.on_gui_click, function(event)
             element.tags = {action = 'starter-kit-confirm'}
         end
     elseif element.name == SHIP_CREATE_NAME then
-        local actions = element.parent
-        local dropdown = actions and actions.valid and actions[SHIP_PLANET_NAME]
-        local planet_name = dropdown
-            and config.public_planets[dropdown.selected_index] or nil
+        local planet_name = factions.of_player(player)
         local platform, err = ships.create(player, planet_name)
         if not platform then player.print(property_error(err)) end
         render_page(player, 'ships')
@@ -1956,33 +2055,32 @@ events.on(defines.events.on_gui_click, function(event)
         else
             update_frame(player)
         end
-    elseif element.name:sub(1, #SUICIDE_PREFIX) == SUICIDE_PREFIX then
+    elseif element.name:sub(1, #FACTION_SWITCH_PREFIX)
+            == FACTION_SWITCH_PREFIX then
         local planet_name = element.tags.planet
-        if element.tags.action == 'suicide-confirm' then
-            if stamina.get(player.index) < config.suicide_stamina_cost then
-                player.print({'un.suicide-stamina-insufficient'})
-                return
-            end
-            local ok = surfaces.suicide(player, planet_name)
+        if element.tags.action == 'faction-switch-confirm' then
+            local ok, err = factions.switch_by_suicide(player, planet_name)
             if ok then
-                stamina.spend(player.index, config.suicide_stamina_cost)
                 close_frame(player)
             else
-                player.print({'un.suicide-unavailable'})
+                player.print(err == 'insufficient-stamina'
+                    and {'un.suicide-stamina-insufficient'}
+                    or err == 'same-faction' and {'un.faction-already-current'}
+                    or {'un.suicide-unavailable'})
             end
         else
             element.caption = {
-                'un.suicide-confirm',
+                'un.faction-switch-confirm',
                 planet_label(planet_name),
                 config.suicide_stamina_cost,
             }
             element.tooltip = {
-                'un.suicide-confirm',
+                'un.faction-switch-confirm',
                 planet_label(planet_name),
                 config.suicide_stamina_cost,
             }
             element.tags = {
-                action = 'suicide-confirm',
+                action = 'faction-switch-confirm',
                 planet = planet_name,
             }
         end
@@ -2039,7 +2137,7 @@ events.on(defines.events.on_gui_click, function(event)
         elseif tags.action == 'property-build' then
             local form = content[PROPERTY_BUILD_FORM_NAME]
             if not (form and form.valid) then return end
-            local planet_name = property_build_planet(form)
+            local planet_name = property_build_planet(player)
             local lifetime_index = form[PROPERTY_BUILD_LIFETIME_NAME].selected_index
             local size_index = form[PROPERTY_BUILD_SIZE_NAME].selected_index
             local can_build, err, requirement = properties.build_availability(
@@ -2161,8 +2259,7 @@ events.on(defines.events.on_gui_selection_state_changed, function(event)
         update_frame(player)
         return
     end
-    if element.name ~= PROPERTY_BUILD_PLANET_NAME
-            and element.name ~= PROPERTY_BUILD_LIFETIME_NAME
+    if element.name ~= PROPERTY_BUILD_LIFETIME_NAME
             and element.name ~= PROPERTY_BUILD_SIZE_NAME then
         return
     end

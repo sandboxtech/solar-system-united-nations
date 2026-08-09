@@ -1,6 +1,7 @@
 local config = require('config')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
+local factions = require('scripts.factions')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local state = require('scripts.state')
@@ -15,9 +16,14 @@ local function records()
     return storage.ships
 end
 
-local function platform_of(index)
-    local platform = game.forces.player.platforms[index]
+local function platform_of(index, record)
+    local force = record and record.force_name and game.forces[record.force_name]
+    local platform = force and force.valid and force.platforms[index]
     if platform and platform.valid then return platform end
+    for _, entry in ipairs(factions.all()) do
+        platform = entry.force.platforms[index]
+        if platform and platform.valid then return platform end
+    end
     return nil
 end
 
@@ -33,14 +39,18 @@ end
 
 local function reconcile()
     local registered = records()
-    for index, platform in pairs(game.forces.player.platforms) do
-        if platform and platform.valid and not registered[index] then
-            registered[index] = {
-                owner_index = nil,
-                created_tick = game.tick,
-                built_tick = is_ready(platform) and game.tick or nil,
-                life_ticks = config.ship_life_hours * config.ticks_per_hour,
-            }
+    for _, entry in ipairs(factions.all()) do
+        for index, platform in pairs(entry.force.platforms) do
+            if platform and platform.valid and not registered[index] then
+                registered[index] = {
+                    owner_index = nil,
+                    force_name = entry.force.name,
+                    planet_name = entry.planet_name,
+                    created_tick = game.tick,
+                    built_tick = is_ready(platform) and game.tick or nil,
+                    life_ticks = config.ship_life_hours * config.ticks_per_hour,
+                }
+            end
         end
     end
 end
@@ -75,7 +85,7 @@ function M.of(player_index)
     local best_index = nil
     for index, record in pairs(records()) do
         if record.owner_index == player_index then
-            local platform = platform_of(index)
+            local platform = platform_of(index, record)
             if not platform then
                 records()[index] = nil
             elseif not (record.scuttled_tick or is_scheduled(platform))
@@ -93,7 +103,7 @@ function M.list()
     reconcile()
     local result = {}
     for index, record in pairs(records()) do
-        local platform = platform_of(index)
+        local platform = platform_of(index, record)
         if not platform then
             records()[index] = nil
         elseif record.owner_index
@@ -116,21 +126,24 @@ function M.list()
 end
 
 function M.enforce_lock()
-    local force = game.forces.player
-    if config.ship_lock_native_creation then
-        if force.is_space_platforms_unlocked() then force.lock_space_platforms() end
-    elseif not force.is_space_platforms_unlocked() then
-        force.unlock_space_platforms()
+    for _, entry in ipairs(factions.all()) do
+        local force = entry.force
+        if config.ship_lock_native_creation then
+            if force.is_space_platforms_unlocked() then
+                force.lock_space_platforms()
+            end
+        elseif not force.is_space_platforms_unlocked() then
+            force.unlock_space_platforms()
+        end
     end
 end
 
 function M.create(player, planet_name)
     if not (player and player.valid) then return nil, 'ship-create-failed' end
-    local valid_planet = false
-    for _, name in ipairs(config.public_planets) do
-        if name == planet_name then valid_planet = true; break end
+    local faction_planet = factions.of_player(player)
+    if not faction_planet or planet_name ~= faction_planet then
+        return nil, 'ship-invalid-planet'
     end
-    if not valid_planet then return nil, 'ship-invalid-planet' end
     if M.of(player.index) then return nil, 'ship-already-have' end
 
     if not stamina.spend(player.index, config.ship_stamina_cost) then
@@ -138,7 +151,7 @@ function M.create(player, planet_name)
     end
 
     local created, platform = pcall(function()
-        return game.forces.player.create_space_platform{
+        return player.force.create_space_platform{
             name = player.name,
             planet = planet_name,
             starter_pack = STARTER_PACK,
@@ -154,6 +167,7 @@ function M.create(player, planet_name)
 
     local record = {
         owner_index = player.index,
+        force_name = player.force.name,
         planet_name = planet_name,
         created_tick = game.tick,
         life_ticks = (settings.get('ship_life_hours')
@@ -193,7 +207,7 @@ function M.remove_owner(player_index)
     local removed = 0
     for index, record in pairs(records()) do
         if record.owner_index == player_index then
-            local platform = platform_of(index)
+            local platform = platform_of(index, record)
             if platform and not is_scheduled(platform) then
                 record.scuttled_tick = game.tick
                 platform.destroy(1)
@@ -209,7 +223,7 @@ function M.ensure()
     reconcile()
     M.enforce_lock()
     for index, record in pairs(records()) do
-        local platform = platform_of(index)
+        local platform = platform_of(index, record)
         if platform then apply_bounds(platform, record.owner_index) end
     end
 end
@@ -220,7 +234,12 @@ local function on_platform_surface(surface)
     if not (platform and platform.valid) then return end
     local record = records()[platform.index]
     if not record then
-        record = {owner_index = nil, created_tick = game.tick}
+        record = {
+            owner_index = nil,
+            force_name = platform.force.name,
+            planet_name = factions.planet_of_force(platform.force),
+            created_tick = game.tick,
+        }
         records()[platform.index] = record
     end
     record.built_tick = record.built_tick or game.tick
@@ -239,7 +258,7 @@ scheduler.every(config.ship_lifecycle_ticks, function()
     reconcile()
     M.enforce_lock()
     for index, record in pairs(records()) do
-        local platform = platform_of(index)
+        local platform = platform_of(index, record)
         if not platform then
             records()[index] = nil
         elseif record.built_tick and M.left_ticks(record) <= 0
@@ -249,6 +268,15 @@ scheduler.every(config.ship_lifecycle_ticks, function()
             local owner = record.owner_index and game.get_player(record.owner_index)
             game.print({'un.ship-expired', owner and owner.name or platform.name})
         end
+    end
+end)
+
+factions.on_switch_cleanup(function(player, source_planet)
+    local source_force = factions.of_planet(source_planet)
+    local platform, record = M.of(player.index)
+    if platform and source_force and platform.force == source_force then
+        record.scuttled_tick = game.tick
+        platform.destroy(1)
     end
 end)
 

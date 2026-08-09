@@ -1,5 +1,6 @@
 local config = require('config')
 local events = require('scripts.events')
+local factions = require('scripts.factions')
 local linked_inventory = require('scripts.linked_inventory')
 
 local M = {}
@@ -232,7 +233,8 @@ function M.ensure_hospice(planet_name)
         'un.hospice-name-planet',
         {'space-location-name.' .. planet_name},
     }
-    game.forces.player.set_spawn_position({0, 0}, surface)
+    local force = factions.of_planet(planet_name)
+    if force and force.valid then force.set_spawn_position({0, 0}, surface) end
     return surface
 end
 
@@ -286,11 +288,14 @@ function M.create_property_surface(property_id, spec)
     if not sample_planet then return nil, nil, nil, nil, nil end
     M.sync_property_environment(surface, nil, sample_planet)
     surface.localised_name = spec.name or {'un.property-default-name', property_id}
-    game.forces.player.set_spawn_position({0, 0}, surface)
-    game.forces.player.chart(surface, {
+    local force = factions.of_planet(sample_planet)
+    if force and force.valid then
+        force.set_spawn_position({0, 0}, surface)
+        force.chart(surface, {
         {-half_width, -half_height},
         {half_width, half_height},
-    })
+        })
+    end
     return surface, half_width, half_height, sample_planet, sample_position
 end
 
@@ -347,22 +352,33 @@ function M.to_planet_origin(player, planet_name)
     end
     local surface = game.surfaces[planet_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
+    local radius = config.public_planet_arrival_radius
+    surface.request_to_generate_chunks({0, 0}, math.ceil(radius / 32) + 1)
+    surface.force_generate_chunk_requests()
+    for _ = 1, 16 do
+        local center = {
+            x = math.random(-radius, radius - 1),
+            y = math.random(-radius, radius - 1),
+        }
+        local position = surface.find_non_colliding_position(
+            'character',
+            center,
+            8,
+            1
+        )
+        if position and math.abs(position.x) <= radius
+                and math.abs(position.y) <= radius then
+            if player.vehicle and player.vehicle.valid then
+                return false, 'in-vehicle'
+            end
+            return player.teleport(position, surface)
+        end
+    end
     return M.teleport_near(player, surface, {0, 0}, false)
 end
 
 function M.suicide(player, planet_name)
-    if not public_planets[planet_name] then return false, 'invalid-planet' end
-    local character = player.character
-    if not (character and character.valid) then
-        for _, candidate in pairs(player.get_associated_characters()) do
-            if candidate.valid then character = candidate; break end
-        end
-    end
-    if not (character and character.valid) then return false, 'no-character' end
-    storage.respawn_hospice_planets[player.index] = planet_name
-    local died = character.die(game.forces.neutral)
-    if not died then storage.respawn_hospice_planets[player.index] = nil end
-    return died
+    return factions.switch_by_suicide(player, planet_name)
 end
 
 local function respawn_destination(player)
