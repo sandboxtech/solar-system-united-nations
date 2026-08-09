@@ -5,17 +5,6 @@ local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
-local TERRAIN_LOCALE = {
-    ['dawn-sands'] = 'property-terrain-dawn-sands',
-    ['classic-water'] = 'property-terrain-classic-water',
-    ['yumako-soil'] = 'property-terrain-yumako-soil',
-    ['jellynut-soil'] = 'property-terrain-jellynut-soil',
-    ['oil-ocean'] = 'property-terrain-oil-ocean',
-    ['coral-wetland'] = 'property-terrain-coral-wetland',
-    volcanic = 'property-terrain-volcanic',
-    ['slime-wetland'] = 'property-terrain-slime-wetland',
-    ['deep-wetland'] = 'property-terrain-deep-wetland',
-}
 
 local function bump_revision()
     storage.property_revision = (storage.property_revision or 0) + 1
@@ -60,6 +49,9 @@ local function ensure_property_name_rendering(property, text)
 end
 
 local function request_property_name_translation(property, player)
+    if type(property.custom_name) == 'string' then
+        return ensure_property_name_rendering(property, property.custom_name)
+    end
     if not (player and player.valid and player.connected) then return false end
     local request_id = player.request_translation(M.display_name(property))
     if not request_id then return false end
@@ -75,16 +67,18 @@ function M.feature_description(property)
     local height = property.height or property.size or 0
     local shape = property.shape == 'long'
         and {'un.property-shape-long'} or {'un.property-shape-square'}
-    local terrain = property.terrain
-        or config.property_terrain_by_theme[property.theme]
-        or 'dawn-sands'
-    local terrain_key = TERRAIN_LOCALE[terrain] or 'property-terrain-dawn-sands'
+    local sample_planet = property.sample_planet
+    local sample_description = sample_planet and {
+        '',
+        '[planet=' .. sample_planet .. '] ',
+        {'space-location-name.' .. sample_planet},
+    } or {'un.property-sample-legacy'}
     return {
         'un.property-features',
         width,
         height,
         shape,
-        {'un.' .. terrain_key},
+        sample_description,
         math.floor((property.solar or 1) * 100 + 0.5),
     }
 end
@@ -155,8 +149,6 @@ function M.create(spec)
     local tax = tonumber(spec.tax) or config.property_default_tax
     local shape = spec.shape or 'square'
     local solar = tonumber(spec.solar) or 1
-    local terrain = spec.terrain or config.property_terrain_by_theme[spec.theme]
-        or 'dawn-sands'
     local half_width = shape == 'long' and 2 * n or n
     local half_height = n
     if not is_positive_integer(price) or price > config.property_price_cap then
@@ -174,18 +166,18 @@ function M.create(spec)
     if tax < 0 or tax > 1 then return nil, 'invalid-tax' end
 
     local id = storage.next_property_id
-    storage.next_property_id = id + 1
-    local surface, half_width, half_height = surfaces.create_property_surface(id, {
+    local surface, half_width, half_height, sample_planet, sample_position
+        = surfaces.create_property_surface(id, {
         n = n,
         shape = shape,
         solar = solar,
-        name = spec.name,
-        theme = spec.theme,
-        terrain = terrain,
+        sample_planet = spec.sample_planet,
     })
+    if not surface then return nil, 'surface-create-failed' end
+    storage.next_property_id = id + 1
     local property = {
         id = id,
-        custom_name = spec.name,
+        custom_name = nil,
         surface_name = surface.name,
         surface_index = surface.index,
         status = 'active',
@@ -199,8 +191,8 @@ function M.create(spec)
         height = 2 * half_height,
         shape = shape,
         solar = solar,
-        theme = spec.theme,
-        terrain = terrain,
+        sample_planet = sample_planet,
+        sample_position = sample_position,
         linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
     }
@@ -225,23 +217,6 @@ function M.ensure_defaults()
         end
         storage.property_tax_version = 1
         bump_revision()
-    end
-    if storage.property_design_version ~= 1 then
-        for _, property in ipairs(M.list()) do
-            local terrain = config.property_terrain_by_theme[property.theme]
-            local solar = config.property_solar_by_theme[property.theme]
-            if terrain then property.terrain = terrain end
-            if solar then property.solar = solar end
-            property.water = nil
-        end
-        storage.property_design_version = 1
-        bump_revision()
-    end
-    if storage.property_ground_version ~= 3 then
-        for _, property in ipairs(M.list()) do
-            surfaces.refresh_property_surface(property)
-        end
-        storage.property_ground_version = 3
     end
     -- Configuration loading is also the one-shot repair path for properties
     -- created before all homes used the fixed central four-chest layout.
@@ -378,6 +353,56 @@ local function require_admin(command)
     return true
 end
 
+local function property_at_player_body(player)
+    local surface = player.physical_surface
+    if not (surface and surface.valid) then return nil end
+    for _, property in ipairs(M.list()) do
+        if property.surface_index == surface.index then return property end
+    end
+    return nil
+end
+
+local function valid_custom_name(name)
+    if name == '' or #name > 256 or name:find('%c') then return false end
+    local characters = 0
+    for index = 1, #name do
+        local byte = name:byte(index)
+        if byte < 128 or byte >= 192 then characters = characters + 1 end
+    end
+    return characters <= 64
+end
+
+local function rename_from_command(command, parameter)
+    local player = command_player(command)
+    if not player then
+        reply(command, {'un.property-rename-player-only'})
+        return
+    end
+    local property = property_at_player_body(player)
+    if not property then
+        player.print({'un.property-rename-not-inside'})
+        return
+    end
+    if property.owner_index ~= player.index then
+        player.print({'un.property-rename-not-owner'})
+        return
+    end
+    local name = parameter:match('^%s*rename%s+(.+)%s*$') or ''
+    name = name:match('^%s*(.-)%s*$') or ''
+    if not valid_custom_name(name) then
+        player.print({'un.property-rename-invalid'})
+        return
+    end
+    property.custom_name = name
+    property.rendered_name = name
+    property.rendered_name_locale = nil
+    local surface = game.surfaces[property.surface_name]
+    if surface and surface.valid then surface.localised_name = name end
+    ensure_property_name_rendering(property, name)
+    bump_revision()
+    player.print({'un.property-renamed', property.id, name})
+end
+
 local function deletion_blocker(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return nil end
@@ -414,11 +439,16 @@ local function delete_confirmed(command, property)
 end
 
 local function on_command(command)
-    if not require_admin(command) then return end
     state.ensure()
-    local action, first, second, third = (command.parameter or ''):match(
+    local parameter = command.parameter or ''
+    local action, first, second, third = parameter:match(
         '^%s*(%S*)%s*(%S*)%s*(%S*)%s*(%S*)'
     )
+    if action == 'rename' then
+        rename_from_command(command, parameter)
+        return
+    end
+    if not require_admin(command) then return end
     if action == '' or action == 'list' then
         reply(command, {'un.property-command-count', #M.list()})
     elseif action == 'create' then
@@ -486,6 +516,7 @@ events.on(defines.events.on_string_translated, function(event)
     storage.property_name_translation_requests[event.id] = nil
     local property = M.get(request.property_id)
     if not property or property.owner_index ~= request.owner_index then return end
+    if type(property.custom_name) == 'string' then return end
     if event.player_index ~= request.owner_index or not event.translated then return end
     property.rendered_name = event.result
     local player = game.get_player(event.player_index)

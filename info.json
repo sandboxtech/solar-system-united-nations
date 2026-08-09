@@ -1,0 +1,21 @@
+{
+  "name": "solar-system-united-nations",
+  "version": "0.1.0",
+  "title": "太阳系联合国",
+  "author": "虚无群友",
+  "contact": "Q群293280221",
+  "description": "太阳系联合国多人场景。领取离线也会累积的低保，以科技瓶建立信用与等级；购买、续期并命名采用自然星球地形样本的私人房产，通过个人关联箱转运物资，并建造有寿命限制的个人飞船。界面支持简体中文与英文。\n\nSolar System United Nations is a multiplayer scenario with lazily accrued offline UBI, science-pack credit and levels, tradable private properties sampled from natural planetary terrain, personal linked-chest logistics, and limited-lifetime player ships. The interface supports Simplified Chinese and English.",
+  "dependencies": [
+    "base >= 2.0.0",
+    "elevated-rails >= 2.0.0",
+    "quality >= 2.0.0",
+    "space-age >= 2.0.0"
+  ],
+  "quality_required": true,
+  "space_travel_required": true,
+  "spoiling_required": true,
+  "freezing_required": true,
+  "segmented_units_required": true,
+  "expansion_shaders_required": true,
+  "factorio_version": "2.0"
+}

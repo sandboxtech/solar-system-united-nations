@@ -1,6 +1,6 @@
 local M = {}
 
-M.schema_version = 12
+M.schema_version = 13
 
 M.ticks_per_second = 60
 M.ticks_per_minute = 60 * M.ticks_per_second
@@ -63,40 +63,18 @@ M.hospice_surface_size = 64
 M.property_surface_prefix = 'un-property-'
 M.property_default_tax = 0.10
 M.property_link_id_unowned = 0
-M.property_water_margin = 2
 M.property_max_size = 128
-M.property_terrain_by_theme = {
-    dawn = 'dawn-sands',
-    moonlake = 'classic-water',
-    quietstar = 'yumako-soil',
-    longwind = 'jellynut-soil',
-    mirrorlight = 'oil-ocean',
-    dusktide = 'coral-wetland',
-    sunstone = 'volcanic',
-    bluewater = 'slime-wetland',
-    skyvault = 'deep-wetland',
-}
-M.property_solar_by_theme = {
-    dawn = 10,
-    moonlake = 1,
-    quietstar = 0.1,
-    longwind = 1,
-    mirrorlight = 10,
-    dusktide = 0.1,
-    sunstone = 10,
-    bluewater = 1,
-    skyvault = 10,
-}
+M.property_sample_planets = {'nauvis', 'gleba'}
 M.default_properties = {
-    {name = {'un.property-name-dawn-court'}, price = 1000, n = 16, shape = 'square', solar = 10, theme = 'dawn', terrain = 'dawn-sands'},
-    {name = {'un.property-name-lakeside-court'}, price = 1000, n = 16, shape = 'square', solar = 1, theme = 'moonlake', terrain = 'classic-water'},
-    {name = {'un.property-name-shade-court'}, price = 1000, n = 16, shape = 'square', solar = 0.1, theme = 'quietstar', terrain = 'yumako-soil'},
-    {name = {'un.property-name-longwind-lodge'}, price = 1000, n = 16, shape = 'long', solar = 1, theme = 'longwind', terrain = 'jellynut-soil'},
-    {name = {'un.property-name-mirrorwater-longhouse'}, price = 1000, n = 16, shape = 'long', solar = 10, theme = 'mirrorlight', terrain = 'oil-ocean'},
-    {name = {'un.property-name-dusktide-longhouse'}, price = 1000, n = 16, shape = 'long', solar = 0.1, theme = 'dusktide', terrain = 'coral-wetland'},
-    {name = {'un.property-name-sunstone-manor'}, price = 5000, n = 32, shape = 'square', solar = 10, theme = 'sunstone', terrain = 'volcanic'},
-    {name = {'un.property-name-bluewater-manor'}, price = 5000, n = 32, shape = 'long', solar = 1, theme = 'bluewater', terrain = 'slime-wetland'},
-    {name = {'un.property-name-skyvault-estate'}, price = 20000, n = 64, shape = 'square', solar = 10, theme = 'skyvault', terrain = 'deep-wetland'},
+    {price = 1000, n = 8, shape = 'square', solar = 0.1, sample_planet = 'nauvis'},
+    {price = 1000, n = 8, shape = 'square', solar = 1, sample_planet = 'gleba'},
+    {price = 1000, n = 8, shape = 'long', solar = 10, sample_planet = 'nauvis'},
+    {price = 1000, n = 8, shape = 'long', solar = 0.1, sample_planet = 'gleba'},
+    {price = 5000, n = 16, shape = 'square', solar = 1, sample_planet = 'nauvis'},
+    {price = 5000, n = 16, shape = 'square', solar = 10, sample_planet = 'gleba'},
+    {price = 5000, n = 16, shape = 'long', solar = 0.1, sample_planet = 'nauvis'},
+    {price = 20000, n = 32, shape = 'square', solar = 1, sample_planet = 'gleba'},
+    {price = 20000, n = 32, shape = 'long', solar = 10, sample_planet = 'nauvis'},
 }
 
 M.ship_life_hours = 50

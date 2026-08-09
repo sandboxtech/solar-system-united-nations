@@ -4,59 +4,6 @@ local linked_inventory = require('scripts.linked_inventory')
 
 local M = {}
 local TUTORIAL_GRID_NAME = 'tutorial-grid'
-local TERRAIN_STYLES = {
-    ['dawn-sands'] = {
-        floor = {'sand-1', 'sand-2', 'sand-3'},
-    },
-    ['classic-water'] = {
-        floor = {'grass-1', 'grass-2'},
-        perimeter = {'water', 'deepwater'},
-    },
-    ['yumako-soil'] = {
-        floor = {'natural-yumako-soil'},
-        perimeter = {'wetland-yumako'},
-    },
-    ['jellynut-soil'] = {
-        floor = {'natural-jellynut-soil'},
-        perimeter = {'wetland-jellynut'},
-    },
-    ['oil-ocean'] = {
-        floor = {'fulgoran-sand'},
-        perimeter = {'oil-ocean-shallow', 'oil-ocean-deep'},
-    },
-    ['coral-wetland'] = {
-        floor = {'lowland-red-vein'},
-        perimeter = {'wetland-pink-tentacle', 'wetland-red-tentacle'},
-    },
-    volcanic = {
-        floor = {'volcanic-ash-dark', 'volcanic-ash-light', 'volcanic-ash-flats'},
-    },
-    ['slime-wetland'] = {
-        floor = {'midland-turquoise-bark'},
-        perimeter = {
-            'wetland-blue-slime',
-            'wetland-light-green-slime',
-            'wetland-green-slime',
-        },
-    },
-    ['deep-wetland'] = {
-        floor = {'highland-dark-rock'},
-        perimeter = {'gleba-deep-lake'},
-    },
-}
-local PROPERTY_SCRIPT_TILES = {
-    [TUTORIAL_GRID_NAME] = true,
-    ['lab-white'] = true,
-    ['lab-dark-1'] = true,
-    ['lab-dark-2'] = true,
-    water = true,
-}
-for _, style in pairs(TERRAIN_STYLES) do
-    for _, name in ipairs(style.floor) do PROPERTY_SCRIPT_TILES[name] = true end
-    for _, name in ipairs(style.perimeter or {}) do
-        PROPERTY_SCRIPT_TILES[name] = true
-    end
-end
 local public_planets = {}
 for _, name in ipairs(config.public_planets) do public_planets[name] = true end
 local function map_gen_settings(width, height)
@@ -79,55 +26,118 @@ local function ensure_generated(surface, radius)
     surface.force_generate_chunk_requests()
 end
 
-local function regional_tile(names, y, half_height)
-    -- Use broad, continuous horizontal regions. Similar tiles never alternate
-    -- every few cells, so each floor and perimeter reads as one landscape.
-    local relative_y = (y + half_height) / (2 * half_height)
-    local index = math.floor(relative_y * #names) + 1
-    if index < 1 then index = 1 end
-    if index > #names then index = #names end
-    return names[index]
+local function sample_planet_name(property_id, requested)
+    if requested == 'nauvis' or requested == 'gleba' then return requested end
+    local names = config.property_sample_planets
+    return names[(property_id - 1) % #names + 1]
 end
 
-local function is_script_owned_property_tile(tile)
-    if PROPERTY_SCRIPT_TILES[tile.name] then return true end
-    local fluid = tile.prototype.fluid
-    return fluid and (fluid.name == 'water' or fluid.name == 'heavy-oil')
+local function ensure_planet_surface(name)
+    local surface = game.surfaces[name]
+    if surface and surface.valid then return surface end
+    local planet = game.planets[name]
+    if not (planet and planet.valid) then return nil end
+    return planet.create_surface()
 end
 
-local function property_tile(terrain, x, y, half_width, half_height)
-    if x >= -3 and x <= 2 and y >= -3 and y <= 2 then
-        return TUTORIAL_GRID_NAME
+local function sample_center(source, property_id, half_width, half_height)
+    local settings = source.map_gen_settings
+    local map_width = tonumber(settings.width) or 0
+    local map_height = tonumber(settings.height) or 0
+    if map_width > 0 and map_height > 0 then
+        local usable_x = math.max(0, math.floor(map_width / 2 - half_width - 64))
+        local usable_y = math.max(0, math.floor(map_height / 2 - half_height - 64))
+        local x = usable_x > 0
+            and ((property_id * 977) % (2 * usable_x + 1) - usable_x) or 0
+        local y = usable_y > 0
+            and ((property_id * 1597) % (2 * usable_y + 1) - usable_y) or 0
+        return {x = x, y = y}
     end
-    local style = TERRAIN_STYLES[terrain] or TERRAIN_STYLES['dawn-sands']
-    local margin = config.property_water_margin
-    local perimeter = style.perimeter and (
-        x < -half_width + margin or x >= half_width - margin
-        or y < -half_height + margin or y >= half_height - margin
-    )
-    if perimeter then
-        return regional_tile(style.perimeter, y, half_height)
-    end
-    return regional_tile(style.floor, y, half_height)
+    return {
+        x = 4096 + (property_id * 977) % 2048,
+        y = (source.name == 'gleba' and -1 or 1)
+            * (4096 + (property_id * 1597) % 2048),
+    }
 end
 
-local function apply_property_tiles(
-        surface, half_width, half_height, terrain, preserve_player_tiles)
+local function in_core(x, y)
+    return x >= -3 and x < 3 and y >= -3 and y < 3
+end
+
+local function copy_sample_tiles(
+        source, center, destination, half_width, half_height)
     local tiles = {}
     for y = -half_height, half_height - 1 do
         for x = -half_width, half_width - 1 do
-            local current = surface.get_tile(x, y)
-            local is_core = x >= -3 and x <= 2 and y >= -3 and y <= 2
-            if not preserve_player_tiles or is_core
-                    or is_script_owned_property_tile(current) then
-                tiles[#tiles + 1] = {
-                    name = property_tile(terrain, x, y, half_width, half_height),
-                    position = {x, y},
+            tiles[#tiles + 1] = {
+                name = in_core(x, y) and TUTORIAL_GRID_NAME
+                    or source.get_tile(center.x + x, center.y + y).name,
+                position = {x, y},
+            }
+        end
+    end
+    destination.set_tiles(tiles, false, false, true, false)
+end
+
+local function is_rock(entity)
+    if entity.type ~= 'simple-entity'
+            and entity.type ~= 'simple-entity-with-force' then
+        return false
+    end
+    local subgroup = entity.prototype.subgroup
+    return (subgroup and subgroup.name == 'rocks')
+        or entity.name:find('rock', 1, true) ~= nil
+end
+
+local function copy_sample_entities(
+        source, center, destination, half_width, half_height)
+    local entities = source.find_entities_filtered{
+        area = {
+            {center.x - half_width, center.y - half_height},
+            {center.x + half_width, center.y + half_height},
+        },
+        type = {'tree', 'simple-entity', 'simple-entity-with-force'},
+    }
+    table.sort(entities, function(a, b)
+        if a.position.y ~= b.position.y then return a.position.y < b.position.y end
+        if a.position.x ~= b.position.x then return a.position.x < b.position.x end
+        return a.name < b.name
+    end)
+    for _, entity in ipairs(entities) do
+        if entity.valid and (entity.type == 'tree' or is_rock(entity)) then
+            local position = {
+                x = entity.position.x - center.x,
+                y = entity.position.y - center.y,
+            }
+            if not in_core(position.x, position.y) then
+                destination.create_entity{
+                    name = entity.name,
+                    position = position,
+                    direction = entity.direction,
+                    force = entity.force,
+                    snap_to_grid = false,
+                    raise_built = false,
                 }
             end
         end
     end
-    surface.set_tiles(tiles, false, false, true, false)
+end
+
+local function apply_natural_sample(surface, property_id, half_width, half_height,
+        requested_planet)
+    local planet_name = sample_planet_name(property_id, requested_planet)
+    local source = ensure_planet_surface(planet_name)
+    if not source then return nil, nil end
+    local center = sample_center(source, property_id, half_width, half_height)
+    local radius = math.max(
+        1,
+        math.ceil(math.max(half_width, half_height) / 32) + 1
+    )
+    source.request_to_generate_chunks(center, radius)
+    source.force_generate_chunk_requests()
+    copy_sample_tiles(source, center, surface, half_width, half_height)
+    copy_sample_entities(source, center, surface, half_width, half_height)
+    return planet_name, center
 end
 
 local function apply_tutorial_grid(surface, half_size)
@@ -178,12 +188,14 @@ function M.create_property_surface(property_id, spec)
         surface = game.create_surface(name, map_gen_settings(width, height))
     end
     ensure_generated(surface, math.max(1, math.ceil(math.max(width, height) / 64)))
-    apply_property_tiles(
+    local sample_planet, sample_position = apply_natural_sample(
         surface,
+        property_id,
         half_width,
         half_height,
-        spec.terrain or 'dawn-sands'
+        spec.sample_planet
     )
+    if not sample_planet then return nil, nil, nil, nil, nil end
     surface.always_day = true
     surface.solar_power_multiplier = spec.solar
     surface.localised_name = spec.name or {'un.property-default-name', property_id}
@@ -192,24 +204,7 @@ function M.create_property_surface(property_id, spec)
         {-half_width, -half_height},
         {half_width, half_height},
     })
-    return surface, half_width, half_height
-end
-
-function M.refresh_property_surface(property)
-    local surface = game.surfaces[property.surface_name]
-    if not (surface and surface.valid) then return false end
-    local half_width = math.floor((property.width or property.size or 0) / 2)
-    local half_height = math.floor((property.height or property.size or 0) / 2)
-    if half_width < 1 or half_height < 1 then return false end
-    apply_property_tiles(
-        surface,
-        half_width,
-        half_height,
-        property.terrain or config.property_terrain_by_theme[property.theme]
-            or 'dawn-sands',
-        true
-    )
-    return true
+    return surface, half_width, half_height, sample_planet, sample_position
 end
 
 local function safe_position(surface, center)
