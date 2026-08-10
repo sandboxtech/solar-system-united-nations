@@ -35,7 +35,7 @@ M.property_price_factor = 2
 
 M.initial_credit = 10000
 M.ubi_credit_per_second = 1
-M.ubi_max_seconds = 100000
+M.ubi_max_seconds = 108000
 M.ledger_record_limit = 2000
 M.transfer_min_amount = 1000
 M.transfer_fee_rate = 0.001
@@ -151,7 +151,7 @@ M.property_permanent_defaults = {
     {count = 1, width = 256, height = 128, decay_hours = 3},
 }
 
-M.stamina_max = 100000
+M.stamina_max = 108000
 M.stamina_per_second = 1
 M.suicide_stamina_cost = 10000
 M.fast_respawn_stamina_cost = 1000
