@@ -1,0 +1,4 @@
+ [color=acid]Willkommen · Welcome · Bienvenido · Bienvenue · ようこそ · 환영합니다 · Witamy · Bem-vindo · Добро пожаловать · 欢迎 ·   歡迎[/color]    [img=space-location/solar-system-edge] [color=acid][font=infinite]United Nations of Sol · 太阳系联合国[/font][/color]    五个敌对阵营争夺五颗公共星球[planet=nauvis][planet=vulcanus][planet=fulgora][planet=gleba][planet=aquilo]。你可以成为建设者、商人   和外交家，也可以成为入侵者与破坏者。    公共星球会周期性[color=red]整颗重建[/color]。在灾变到来前收拢工厂，把物资和预制产线撤入本阵营的[color=yellow]联合国难民营[/color]   或限时私人房产。    在所属星球放置[img=item/wooden-chest]木箱建立个人关联箱，用机械臂投入[img=item/automation-science-pack]科技瓶。每个瓶子获得1[img=item/coin]金币并积累经验，用经验建造不同寿命和面积的房产。    五个阵营科技、建筑和飞船独立，炮塔可以互相开火；但战争并非强制。贸易、好友互访、房产交易、跨阵营合作与犯罪玩法同时存在。    [img=item/space-platform-starter-pack]总等级会扩大新飞船、延长飞船寿命并降低卖房税率。无需安装第三方 MOD，需要 Factorio 2.0 与   Space Age。    版本：20260810   [img=virtual-signal/signal-info] BUG 反馈：QQ 群 293280221   GitHub：https://github.com/sandboxtech/solar-system-united-nations   直连地址：dx.moe.xin:37005
+
+
+ 
