@@ -351,7 +351,27 @@ function M.to_hospice(player, planet_name)
     return M.teleport(player, M.ensure_hospice(planet_name))
 end
 
-function M.to_planet_origin(player, planet_name, preferred_center)
+local function recorded_center(surface, planet_name, record)
+    if type(record) ~= 'table' or record.surface_index ~= surface.index then
+        return nil
+    end
+    local reset = storage.public_planet_resets
+        and storage.public_planet_resets[planet_name]
+    if record.round ~= (reset and reset.round or 0) then return nil end
+    local position = record.position
+    if type(position) ~= 'table'
+            or type(position.x) ~= 'number'
+            or type(position.y) ~= 'number' then
+        return nil
+    end
+    return position
+end
+
+local function weighted_arrival_axis(radius)
+    return math.floor((math.random() - math.random()) * radius)
+end
+
+function M.to_planet_origin(player, planet_name, return_record)
     local source = player.physical_surface
     if not M.can_start_public_travel(source) then
         return false, 'travel-restricted'
@@ -362,16 +382,19 @@ function M.to_planet_origin(player, planet_name, preferred_center)
     end
     local surface = game.surfaces[planet_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
+    if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
+    local preferred_center = recorded_center(surface, planet_name, return_record)
     if preferred_center then
-        return M.teleport_near(player, surface, preferred_center, false)
+        local position = safe_position(surface, preferred_center)
+        if position then return player.teleport(position, surface) end
     end
     local radius = config.public_planet_arrival_radius
     surface.request_to_generate_chunks({0, 0}, math.ceil(radius / 32) + 1)
     surface.force_generate_chunk_requests()
-    for _ = 1, 16 do
+    for _ = 1, 32 do
         local center = {
-            x = math.random(-radius, radius - 1),
-            y = math.random(-radius, radius - 1),
+            x = weighted_arrival_axis(radius),
+            y = weighted_arrival_axis(radius),
         }
         local position = surface.find_non_colliding_position(
             'character',
@@ -379,11 +402,8 @@ function M.to_planet_origin(player, planet_name, preferred_center)
             8,
             1
         )
-        if position and math.abs(position.x) <= radius
-                and math.abs(position.y) <= radius then
-            if player.vehicle and player.vehicle.valid then
-                return false, 'in-vehicle'
-            end
+        if position and math.abs(position.x) < radius
+                and math.abs(position.y) < radius then
             return player.teleport(position, surface)
         end
     end

@@ -60,7 +60,9 @@ local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
+local SHIP_SCROLL_NAME = 'un_ship_scroll'
 local SHIP_TABLE_NAME = 'un_ship_table'
+local PROPERTY_SCROLL_NAME = 'un_property_scroll'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
 local PROPERTY_BUILD_NAME_NAME = 'un_property_build_name'
@@ -74,6 +76,7 @@ local PROPERTY_BUILD_BUTTON_NAME = 'un_property_build_button'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
+local PLAYER_SCROLL_NAME = 'un_player_scroll'
 local PLAYER_TABLE_NAME = 'un_player_table'
 local PLANET_HEADER_NAME = 'un_planet_header'
 local PLANET_TABLE_NAME = 'un_planet_table'
@@ -122,6 +125,7 @@ local crime_error_caption
 local update_crime_action
 
 local PERSONAL_ACTION_WIDTH = 300
+local LIST_SCROLL_MAX_HEIGHT = 520
 local PROPERTY_SORT_FIELDS = {
     name = true,
     owner = true,
@@ -130,6 +134,20 @@ local PROPERTY_SORT_FIELDS = {
     change = true,
     period = true,
 }
+
+local function add_list_scroll(content, name)
+    local scroll = content.add{type = 'scroll-pane', name = name}
+    scroll.style.maximal_height = LIST_SCROLL_MAX_HEIGHT
+    scroll.style.horizontally_stretchable = true
+    return scroll
+end
+
+local function table_in_scroll(content, scroll_name, table_name)
+    local scroll = content[scroll_name]
+    if scroll and scroll.valid then return scroll[table_name] end
+    -- Keep already-open windows from older scenario code safe until rebuilt.
+    return content[table_name]
+end
 
 local function update_home_button(player, hud)
     hud = hud or player.gui.top[HUD_FLOW_NAME]
@@ -530,6 +548,8 @@ local function render_property_table(player, frame, content)
     if old_crime and old_crime.valid then old_crime.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
     if old_access and old_access.valid then old_access.destroy() end
+    local old_scroll = content[PROPERTY_SCROLL_NAME]
+    if old_scroll and old_scroll.valid then old_scroll.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
     local selected = factions.of_player(player) or 'nauvis'
@@ -588,7 +608,8 @@ local function render_property_table(player, frame, content)
     if properties.owned_count(player.index) > 0 then
         render_property_access_section(player, content)
     end
-    local list = content.add{
+    local scroll = add_list_scroll(content, PROPERTY_SCROLL_NAME)
+    local list = scroll.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
         column_count = 8,
@@ -990,7 +1011,8 @@ local function render_ships_page(player, frame, content)
     render_ship_actions(player, content)
     content.add{type = 'line'}
     local list_data = ships.list()
-    local list = content.add{
+    local scroll = add_list_scroll(content, SHIP_SCROLL_NAME)
+    local list = scroll.add{
         type = 'table',
         name = SHIP_TABLE_NAME,
         column_count = 4,
@@ -1746,7 +1768,8 @@ local function render_players_page(viewer, frame, content)
         config.transfer_fee_rate * 100,
         config.transfer_min_fee,
     })
-    local list = content.add{
+    local scroll = add_list_scroll(content, PLAYER_SCROLL_NAME)
+    local list = scroll.add{
         type = 'table',
         name = PLAYER_TABLE_NAME,
         column_count = 9,
@@ -2139,7 +2162,11 @@ local function update_frame(player)
                 render_ships_page(player, frame, content)
             else
                 update_ship_actions(player, content)
-                local list = content[SHIP_TABLE_NAME]
+                local list = table_in_scroll(
+                    content,
+                    SHIP_SCROLL_NAME,
+                    SHIP_TABLE_NAME
+                )
                 if list and list.valid then
                     for _, item in ipairs(list_data) do
                         local remaining = list[ship_remaining_name(item.index)]
@@ -2167,7 +2194,11 @@ local function update_frame(player)
                 ~= (storage.property_revision or 0) or price_sort_changed then
             render_property_table(player, frame, content)
         elseif refresh_rows then
-            local property_table = content[PROPERTY_TABLE_NAME]
+            local property_table = table_in_scroll(
+                content,
+                PROPERTY_SCROLL_NAME,
+                PROPERTY_TABLE_NAME
+            )
             if property_table and property_table.valid then
                 for _, property in ipairs(properties.list(
                     factions.of_player(player)
@@ -2187,7 +2218,11 @@ local function update_frame(player)
                 content.clear()
                 render_players_page(player, frame, content)
             end
-            local list = content[PLAYER_TABLE_NAME]
+            local list = table_in_scroll(
+                content,
+                PLAYER_SCROLL_NAME,
+                PLAYER_TABLE_NAME
+            )
             if list and list.valid then
                 for _, listed_player in pairs(game.players) do
                     local status = list[player_element_name('status', listed_player.index)]

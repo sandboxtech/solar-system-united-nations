@@ -657,10 +657,48 @@ function M.hospice_travel_availability(player)
     return true, nil, planet_name
 end
 
+local function remember_public_departure(
+        player,
+        planet_name,
+        source_surface,
+        source_position
+    )
+    if not (source_surface and source_surface.valid
+            and source_surface.name == planet_name
+            and source_position) then
+        return
+    end
+    local reset = storage.public_planet_resets
+        and storage.public_planet_resets[planet_name]
+    local account = economy.ensure_account(player.index)
+    account.last_public_position_by_planet
+        = account.last_public_position_by_planet or {}
+    account.last_public_position_by_planet[planet_name] = {
+        position = {x = source_position.x, y = source_position.y},
+        surface_index = source_surface.index,
+        round = reset and reset.round or 0,
+    }
+end
+
+local function travel_to_hospice_recording(player, planet_name)
+    local source_surface = player.physical_surface
+    local source_position = player.physical_position
+    local ok, err = surfaces.to_hospice(player, planet_name)
+    if ok then
+        remember_public_departure(
+            player,
+            planet_name,
+            source_surface,
+            source_position
+        )
+    end
+    return ok, err
+end
+
 function M.travel_to_hospice(player)
     local available, err, planet_name = M.hospice_travel_availability(player)
     if not available then return false, err end
-    return surfaces.to_hospice(player, planet_name)
+    return travel_to_hospice_recording(player, planet_name)
 end
 
 function M.release_owner(player_index)
@@ -820,18 +858,19 @@ function M.enter(player, property_id)
     else
         ok, err = surfaces.teleport(player, surface)
     end
-    if ok and property.owner_index == player.index then
-        local account = economy.ensure_account(player.index)
-        account.last_property_id = property.id
-        account.last_property_by_planet = account.last_property_by_planet or {}
-        account.last_property_by_planet[property.sample_planet] = property.id
-        if source and source.valid and source.name == property.sample_planet then
-            account.last_public_position_by_planet
-                = account.last_public_position_by_planet or {}
-            account.last_public_position_by_planet[property.sample_planet] = {
-                x = source_position.x,
-                y = source_position.y,
-            }
+    if ok then
+        remember_public_departure(
+            player,
+            property.sample_planet,
+            source,
+            source_position
+        )
+        if property.owner_index == player.index then
+            local account = economy.ensure_account(player.index)
+            account.last_property_id = property.id
+            account.last_property_by_planet
+                = account.last_property_by_planet or {}
+            account.last_property_by_planet[property.sample_planet] = property.id
         end
     end
     return ok, err
@@ -863,7 +902,7 @@ function M.home_travel(player)
     if source.name == planet_name then
         local property = owned_home(player.index, planet_name)
         if property then return M.enter(player, property.id) end
-        return surfaces.to_hospice(player, planet_name)
+        return travel_to_hospice_recording(player, planet_name)
     end
     local account = economy.ensure_account(player.index)
     local positions = account.last_public_position_by_planet or {}
