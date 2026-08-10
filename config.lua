@@ -22,7 +22,7 @@ M.faction_initial_technologies_by_planet = {
     -- technology prototype.
     nauvis = {},
     vulcanus = {
-        'planet-discovery-vulcanus',
+        -- 'planet-discovery-vulcanus',
         'calcite-processing',
         'tungsten-carbide',
         'big-mining-drill',
@@ -31,7 +31,7 @@ M.faction_initial_technologies_by_planet = {
         'metallurgic-science-pack',
     },
     gleba = {
-        'planet-discovery-gleba',
+        -- 'planet-discovery-gleba',
         'agriculture',
         'heating-tower',
         'yumako',
@@ -42,17 +42,17 @@ M.faction_initial_technologies_by_planet = {
         'bacteria-cultivation',
         'bioflux-processing',
         'agricultural-science-pack',
-        'biter-egg-handling',
+        -- 'biter-egg-handling',
     },
     fulgora = {
-        'planet-discovery-fulgora',
+        -- 'planet-discovery-fulgora',
         'recycling',
         'holmium-processing',
         'electromagnetic-plant',
         'electromagnetic-science-pack',
     },
     aquilo = {
-        'planet-discovery-aquilo',
+        -- 'planet-discovery-aquilo',
         'heating-tower',
         'lithium-processing',
         'cryogenic-plant',
@@ -60,16 +60,22 @@ M.faction_initial_technologies_by_planet = {
     },
 }
 M.faction_initial_technologies_recursive = {
-    'electric-energy-distribution-2',
-    'electric-engine',
+    'landfill',
     'solar-energy',
+    'electric-engine',
+    'electric-energy-accumulators',
 }
 M.faction_initial_technologies_recursive_by_planet = {
     nauvis = {},
-    vulcanus = {},
-    gleba = {},
-    fulgora = {},
-    aquilo = {},
+    vulcanus = {
+    },
+    gleba = {
+    },
+    fulgora = {
+    },
+    aquilo = {
+        'cryogenic-science-pack',
+    },
 }
 M.faction_initial_recipes = {}
 M.faction_enabled_recipes = {'lightning-rod'}
