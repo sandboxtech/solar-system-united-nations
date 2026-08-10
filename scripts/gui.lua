@@ -1033,6 +1033,9 @@ local function render_experience_section(content)
     heading.style.vertical_align = 'center'
     heading.add{type = 'label', caption = {'un.experience-title'}}
     add_info_sprite(heading, {'un.experience-tooltip'})
+    local help = content.add{type = 'label', caption = {'un.experience-help'}}
+    help.style.single_line = false
+    help.style.maximal_width = PERSONAL_ACTION_WIDTH
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
