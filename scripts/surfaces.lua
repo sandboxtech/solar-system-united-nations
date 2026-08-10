@@ -71,18 +71,13 @@ local function in_core(x, y, core_half)
 end
 
 local function copy_sample_tiles(
-        source, center, destination, half_width, half_height,
-        sample_half_width, sample_half_height, core_half, fill_tile)
+        source, center, destination, half_width, half_height, core_half)
     local tiles = {}
     for y = -half_height, half_height - 1 do
         for x = -half_width, half_width - 1 do
-            local in_sample = x >= -sample_half_width and x < sample_half_width
-                and y >= -sample_half_height and y < sample_half_height
             tiles[#tiles + 1] = {
-                name = in_sample and (in_core(x, y, core_half)
-                    and TUTORIAL_GRID_NAME
-                    or source.get_tile(center.x + x, center.y + y).name)
-                    or fill_tile,
+                name = in_core(x, y, core_half) and TUTORIAL_GRID_NAME
+                    or source.get_tile(center.x + x, center.y + y).name,
                 position = {x, y},
             }
         end
@@ -103,12 +98,11 @@ local function is_rock(entity)
 end
 
 local function copy_sample_entities(
-        source, center, destination, sample_half_width, sample_half_height,
-        core_half)
+        source, center, destination, half_width, half_height, core_half)
     local entities = source.find_entities_filtered{
         area = {
-            {center.x - sample_half_width, center.y - sample_half_height},
-            {center.x + sample_half_width, center.y + sample_half_height},
+            {center.x - half_width, center.y - half_height},
+            {center.x + half_width, center.y + half_height},
         },
         type = {'tree', 'simple-entity', 'simple-entity-with-force'},
     }
@@ -138,32 +132,23 @@ local function copy_sample_entities(
 end
 
 local function apply_natural_sample(surface, property_id, half_width, half_height,
-        requested_planet, spec)
+        requested_planet)
     local planet_name = sample_planet_name(property_id, requested_planet)
     local source = ensure_planet_surface(planet_name)
     if not source then return nil, nil end
-    local sample_half_width = math.min(half_width, (spec.sample_width or 2 * half_width) / 2)
-    local sample_half_height = math.min(
-        half_height,
-        (spec.sample_height or 2 * half_height) / 2
-    )
-    local center = sample_center(
-        source, property_id, sample_half_width, sample_half_height
-    )
+    local center = sample_center(source, property_id, half_width, half_height)
     local radius = math.max(
         1,
-        math.ceil(math.max(sample_half_width, sample_half_height) / 32) + 1
+        math.ceil(math.max(half_width, half_height) / 32) + 1
     )
     source.request_to_generate_chunks(center, radius)
     source.force_generate_chunk_requests()
-    local core_half = core_half_size(sample_half_width, sample_half_height)
+    local core_half = core_half_size(half_width, half_height)
     copy_sample_tiles(
-        source, center, surface, half_width, half_height,
-        sample_half_width, sample_half_height, core_half,
-        spec.fill_tile or TUTORIAL_GRID_NAME
+        source, center, surface, half_width, half_height, core_half
     )
     copy_sample_entities(
-        source, center, surface, sample_half_width, sample_half_height, core_half
+        source, center, surface, half_width, half_height, core_half
     )
     return planet_name, center
 end
@@ -187,6 +172,27 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
         end
     end
     if #tiles > 0 then surface.set_tiles(tiles, true, false, true, false) end
+end
+
+local function apply_fixed_property_tiles(surface, half_width, half_height, layout)
+    local middle_half = (tonumber(layout.middle_size) or 0) / 2
+    local core_half = (tonumber(layout.core_size) or 0) / 2
+    local tiles = {}
+    for y = -half_height, half_height - 1 do
+        for x = -half_width, half_width - 1 do
+            local in_core = x >= -core_half and x < core_half
+                and y >= -core_half and y < core_half
+            local in_middle = x >= -middle_half and x < middle_half
+                and y >= -middle_half and y < middle_half
+            tiles[#tiles + 1] = {
+                name = in_core and layout.core_tile
+                    or in_middle and layout.middle_tile
+                    or layout.fill_tile,
+                position = {x, y},
+            }
+        end
+    end
+    surface.set_tiles(tiles, true, false, true, false)
 end
 
 local function apply_hospice_tiles(surface, planet_name)
@@ -360,14 +366,21 @@ function M.create_property_surface(property_id, spec)
         surface = game.create_surface(name, map_gen_settings(width, height))
     end
     ensure_generated(surface, math.max(1, math.ceil(math.max(width, height) / 64)))
-    local sample_planet, sample_position = apply_natural_sample(
-        surface,
-        property_id,
-        half_width,
-        half_height,
-        requested_planet,
-        spec
-    )
+    local sample_planet, sample_position
+    if spec.fixed_layout then
+        sample_planet = requested_planet
+        apply_fixed_property_tiles(
+            surface, half_width, half_height, spec.fixed_layout
+        )
+    else
+        sample_planet, sample_position = apply_natural_sample(
+            surface,
+            property_id,
+            half_width,
+            half_height,
+            requested_planet
+        )
+    end
     if not sample_planet then return nil, nil, nil, nil, nil end
     apply_property_special_tiles(surface, half_width, half_height, spec)
     M.sync_property_environment(surface, nil, sample_planet)

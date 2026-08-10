@@ -352,9 +352,7 @@ local function create(spec)
         height = height,
         sample_planet = spec.sample_planet,
         terrain_planet = spec.terrain_planet,
-        sample_width = spec.sample_width,
-        sample_height = spec.sample_height,
-        fill_tile = spec.fill_tile,
+        fixed_layout = spec.fixed_layout,
         top_tile = spec.top_tile,
         top_tile_rows = spec.top_tile_rows,
         top_split_rows = spec.top_split_rows,
@@ -500,10 +498,6 @@ function M.build_requirements(player, planet_name, build_type_index)
     local width = math.floor((build_type.base_width
         + (build_type.width_per_level or 1) * level) / 2) * 2
     width = math.min(config.property_max_size, width)
-    local sample_width = build_type.sample_base_width and math.floor(
-        (build_type.sample_base_width
-            + (build_type.sample_width_per_level or 1) * level) / 2
-    ) * 2 or nil
     local experience_cost = config.property_build_experience_base
         + config.property_build_experience_per_level * level
     local initial_price = math.min(
@@ -525,10 +519,6 @@ function M.build_requirements(player, planet_name, build_type_index)
                 + build_type.decay_hours_per_level * level,
         },
         size = {width = width, height = build_type.height},
-        sample_size = sample_width and {
-            width = sample_width,
-            height = build_type.sample_height,
-        } or nil,
         experience_cost = experience_cost,
         initial_price = initial_price,
         stamina_cost = config.property_build_stamina_cost,
@@ -588,9 +578,7 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         owner_index = player.index,
         sample_planet = planet_name,
         terrain_planet = requirement.build_type.terrain_planet,
-        sample_width = requirement.sample_size and requirement.sample_size.width,
-        sample_height = requirement.sample_size and requirement.sample_size.height,
-        fill_tile = requirement.build_type.fill_tile,
+        fixed_layout = requirement.build_type.fixed_layout,
         top_tile = requirement.build_type.top_tile,
         top_tile_rows = requirement.build_type.top_tile_rows,
         top_split_rows = requirement.build_type.top_split_rows,
