@@ -6,6 +6,19 @@ M.ticks_per_hour = 60 * M.ticks_per_minute
 
 M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
+M.faction_initial_recipes = {
+    'ice-melting',
+    'lubricant',
+    'concrete',
+    'refined-concrete',
+}
+M.faction_chat_colors = {
+    nauvis = '0.35,0.70,1.00',
+    vulcanus = '1.00,0.45,0.25',
+    gleba = '0.55,0.90,0.35',
+    fulgora = '0.85,0.55,1.00',
+    aquilo = '0.45,0.90,1.00',
+}
 M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
 M.faction_force_prefix = 'un-faction-'
 M.faction_diplomacy_start_hours = 12

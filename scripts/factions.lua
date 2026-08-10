@@ -41,6 +41,16 @@ function M.display_name(planet_name)
     }
 end
 
+function M.chat_display_name(planet_name)
+    local color = config.faction_chat_colors[planet_name] or '1,1,1'
+    return {
+        '',
+        '[color=' .. color .. ']',
+        M.display_name(planet_name),
+        '[/color]',
+    }
+end
+
 function M.planet_of_force(force)
     if not (force and force.valid) then return nil end
     local prefix = config.faction_force_prefix

@@ -1,5 +1,6 @@
 local config = require('config')
 local factions = require('scripts.factions')
+local restrictions = require('scripts.restrictions')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 
@@ -78,6 +79,8 @@ local function run_force(force)
             end
         end
     end
+
+    restrictions.apply(force)
 
     if #lost > 0 then
         force.print({

@@ -4,6 +4,21 @@ local factions = require('scripts.factions')
 
 local M = {}
 
+local function colored_player_name(player)
+    local color = player.chat_color
+    return {
+        '',
+        string.format(
+            '[color=%.3f,%.3f,%.3f]',
+            color.r,
+            color.g,
+            color.b
+        ),
+        player.name,
+        '[/color]',
+    }
+end
+
 events.on(defines.events.on_console_chat, function(event)
     if not event.player_index then return end
     local player = game.get_player(event.player_index)
@@ -12,8 +27,8 @@ events.on(defines.events.on_console_chat, function(event)
     if not source_planet then return end
     local message = {
         'un.faction-chat-message',
-        factions.display_name(source_planet),
-        player.name,
+        factions.chat_display_name(source_planet),
+        colored_player_name(player),
         event.message,
     }
     -- Factorio already delivers the original line inside the sender's force.
@@ -24,7 +39,6 @@ events.on(defines.events.on_console_chat, function(event)
             local force = factions.of_planet(target_planet)
             if force and force.valid then
                 force.print(message, {
-                    color = player.chat_color,
                     skip = defines.print_skip.never,
                 })
             end
