@@ -47,6 +47,7 @@ local HELP_DETAILS_NAME = 'un_help_details'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
 local PROPERTY_HEADER_NAME = 'un_property_header'
+local PROPERTY_HOSPICE_BUTTON_NAME = 'un_property_hospice_button'
 local PROPERTY_SALVAGE_BUTTON_NAME = 'un_property_salvage_button'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
@@ -515,6 +516,17 @@ local function update_property_salvage_action(player, content)
     end
 end
 
+local function update_property_hospice_action(player, content)
+    local actions = content[CRIME_ACTIONS_NAME]
+    local button = actions and actions.valid
+        and actions[PROPERTY_HOSPICE_BUTTON_NAME]
+    if not (button and button.valid) then return end
+    local available, err = properties.hospice_travel_availability(player)
+    button.enabled = available
+    button.tooltip = available and {'un.travel-hospice'}
+        or disabled_tooltip('hospice', err)
+end
+
 local function render_property_table(player, frame, content)
     local old_header = content[PROPERTY_HEADER_NAME]
     if old_header and old_header.valid then old_header.destroy() end
@@ -545,8 +557,18 @@ local function render_property_table(player, frame, content)
     local crime_actions = content.add{
         type = 'table',
         name = CRIME_ACTIONS_NAME,
-        column_count = 2,
+        column_count = 3,
     }
+    if properties.owned_count(player.index, selected) > 0 then
+        crime_actions.add{
+            type = 'button',
+            name = PROPERTY_HOSPICE_BUTTON_NAME,
+            caption = {'un.travel-hospice'},
+            tags = {action = 'property-travel-hospice'},
+        }
+    else
+        crime_actions.add{type = 'label', caption = ''}
+    end
     crime_actions.add{
         type = 'button',
         name = PROPERTY_SALVAGE_BUTTON_NAME,
@@ -563,7 +585,9 @@ local function render_property_table(player, frame, content)
         },
     }
     crime_actions.add{type = 'label', caption = ''}
+    crime_actions.add{type = 'label', caption = ''}
     crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
+    update_property_hospice_action(player, content)
     update_property_salvage_action(player, content)
     if properties.owned_count(player.index) > 0 then
         render_property_access_section(player, content)
@@ -2135,6 +2159,7 @@ local function update_frame(player)
             end
         end
     elseif page == 'property' then
+        update_property_hospice_action(player, content)
         update_property_salvage_action(player, content)
         local sort_field = property_sort_state(frame)
         local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
@@ -2465,6 +2490,14 @@ events.on(defines.events.on_gui_click, function(event)
         elseif result then
             close_frame(player)
         else
+            update_frame(player)
+        end
+    elseif element.name == PROPERTY_HOSPICE_BUTTON_NAME then
+        local ok, err = properties.travel_to_hospice(player)
+        if ok then
+            close_frame(player)
+        else
+            player.print(property_error(err))
             update_frame(player)
         end
     elseif element.name:sub(1, #FACTION_SWITCH_PREFIX)

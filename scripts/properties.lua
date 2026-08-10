@@ -636,12 +636,31 @@ function M.set_all_open(player_index, enabled)
     return true
 end
 
-function M.owned_count(player_index)
+function M.owned_count(player_index, planet_name)
     local count = 0
-    for _, property in ipairs(M.list()) do
+    for _, property in ipairs(M.list(planet_name)) do
         if property.owner_index == player_index then count = count + 1 end
     end
     return count
+end
+
+function M.hospice_travel_availability(player)
+    if not (player and player.valid) then return false, 'invalid-player' end
+    local planet_name = factions.of_player(player)
+    if not planet_name or M.owned_count(player.index, planet_name) == 0 then
+        return false, 'not-owner'
+    end
+    if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
+    if not surfaces.can_start_public_travel(player.physical_surface) then
+        return false, 'travel-restricted'
+    end
+    return true, nil, planet_name
+end
+
+function M.travel_to_hospice(player)
+    local available, err, planet_name = M.hospice_travel_availability(player)
+    if not available then return false, err end
+    return surfaces.to_hospice(player, planet_name)
 end
 
 function M.release_owner(player_index)
