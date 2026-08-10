@@ -71,7 +71,9 @@ local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
 local PROPERTY_BUILD_NAME_NAME = 'un_property_build_name'
 local PROPERTY_BUILD_TYPE_NAME = 'un_property_build_type'
-local PROPERTY_BUILD_ATTRIBUTES_NAME = 'un_property_build_attributes'
+local PROPERTY_BUILD_DIMENSIONS_NAME = 'un_property_build_dimensions'
+local PROPERTY_BUILD_HALF_LIFE_NAME = 'un_property_build_half_life'
+local PROPERTY_BUILD_TOTAL_LIFE_NAME = 'un_property_build_total_life'
 local PROPERTY_BUILD_PRICE_NAME = 'un_property_build_price'
 local PROPERTY_BUILD_COST_NAME = 'un_property_build_cost'
 local PROPERTY_BUILD_AVAILABLE_NAME = 'un_property_build_available'
@@ -616,6 +618,8 @@ end
 local function render_property_table(player, frame, content)
     local old_header = content[PROPERTY_HEADER_NAME]
     if old_header and old_header.valid then old_header.destroy() end
+    local old_tabs = content[PROPERTY_PLANET_TABS_NAME]
+    if old_tabs and old_tabs.valid then old_tabs.destroy() end
     local old_crime = content[CRIME_ACTIONS_NAME]
     if old_crime and old_crime.valid then old_crime.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
@@ -807,14 +811,17 @@ local function update_property_build_page(player, content)
     if not (form and form.valid) then return end
     local planet_name = property_build_planet(player)
     local build_type = form[PROPERTY_BUILD_TYPE_NAME]
-    local attributes = form[PROPERTY_BUILD_ATTRIBUTES_NAME]
+    local dimensions = form[PROPERTY_BUILD_DIMENSIONS_NAME]
+    local half_life = form[PROPERTY_BUILD_HALF_LIFE_NAME]
+    local total_life = form[PROPERTY_BUILD_TOTAL_LIFE_NAME]
     local price_label = form[PROPERTY_BUILD_PRICE_NAME]
     local cost_label = form[PROPERTY_BUILD_COST_NAME]
     local available_label = form[PROPERTY_BUILD_AVAILABLE_NAME]
     local stamina_cost_label = form[PROPERTY_BUILD_STAMINA_COST_NAME]
     local stamina_available_label = form[PROPERTY_BUILD_STAMINA_AVAILABLE_NAME]
     local button = form[PROPERTY_BUILD_BUTTON_NAME]
-    if not (planet_name and build_type and attributes and price_label and cost_label
+    if not (planet_name and build_type and dimensions and half_life
+            and total_life and price_label and cost_label
             and available_label and stamina_cost_label and stamina_available_label
             and button) then return end
     local can_build, err, requirement = properties.build_availability(
@@ -823,11 +830,17 @@ local function update_property_build_page(player, content)
         build_type.selected_index
     )
     if not requirement then return end
-    attributes.caption = {
-        'un.property-build-generated-attributes',
+    dimensions.caption = {
+        'un.property-build-generated-dimensions',
         requirement.size.width,
         requirement.size.height,
+    }
+    half_life.caption = {
+        'un.property-build-generated-hours',
         requirement.lifetime.decay_hours,
+    }
+    total_life.caption = {
+        'un.property-build-generated-hours',
         requirement.lifetime.hours,
     }
     price_label.caption = {'un.coin-amount', format_integer(requirement.initial_price)}
@@ -899,8 +912,21 @@ local function render_property_build_page(player, frame, content)
         items = build_type_items,
         selected_index = 1,
     }
-    form.add{type = 'label', caption = {'un.property-build-attributes'}}
-    form.add{type = 'label', name = PROPERTY_BUILD_ATTRIBUTES_NAME}
+    form.add{type = 'label', caption = {'un.property-build-dimensions'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_DIMENSIONS_NAME}
+    local half_life_tooltip = {'un.property-build-half-life-tooltip'}
+    form.add{
+        type = 'label',
+        caption = {'un.property-build-half-life'},
+        tooltip = half_life_tooltip,
+    }
+    form.add{
+        type = 'label',
+        name = PROPERTY_BUILD_HALF_LIFE_NAME,
+        tooltip = half_life_tooltip,
+    }
+    form.add{type = 'label', caption = {'un.property-build-total-life'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_TOTAL_LIFE_NAME}
     form.add{type = 'label', caption = {'un.property-build-initial-price'}}
     form.add{type = 'label', name = PROPERTY_BUILD_PRICE_NAME}
     form.add{type = 'label', caption = {'un.property-build-total'}}
@@ -2498,12 +2524,24 @@ events.on(defines.events.on_gui_click, function(event)
         render_page(player, 'property-build')
         update_frame(player)
     elseif element.name == HELP_OPEN_PROPERTY_NAME then
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid then
+            local tags = frame.tags
+            tags.property_planet = factions.of_player(player)
+            frame.tags = tags
+        end
         render_page(player, 'property')
         update_frame(player)
     elseif element.name == NAV_PROPERTY_BUILD_NAME then
         render_page(player, 'property-build')
         update_frame(player)
     elseif element.name == NAV_PROPERTY_NAME then
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid then
+            local tags = frame.tags
+            tags.property_planet = factions.of_player(player)
+            frame.tags = tags
+        end
         render_page(player, 'property')
         update_frame(player)
     elseif element.name == NAV_PLANETS_NAME then
