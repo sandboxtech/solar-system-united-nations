@@ -229,6 +229,21 @@ function M.clear_player_dropoff(player_index)
     storage.dropoffs[player_index] = nil
 end
 
+-- Removing the LuaPlayer must also remove inventories which can outlive an
+-- individual chest entity. Keep this separate from normal drop-off removal:
+-- a planet reset must not empty the same linked inventory inside a property.
+function M.purge_player(player_index)
+    state.ensure()
+    M.clear_player_dropoff(player_index)
+    for _, entry in ipairs(factions.all()) do
+        local inventory = entry.force.get_linked_inventory(
+            config.linked_chest_name,
+            player_index
+        )
+        if inventory and inventory.valid then inventory.clear() end
+    end
+end
+
 function M.release_player_dropoff(player)
     state.ensure()
     local chest = resolve_record(player.index)

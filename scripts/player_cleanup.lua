@@ -1,5 +1,6 @@
 local config = require('config')
 local events = require('scripts.events')
+local experience = require('scripts.experience')
 local linked_inventory = require('scripts.linked_inventory')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
@@ -28,10 +29,12 @@ local function clean_ledger(player_index)
     end
 end
 
-local function release_assets(player_index)
+local function release_assets(player_index, player_name)
     state.ensure()
-    properties.release_owner(player_index)
-    linked_inventory.clear_player_dropoff(player_index)
+    experience.preserve(player_index, player_name)
+    linked_inventory.purge_player(player_index)
+    properties.remove_owner_assets(player_index)
+    properties.clear_player_translation_requests(player_index)
     ships.remove_owner(player_index)
     social.remove_player(player_index)
 end
@@ -39,6 +42,9 @@ end
 local function erase_scenario_account(player_index)
     state.ensure()
     clean_ledger(player_index)
+    storage.pending_faction_switches[player_index] = nil
+    storage.respawn_hospice_planets[player_index] = nil
+    storage.suppress_foreign_join_notifications[player_index] = nil
     storage.players[player_index] = nil
 end
 
@@ -72,7 +78,7 @@ local function check_one()
     if not player then return end
     local index = player.index
     local name = player.name
-    release_assets(index)
+    release_assets(index, name)
     local ok, err = pcall(function()
         game.remove_offline_players({index})
     end)
@@ -84,7 +90,8 @@ local function check_one()
 end
 
 events.on(defines.events.on_pre_player_removed, function(event)
-    release_assets(event.player_index)
+    local player = game.get_player(event.player_index)
+    release_assets(event.player_index, player and player.name or nil)
 end)
 
 events.on(defines.events.on_player_removed, function(event)

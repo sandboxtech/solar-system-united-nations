@@ -1,12 +1,56 @@
 local config = require('config')
 local economy = require('scripts.economy')
+local state = require('scripts.state')
 
 local M = {}
 
+local function merge_experience(target, source)
+    if type(source) ~= 'table' or source == target then return target end
+    for name, amount in pairs(source) do
+        if type(name) == 'string' and type(amount) == 'number'
+                and amount >= 0 and amount == math.floor(amount) then
+            target[name] = math.max(target[name] or 0, amount)
+        end
+    end
+    return target
+end
+
+local function preserve_account_data(player_index, player_name)
+    state.ensure()
+    local account = storage.players[player_index]
+    local old = type(account) == 'table' and account.science_consumed or nil
+    local player = game.get_player(player_index)
+    player_name = player_name
+        or player and player.name
+        or type(account) == 'table' and account.name
+    if not player_name then
+        if type(old) ~= 'table' then
+            old = {}
+            if type(account) == 'table' then account.science_consumed = old end
+        end
+        return old
+    end
+
+    local saved = storage.player_experience_by_name[player_name]
+    if type(saved) ~= 'table' then
+        saved = type(old) == 'table' and old or {}
+        storage.player_experience_by_name[player_name] = saved
+    else
+        merge_experience(saved, old)
+    end
+    if type(account) == 'table' then account.science_consumed = nil end
+    return saved
+end
+
 local function account_data(player_index)
     local account = economy.ensure_account(player_index)
-    if account.science_consumed == nil then account.science_consumed = {} end
-    return account.science_consumed
+    return preserve_account_data(player_index, account.name)
+end
+
+-- LuaPlayer indexes can change after game.remove_offline_players(). Preserve
+-- the only durable part of an account under the stable player name first.
+function M.preserve(player_index, player_name)
+    return preserve_account_data(player_index, player_name)
 end
 
 function M.record(player_index, entries)

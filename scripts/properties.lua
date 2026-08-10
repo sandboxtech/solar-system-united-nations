@@ -701,23 +701,25 @@ function M.travel_to_hospice(player)
     return travel_to_hospice_recording(player, planet_name)
 end
 
+local function release_property(property)
+    assign_owner(property, nil)
+    property.planet_property_number = next_planet_property_number(
+        property.sample_planet,
+        property.id
+    )
+    property.owner_cleanup_tick = game.tick
+    ensure_linked_chests(property)
+    sync_surface_visibility(property)
+    local translator = first_connected_player()
+    if translator then request_property_name_translation(property, translator) end
+end
+
 function M.release_owner(player_index)
     state.ensure()
     local changed = 0
     for _, property in ipairs(M.list()) do
         if property.owner_index == player_index then
-            assign_owner(property, nil)
-            property.planet_property_number = next_planet_property_number(
-                property.sample_planet,
-                property.id
-            )
-            property.owner_cleanup_tick = game.tick
-            ensure_linked_chests(property)
-            sync_surface_visibility(property)
-            local translator = first_connected_player()
-            if translator then
-                request_property_name_translation(property, translator)
-            end
+            release_property(property)
             changed = changed + 1
         end
     end
@@ -730,18 +732,7 @@ function M.release_owner_in_faction(player_index, planet_name)
     local changed = 0
     for _, property in ipairs(M.list(planet_name)) do
         if property.owner_index == player_index then
-            assign_owner(property, nil)
-            property.planet_property_number = next_planet_property_number(
-                property.sample_planet,
-                property.id
-            )
-            property.owner_cleanup_tick = game.tick
-            ensure_linked_chests(property)
-            sync_surface_visibility(property)
-            local translator = first_connected_player()
-            if translator then
-                request_property_name_translation(property, translator)
-            end
+            release_property(property)
             changed = changed + 1
         end
     end
@@ -962,6 +953,61 @@ local function delete_property_surface(property)
     storage.deleting_properties[surface.index] = nil
     property.status = 'active'
     return false, 'surface-delete-failed'
+end
+
+-- Account cleanup removes player-built property surfaces without a salvage
+-- payout. Permanent public properties survive and return to the vacant pool.
+function M.remove_owner_assets(player_index)
+    state.ensure()
+    local owned = {}
+    for _, property in pairs(storage.properties) do
+        if property.status == 'active'
+                and property.owner_index == player_index then
+            owned[#owned + 1] = property
+        end
+    end
+    table.sort(owned, function(a, b) return a.id < b.id end)
+
+    local removed = 0
+    local released = 0
+    for _, property in ipairs(owned) do
+        if property.permanent then
+            release_property(property)
+            released = released + 1
+        else
+            local surface = game.surfaces[property.surface_name]
+            if not (surface and surface.valid) then
+                clear_name_translation_requests(property.id)
+                storage.properties[property.id] = nil
+                bump_revision()
+                removed = removed + 1
+            else
+                local ok, err = delete_property_surface(property)
+                if ok then
+                    removed = removed + 1
+                else
+                    -- Never retain ownership under an index that the engine is
+                    -- about to delete. The lifecycle pass will retry deletion.
+                    release_property(property)
+                    property.expires_tick = game.tick
+                    log('[un] deferred property cleanup ' .. property.id
+                        .. ': ' .. tostring(err))
+                end
+            end
+        end
+    end
+    if released > 0 then bump_revision() end
+    return removed, released
+end
+
+function M.clear_player_translation_requests(player_index)
+    state.ensure()
+    for request_id, request in pairs(storage.property_name_translation_requests) do
+        if request.player_index == player_index
+                or request.owner_index == player_index then
+            storage.property_name_translation_requests[request_id] = nil
+        end
+    end
 end
 
 function M.salvage_value(property)

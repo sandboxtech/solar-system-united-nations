@@ -2,6 +2,9 @@ local M = {}
 
 function M.ensure()
     if storage.players == nil then storage.players = {} end
+    if storage.player_experience_by_name == nil then
+        storage.player_experience_by_name = {}
+    end
     if storage.properties == nil then storage.properties = {} end
     if storage.next_property_id == nil then storage.next_property_id = 1 end
     if storage.deleting_properties == nil then storage.deleting_properties = {} end
