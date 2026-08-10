@@ -86,6 +86,7 @@ M.faction_initial_recipes = {
 }
 M.tech_leak_immune_technologies = {
     'logistic-robotics',
+    'space-platform-thruster',
     'planet-discovery-vulcanus',
     'planet-discovery-gleba',
     'planet-discovery-fulgora',
