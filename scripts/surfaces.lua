@@ -1,7 +1,6 @@
 local config = require('config')
 local events = require('scripts.events')
 local factions = require('scripts.factions')
-local linked_inventory = require('scripts.linked_inventory')
 
 local M = {}
 local TUTORIAL_GRID_NAME = 'tutorial-grid'
@@ -448,11 +447,10 @@ local function respawn_destination(player)
     local planet_name = storage.respawn_hospice_planets[player.index]
     if planet_name then
         storage.respawn_hospice_planets[player.index] = nil
-        return M.ensure_hospice(planet_name), {0, 0}
+    else
+        planet_name = factions.of_player(player) or 'nauvis'
     end
-    local dropoff = linked_inventory.get_active_dropoff(player.index)
-    if dropoff then return dropoff.surface, dropoff.position end
-    return M.ensure_hospice('nauvis'), {0, 0}
+    return M.ensure_hospice(planet_name), {0, 0}
 end
 
 events.on(defines.events.on_player_created, function(event)

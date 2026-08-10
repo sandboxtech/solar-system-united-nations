@@ -750,7 +750,7 @@ function M.can_accelerate_reset(player)
     if not name then return false, 'invalid-faction' end
     local record = ensure_record(name)
     if record.state ~= 'open' then
-        return false, 'rebuilding', name
+        return false, 'clearing', name
     end
     if not settings.get('planet_resets_enabled') or not record.next_tick then
         return false, 'paused', name

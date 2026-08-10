@@ -186,7 +186,7 @@ local function update_hud_reset_countdown(player, hud)
     if not record then
         label.caption = {'un.hud-reset-unknown'}
     elseif record.state ~= 'open' then
-        label.caption = {'un.hud-reset-rebuilding'}
+        label.caption = {'un.hud-reset-clearing'}
     elseif not settings.get('planet_resets_enabled') or not record.next_tick then
         label.caption = {'un.hud-reset-paused'}
     else
@@ -2173,7 +2173,7 @@ local function update_frame(player)
                             format_countdown(item.left_ticks)}
                         or item.left_ticks
                         and format_countdown(item.left_ticks)
-                        or {'un.planet-countdown-rebuilding'}
+                        or {'un.planet-countdown-clearing'}
                 end
                 local traits = list[planet_traits_name(item.name)]
                 if traits and traits.valid then
