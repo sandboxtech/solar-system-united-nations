@@ -145,6 +145,12 @@ function M.create(player, planet_name)
         return nil, 'ship-invalid-planet'
     end
     if M.of(player.index) then return nil, 'ship-already-have' end
+    if not settings.online_requirement_met(
+            player,
+            'ship_build_min_online_hours'
+        ) then
+        return nil, 'ship-online-time'
+    end
 
     if not stamina.spend(player.index, config.ship_stamina_cost) then
         return nil, 'insufficient-stamina'

@@ -1,5 +1,4 @@
 local config = require('config')
-local economy = require('scripts.economy')
 local events = require('scripts.events')
 local stamina = require('scripts.stamina')
 
@@ -90,9 +89,6 @@ function M.can_buy_wood(player)
             and player.character.valid and prototypes.item.wood) then
         return false, 'unavailable'
     end
-    if economy.get_balance(player.index) < config.wood_supply_coin_cost then
-        return false, 'insufficient-credit'
-    end
     if stamina.get(player.index) < config.wood_supply_stamina_cost then
         return false, 'insufficient-stamina'
     end
@@ -104,15 +100,6 @@ function M.buy_wood(player)
     if not available then return false, err end
     if not stamina.spend(player.index, config.wood_supply_stamina_cost) then
         return false, 'insufficient-stamina'
-    end
-    local paid, pay_err = economy.change(
-        player.index,
-        -config.wood_supply_coin_cost,
-        'wood-supply'
-    )
-    if not paid then
-        stamina.refund(player.index, config.wood_supply_stamina_cost)
-        return false, pay_err
     end
     deliver_item(player, {name = 'wood', count = config.wood_supply_count})
     return true

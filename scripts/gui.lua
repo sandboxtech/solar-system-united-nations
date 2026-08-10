@@ -5,7 +5,8 @@ local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
 local factions = require('scripts.factions')
-local linked_inventory = require('scripts.linked_inventory')
+local permissions = require('scripts.permissions')
+local playtime = require('scripts.playtime')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
@@ -19,7 +20,7 @@ local technology_decay = require('scripts.technology_decay')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 12
+local HUD_LAYOUT_VERSION = 13
 local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_MENU_NAME = 'un_hud_menu'
@@ -71,7 +72,6 @@ local PROPERTY_BUILD_STAMINA_AVAILABLE_NAME = 'un_property_build_stamina_availab
 local PROPERTY_BUILD_BUTTON_NAME = 'un_property_build_button'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
-local SCIENCE_CONVERT_NAME = 'un_science_convert'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
 local PLANET_HEADER_NAME = 'un_planet_header'
@@ -91,6 +91,10 @@ local ADMIN_NUMBER_SETTINGS = {
     {'initial_coin', 'un.admin-setting-initial-coin'},
     {'friend_limit', 'un.admin-setting-friend-limit'},
     {'ship_life_hours', 'un.admin-setting-ship-life'},
+    {'faction_switch_min_online_hours', 'un.admin-setting-faction-online-hours'},
+    {'crime_min_online_hours', 'un.admin-setting-crime-online-hours'},
+    {'ship_build_min_online_hours', 'un.admin-setting-ship-online-hours'},
+    {'deconstruction_min_online_hours', 'un.admin-setting-deconstruction-online-hours'},
     {'cleanup_idle_hours', 'un.admin-setting-cleanup-hours'},
     {'planet_reset_min_hours', 'un.admin-setting-planet-reset-min'},
     {'planet_reset_max_hours', 'un.admin-setting-planet-reset-max'},
@@ -237,18 +241,18 @@ function M.ensure_button(player)
     title.style.left_margin = 4
     title.style.right_margin = 6
     local buttons = {
-        {HUD_MENU_NAME, 'virtual-signal/signal-info', {'un.hud-menu-tooltip'}},
-        {HUD_LAST_PROPERTY_NAME, 'virtual-signal/signal-map-marker', {'un.hud-home-tooltip'}},
+        {HUD_MENU_NAME, {'un.hud-action-button'}, {'un.hud-menu-tooltip'}},
+        {HUD_LAST_PROPERTY_NAME, {'un.hud-travel-button'}, {'un.hud-home-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
-            type = 'sprite-button',
+            type = 'button',
             name = spec[1],
-            sprite = spec[2],
+            caption = spec[2],
             tooltip = spec[3],
         }
-        button.style.width = 40
         button.style.height = 40
+        button.style.minimal_width = 88
     end
     update_home_button(player, hud)
     return hud
@@ -376,6 +380,17 @@ local function format_countdown(ticks)
     return string.format('%02d:%02d:%02d', hours, minutes, remainder)
 end
 
+local function online_requirement_caption(player, setting_key, locale_key)
+    return {
+        locale_key,
+        settings.get(setting_key),
+        format_countdown(settings.online_requirement_left_ticks(
+            player,
+            setting_key
+        )),
+    }
+end
+
 local function property_lifetime_caption(property)
     if property.permanent then return {'un.property-permanent'} end
     return format_countdown(properties.left_ticks(property))
@@ -470,9 +485,9 @@ local function render_property_access_section(player, content)
 end
 
 local function update_property_salvage_action(player, content)
-    local header = content[PROPERTY_HEADER_NAME]
-    local button = header and header.valid
-        and header[PROPERTY_SALVAGE_BUTTON_NAME]
+    local actions = content[CRIME_ACTIONS_NAME]
+    local button = actions and actions.valid
+        and actions[PROPERTY_SALVAGE_BUTTON_NAME]
     if not (button and button.valid) then return end
     local available, err, property, value
         = properties.salvage_at_player_availability(player)
@@ -527,19 +542,17 @@ local function render_property_table(player, frame, content)
         caption = {'un.property-current-faction', planet_label(selected)},
     }
     add_info_sprite(header, {'un.property-page-tooltip'})
-    header.add{
+    local crime_actions = content.add{
+        type = 'table',
+        name = CRIME_ACTIONS_NAME,
+        column_count = 2,
+    }
+    crime_actions.add{
         type = 'button',
         name = PROPERTY_SALVAGE_BUTTON_NAME,
         caption = {'un.property-salvage'},
         tags = {action = 'property-salvage', property_id = 0},
     }
-    update_property_salvage_action(player, content)
-    local crime_actions = content.add{
-        type = 'flow',
-        name = CRIME_ACTIONS_NAME,
-        direction = 'horizontal',
-    }
-    crime_actions.style.vertical_align = 'center'
     crime_actions.add{
         type = 'button',
         name = CRIME_BUTTON_NAME,
@@ -549,7 +562,9 @@ local function render_property_table(player, frame, content)
             config.crime_stamina_cost,
         },
     }
+    crime_actions.add{type = 'label', caption = ''}
     crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
+    update_property_salvage_action(player, content)
     if properties.owned_count(player.index) > 0 then
         render_property_access_section(player, content)
     end
@@ -865,13 +880,11 @@ local function render_ubi_section(content)
         caption = {
             'un.wood-supply-buy',
             config.wood_supply_count,
-            config.wood_supply_coin_cost,
             config.wood_supply_stamina_cost,
         },
         tooltip = {
             'un.wood-supply-tooltip',
             config.wood_supply_count,
-            config.wood_supply_coin_cost,
             config.wood_supply_stamina_cost,
         },
         tags = {action = 'wood-supply-buy'},
@@ -880,15 +893,15 @@ local function render_ubi_section(content)
 end
 
 local function render_ship_actions(player, content)
+    content.add{
+        type = 'label',
+        caption = {'un.ship-faction-orbit',
+            planet_label(factions.of_player(player) or 'nauvis')},
+    }
     local ship_actions = content.add{
         type = 'flow',
         name = SHIP_ACTIONS_NAME,
         direction = 'horizontal',
-    }
-    ship_actions.add{
-        type = 'label',
-        caption = {'un.ship-faction-orbit',
-            planet_label(factions.of_player(player) or 'nauvis')},
     }
     ship_actions.add{
         type = 'button',
@@ -910,13 +923,6 @@ local function render_experience_section(content)
     heading.style.vertical_align = 'center'
     heading.add{type = 'label', caption = {'un.experience-title'}}
     add_info_sprite(heading, {'un.experience-tooltip'})
-    local convert = content.add{
-        type = 'button',
-        name = SCIENCE_CONVERT_NAME,
-        caption = {'un.science-convert'},
-        tooltip = {'un.science-convert-tooltip'},
-    }
-    convert.style.width = PERSONAL_ACTION_WIDTH
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
@@ -1093,6 +1099,10 @@ local function update_factions_page(player, content)
         local ship_count = list[faction_element_name('ships', planet_name)]
         local button = list[FACTION_SWITCH_PREFIX .. planet_name]
         local switch_cost = factions.switch_stamina_cost(planet_name)
+        local online_ready = settings.online_requirement_met(
+            player,
+            'faction_switch_min_online_hours'
+        )
         if status and status.valid then
             status.caption = current == planet_name
                 and {'un.faction-current'} or {'un.faction-hostile'}
@@ -1108,9 +1118,30 @@ local function update_factions_page(player, content)
         end
         if button and button.valid then
             button.enabled = current ~= planet_name
+                and online_ready
                 and stamina.get(player.index) >= switch_cost
             if current == planet_name then
                 button.tooltip = {'un.faction-already-current'}
+            elseif not online_ready then
+                button.tooltip = {
+                    '',
+                    online_requirement_caption(
+                        player,
+                        'faction_switch_min_online_hours',
+                        'un.faction-online-required'
+                    ),
+                    '\n\n',
+                    switch_cost == 0 and {
+                        'un.faction-switch-tooltip-free',
+                        planet_label(planet_name),
+                        config.normal_respawn_seconds,
+                    } or {
+                        'un.faction-switch-tooltip',
+                        planet_label(planet_name),
+                        switch_cost,
+                        config.normal_respawn_seconds,
+                    },
+                }
             else
                 button.tooltip = switch_cost == 0 and {
                     'un.faction-switch-tooltip-free',
@@ -1192,6 +1223,9 @@ local function render_factions_page(player, frame, content)
 end
 
 crime_error_caption = function(err)
+    if err == 'crime-online-time' then
+        return {'un.crime-online-required-short'}
+    end
     if err == 'in-space' then return {'un.crime-error-space'} end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'no-targets' then return {'un.crime-error-no-targets'} end
@@ -1214,7 +1248,11 @@ update_crime_action = function(player, content)
         'un.crime-ready',
         planet_label(planet_name),
         count,
-    } or crime_error_caption(err)
+    } or err == 'crime-online-time' and online_requirement_caption(
+        player,
+        'crime_min_online_hours',
+        'un.crime-online-required'
+    ) or crime_error_caption(err)
     button.enabled = available
     local details = {
         'un.crime-button-tooltip',
@@ -1222,9 +1260,14 @@ update_crime_action = function(player, content)
         config.crime_stamina_cost,
         config.crime_price_scale,
     }
+    local unavailable = err == 'crime-online-time' and online_requirement_caption(
+        player,
+        'crime_min_online_hours',
+        'un.crime-online-required'
+    ) or crime_error_caption(err)
     button.tooltip = available and details or {
         '',
-        crime_error_caption(err),
+        unavailable,
         '\n\n',
         details,
     }
@@ -1275,6 +1318,10 @@ local function render_admin_page(player, frame, content)
             text = tostring(settings.get(key)),
             numeric = true,
             allow_decimal = key == 'ship_life_hours'
+                or key == 'faction_switch_min_online_hours'
+                or key == 'crime_min_online_hours'
+                or key == 'ship_build_min_online_hours'
+                or key == 'deconstruction_min_online_hours'
                 or key == 'cleanup_idle_hours'
                 or key == 'planet_reset_min_hours'
                 or key == 'planet_reset_max_hours'
@@ -1484,7 +1531,10 @@ local function render_help_page(player, frame, content, mode)
         })
     elseif mode == 'brief' then
         local income = add_help_card(details, {'un.help-card-income'})
-        add_help_line(income, {'un.help-brief-start'})
+        add_help_line(income, {
+            'un.help-brief-start',
+            settings.get('deconstruction_min_online_hours'),
+        })
         add_help_gap(details)
         local property = add_help_card(details, {'un.help-card-property'})
         add_help_line(property, {
@@ -1649,6 +1699,12 @@ local function list_refresh_due(frame, page)
     return true
 end
 
+local function player_faction_icon(player)
+    local planet_name = factions.of_player(player)
+    if not planet_name then return {'un.faction-unknown'} end
+    return {'', '[img=space-location/' .. planet_name .. ']'}
+end
+
 local function render_players_page(viewer, frame, content)
     local actions = content.add{
         type = 'flow',
@@ -1670,11 +1726,12 @@ local function render_players_page(viewer, frame, content)
     local list = content.add{
         type = 'table',
         name = PLAYER_TABLE_NAME,
-        column_count = 8,
+        column_count = 9,
         style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.player-column-status'}}
     list.add{type = 'label', caption = {'un.player-column-name'}}
+    list.add{type = 'label', caption = {'un.player-column-faction'}}
     list.add{type = 'label', caption = {'un.player-column-online-hours'}}
     list.add{type = 'label', caption = {'un.player-column-offline-hours'}}
     list.add{type = 'label', caption = {'un.player-column-locale'}}
@@ -1685,6 +1742,12 @@ local function render_players_page(viewer, frame, content)
     for _, player in ipairs(sorted_players(viewer.index)) do
         list.add{type = 'label', name = player_element_name('status', player.index)}
         list.add{type = 'label', caption = player.name}
+        list.add{
+            type = 'label',
+            name = player_element_name('faction', player.index),
+            caption = player_faction_icon(player),
+            tooltip = factions.display_name(factions.of_player(player)),
+        }
         list.add{type = 'label', name = player_element_name('online', player.index)}
         list.add{type = 'label', name = player_element_name('offline', player.index)}
         list.add{type = 'label', name = player_element_name('locale', player.index)}
@@ -1769,6 +1832,7 @@ local function property_error(err)
     if err == 'ship-missing' then return {'un.ship-missing'} end
     if err == 'ship-not-ready' then return {'un.ship-not-ready'} end
     if err == 'ship-create-failed' then return {'un.ship-create-failed'} end
+    if err == 'ship-online-time' then return {'un.ship-online-required-short'} end
     if err == 'insufficient-experience' then
         return {'un.property-build-insufficient-experience'}
     end
@@ -1869,10 +1933,20 @@ local function update_ship_actions(player, content)
         scuttle.enabled = true
     else
         status.caption = {'un.ship-none'}
-        create.enabled = stamina.get(player.index) >= config.ship_stamina_cost
+        local online_ready = settings.online_requirement_met(
+            player,
+            'ship_build_min_online_hours'
+        )
+        create.enabled = online_ready
+            and stamina.get(player.index) >= config.ship_stamina_cost
+        local unavailable = not online_ready and online_requirement_caption(
+            player,
+            'ship_build_min_online_hours',
+            'un.ship-online-required'
+        ) or {'un.stamina-insufficient'}
         create.tooltip = create.enabled and ship_create_tooltip() or {
             '',
-            {'un.stamina-insufficient'},
+            unavailable,
             '\n\n',
             ship_create_tooltip(),
         }
@@ -1958,14 +2032,11 @@ local function update_frame(player)
             local wood_details = {
                 'un.wood-supply-tooltip',
                 config.wood_supply_count,
-                config.wood_supply_coin_cost,
                 config.wood_supply_stamina_cost,
             }
             wood.tooltip = can_buy and wood_details or {
                 '',
-                buy_error == 'insufficient-credit'
-                    and {'un.wood-supply-insufficient-coin'}
-                    or buy_error == 'insufficient-stamina'
+                buy_error == 'insufficient-stamina'
                     and {'un.wood-supply-insufficient-stamina'}
                     or {'un.wood-supply-unavailable'},
                 '\n\n',
@@ -1975,7 +2046,6 @@ local function update_frame(player)
                 wood.caption = {
                     'un.wood-supply-buy',
                     config.wood_supply_count,
-                    config.wood_supply_coin_cost,
                     config.wood_supply_stamina_cost,
                 }
                 wood.tags = {action = 'wood-supply-buy'}
@@ -2100,6 +2170,7 @@ local function update_frame(player)
             if list and list.valid then
                 for _, listed_player in pairs(game.players) do
                     local status = list[player_element_name('status', listed_player.index)]
+                    local faction = list[player_element_name('faction', listed_player.index)]
                     local online = list[player_element_name('online', listed_player.index)]
                     local offline = list[player_element_name('offline', listed_player.index)]
                     local locale = list[player_element_name('locale', listed_player.index)]
@@ -2109,8 +2180,13 @@ local function update_frame(player)
                         status.caption = listed_player.connected
                             and {'un.player-online'} or {'un.player-offline'}
                     end
+                    if faction and faction.valid then
+                        local planet_name = factions.of_player(listed_player)
+                        faction.caption = player_faction_icon(listed_player)
+                        faction.tooltip = factions.display_name(planet_name)
+                    end
                     if online and online.valid then
-                        online.caption = format_hours(listed_player.online_time)
+                        online.caption = format_hours(playtime.ticks(listed_player))
                     end
                     if offline and offline.valid then
                         local account = economy.ensure_account(listed_player.index)
@@ -2120,7 +2196,7 @@ local function update_frame(player)
                         )
                         local offline_ticks = math.max(
                             0,
-                            observed_ticks - listed_player.online_time
+                            observed_ticks - playtime.ticks(listed_player)
                         )
                         offline.caption = format_hours(offline_ticks)
                     end
@@ -2327,15 +2403,6 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
-    elseif element.name == SCIENCE_CONVERT_NAME then
-        local items, coins = linked_inventory.convert_main_inventory(player)
-        player.print(items > 0 and {
-            'un.science-convert-success',
-            items,
-            coins,
-        } or {'un.science-convert-empty'})
-        render_page(player, 'overview')
-        update_frame(player)
     elseif element.name == STARTER_KIT_NAME then
         if element.tags.action == 'starter-kit-confirm' then
             local ok, err = starter.buy(player)
@@ -2361,9 +2428,7 @@ events.on(defines.events.on_gui_click, function(event)
             player.print(ok and {
                 'un.wood-supply-purchased',
                 config.wood_supply_count,
-            } or err == 'insufficient-credit'
-                and {'un.wood-supply-insufficient-coin'}
-                or err == 'insufficient-stamina'
+            } or err == 'insufficient-stamina'
                 and {'un.wood-supply-insufficient-stamina'}
                 or {'un.wood-supply-unavailable'})
             render_page(player, 'overview')
@@ -2372,7 +2437,6 @@ events.on(defines.events.on_gui_click, function(event)
             element.caption = {
                 'un.wood-supply-confirm',
                 config.wood_supply_count,
-                config.wood_supply_coin_cost,
                 config.wood_supply_stamina_cost,
             }
             element.tags = {action = 'wood-supply-confirm'}
@@ -2414,6 +2478,12 @@ events.on(defines.events.on_gui_click, function(event)
             else
                 player.print(err == 'insufficient-stamina'
                     and {'un.suicide-stamina-insufficient'}
+                    or err == 'faction-online-time'
+                    and online_requirement_caption(
+                        player,
+                        'faction_switch_min_online_hours',
+                        'un.faction-online-required'
+                    )
                     or err == 'same-faction' and {'un.faction-already-current'}
                     or {'un.suicide-unavailable'})
             end
@@ -2491,6 +2561,9 @@ events.on(defines.events.on_gui_click, function(event)
                 end
                 if ok and tags.setting == 'tech_leak_interval_hours' then
                     technology_decay.reschedule()
+                end
+                if ok and tags.setting == 'deconstruction_min_online_hours' then
+                    permissions.refresh_connected(true)
                 end
                 player.print(ok and {'un.admin-setting-saved'}
                     or {'un.admin-invalid-value'})

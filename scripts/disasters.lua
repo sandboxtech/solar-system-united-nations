@@ -2,6 +2,7 @@ local config = require('config')
 local events = require('scripts.events')
 local factions = require('scripts.factions')
 local linked_inventory = require('scripts.linked_inventory')
+local playtime = require('scripts.playtime')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local state = require('scripts.state')
@@ -653,6 +654,13 @@ end
 
 local function finish_reset(name, surface, record)
     clear_statistics(surface)
+    if name == 'nauvis' then
+        playtime.snapshot_all()
+        local ok, err = pcall(function() game.reset_time_played() end)
+        if not ok then
+            log('[un] failed to reset map time played: ' .. tostring(err))
+        end
+    end
     apply_round_environment(name, surface, record)
     surfaces.sync_all_property_environments()
     local force = factions.of_planet(name)

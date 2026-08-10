@@ -14,6 +14,7 @@ require('scripts.social')
 require('scripts.ships')
 require('scripts.disasters')
 require('scripts.player_cleanup')
+require('scripts.permissions')
 require('scripts.gui')
 
 local bootstrap = require('scripts.bootstrap')

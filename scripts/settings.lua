@@ -1,4 +1,5 @@
 local config = require('config')
+local playtime = require('scripts.playtime')
 local state = require('scripts.state')
 
 local M = {}
@@ -7,6 +8,26 @@ local DEFINITIONS = {
     initial_coin = {default = config.initial_credit, min = 0, max = 1000000000000, integer = true},
     friend_limit = {default = config.friend_limit, min = 0, max = 100, integer = true},
     ship_life_hours = {default = config.ship_life_hours, min = 1, max = 10000},
+    faction_switch_min_online_hours = {
+        default = config.faction_switch_min_online_hours,
+        min = 0,
+        max = 100000,
+    },
+    crime_min_online_hours = {
+        default = config.crime_min_online_hours,
+        min = 0,
+        max = 100000,
+    },
+    ship_build_min_online_hours = {
+        default = config.ship_build_min_online_hours,
+        min = 0,
+        max = 100000,
+    },
+    deconstruction_min_online_hours = {
+        default = config.deconstruction_min_online_hours,
+        min = 0,
+        max = 100000,
+    },
     cleanup_idle_hours = {default = config.player_cleanup_idle_hours, min = 1, max = 100000},
     planet_reset_min_hours = {
         default = config.public_planet_reset_min_hours,
@@ -154,6 +175,16 @@ end
 
 function M.definition(key)
     return DEFINITIONS[key]
+end
+
+function M.online_requirement_left_ticks(player, key)
+    if not (player and player.valid) then return math.huge end
+    local required_ticks = M.get(key) * config.ticks_per_hour
+    return math.max(0, math.ceil(required_ticks - playtime.ticks(player)))
+end
+
+function M.online_requirement_met(player, key)
+    return M.online_requirement_left_ticks(player, key) <= 0
 end
 
 return M

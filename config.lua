@@ -60,8 +60,7 @@ M.starter_kit_items = {
     {name = 'construction-robot', count = 5},
 }
 M.wood_supply_count = 100
-M.wood_supply_coin_cost = 100
-M.wood_supply_stamina_cost = 100
+M.wood_supply_stamina_cost = 1000
 
 M.property_limit_per_planet = 100
 M.tech_leak_interval_hours = 1
@@ -163,6 +162,11 @@ M.ship_stamina_cost = 10000
 M.crime_coin_cost = 1000
 M.crime_stamina_cost = 10000
 M.crime_price_scale = 10000
+M.faction_switch_min_online_hours = 1
+M.crime_min_online_hours = 1
+M.ship_build_min_online_hours = 1
+M.deconstruction_min_online_hours = 1
+M.permission_refresh_ticks = M.ticks_per_minute
 M.ship_width_per_level = 2
 M.ship_base_width = 16
 M.ship_height = 512

@@ -1,5 +1,6 @@
 local config = require('config')
 local events = require('scripts.events')
+local settings = require('scripts.settings')
 local stamina = require('scripts.stamina')
 local state = require('scripts.state')
 
@@ -112,6 +113,12 @@ function M.switch_by_suicide(player, target_planet)
     local source_planet = M.of_player(player)
     if not source_planet then return false, 'invalid-faction' end
     if source_planet == target_planet then return false, 'same-faction' end
+    if not settings.online_requirement_met(
+            player,
+            'faction_switch_min_online_hours'
+        ) then
+        return false, 'faction-online-time'
+    end
     local stamina_cost = M.switch_stamina_cost(target_planet)
     if stamina.get(player.index) < stamina_cost then
         return false, 'insufficient-stamina'

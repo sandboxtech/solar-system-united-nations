@@ -1,6 +1,7 @@
 local config = require('config')
 local economy = require('scripts.economy')
 local properties = require('scripts.properties')
+local settings = require('scripts.settings')
 local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
 
@@ -33,6 +34,10 @@ local function context(player)
 end
 
 function M.availability(player)
+    if not (player and player.valid) then return false, 'invalid-player' end
+    if not settings.online_requirement_met(player, 'crime_min_online_hours') then
+        return false, 'crime-online-time'
+    end
     local planet_name, err = context(player)
     if not planet_name then return false, err end
     local candidates = targets(planet_name, player.index)

@@ -273,15 +273,6 @@ function M.convert_player(player)
     )
 end
 
-function M.convert_main_inventory(player)
-    local inventory = player and player.get_main_inventory()
-    return convert_inventory(
-        player,
-        inventory,
-        'backpack-science-sale'
-    )
-end
-
 events.on(defines.events.on_built_entity, on_player_built)
 events.on(defines.events.on_player_mined_entity, on_player_mined)
 events.on(defines.events.on_entity_died, function(event)
