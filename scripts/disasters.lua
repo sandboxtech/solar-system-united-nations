@@ -680,14 +680,7 @@ local function finish_reset(name, surface, record)
         record.paused_left_ticks = record.period_ticks
     end
     record.warned = {}
-    game.print({
-        'un.planet-reset-finished',
-        planet_label(name),
-        math.floor((record.solar_factor or 1) * 100 + 0.5),
-        math.floor((record.day_factor or 1) * 100 + 0.5),
-        string.format('%.2f', record.min_brightness or 0),
-        record.peaceful and {'un.yes'} or {'un.no'},
-    })
+    game.print({'un.planet-reset-finished', planet_label(name)})
 end
 
 function M.apply_global_settings()
