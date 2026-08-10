@@ -228,21 +228,13 @@ end
 
 local function sorted_players(viewer_index)
     local result = {}
-    for _, player in pairs(game.players) do result[#result + 1] = player end
+    for _, player in pairs(game.connected_players) do
+        result[#result + 1] = player
+    end
     table.sort(result, function(a, b)
         local a_self = a.index == viewer_index
         local b_self = b.index == viewer_index
         if a_self ~= b_self then return a_self end
-        if a.connected ~= b.connected then return a.connected end
-        if not a.connected then
-            local a_account = storage.players[a.index]
-            local b_account = storage.players[b.index]
-            local a_seen = a_account and a_account.last_seen_tick
-                or a.last_online or 0
-            local b_seen = b_account and b_account.last_seen_tick
-                or b.last_online or 0
-            if a_seen ~= b_seen then return a_seen > b_seen end
-        end
         local a_name = string.lower(a.name)
         local b_name = string.lower(b.name)
         if a_name ~= b_name then return a_name < b_name end
@@ -1715,9 +1707,8 @@ end
 
 local function player_signature()
     local parts = {}
-    for _, player in pairs(game.players) do
+    for _, player in pairs(game.connected_players) do
         parts[#parts + 1] = tostring(player.index)
-            .. (player.connected and '+' or '-')
     end
     table.sort(parts)
     return table.concat(parts, ',')
@@ -1769,14 +1760,13 @@ local function render_players_page(viewer, frame, content)
     local list = scroll.add{
         type = 'table',
         name = PLAYER_TABLE_NAME,
-        column_count = 9,
+        column_count = 8,
         style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.player-column-status'}}
     list.add{type = 'label', caption = {'un.player-column-name'}}
     list.add{type = 'label', caption = {'un.player-column-faction'}}
     list.add{type = 'label', caption = {'un.player-column-online-hours'}}
-    list.add{type = 'label', caption = {'un.player-column-offline-hours'}}
     list.add{type = 'label', caption = {'un.player-column-locale'}}
     list.add{type = 'label', caption = {'un.player-column-coins'}}
     list.add{type = 'label', caption = {'un.player-column-total-level'}}
@@ -1792,7 +1782,6 @@ local function render_players_page(viewer, frame, content)
             tooltip = factions.display_name(factions.of_player(player)),
         }
         list.add{type = 'label', name = player_element_name('online', player.index)}
-        list.add{type = 'label', name = player_element_name('offline', player.index)}
         list.add{type = 'label', name = player_element_name('locale', player.index)}
         list.add{type = 'label', name = player_element_name('coins', player.index)}
         list.add{type = 'label', name = player_element_name('level', player.index)}
@@ -2221,11 +2210,10 @@ local function update_frame(player)
                 PLAYER_TABLE_NAME
             )
             if list and list.valid then
-                for _, listed_player in pairs(game.players) do
+                for _, listed_player in pairs(game.connected_players) do
                     local status = list[player_element_name('status', listed_player.index)]
                     local faction = list[player_element_name('faction', listed_player.index)]
                     local online = list[player_element_name('online', listed_player.index)]
-                    local offline = list[player_element_name('offline', listed_player.index)]
                     local locale = list[player_element_name('locale', listed_player.index)]
                     local coins = list[player_element_name('coins', listed_player.index)]
                     local level = list[player_element_name('level', listed_player.index)]
@@ -2240,18 +2228,6 @@ local function update_frame(player)
                     end
                     if online and online.valid then
                         online.caption = format_hours(playtime.ticks(listed_player))
-                    end
-                    if offline and offline.valid then
-                        local account = economy.ensure_account(listed_player.index)
-                        local observed_ticks = math.max(
-                            0,
-                            game.tick - (account.created_tick or game.tick)
-                        )
-                        local offline_ticks = math.max(
-                            0,
-                            observed_ticks - playtime.ticks(listed_player)
-                        )
-                        offline.caption = format_hours(offline_ticks)
                     end
                     if locale and locale.valid then
                         locale.caption = listed_player.locale
