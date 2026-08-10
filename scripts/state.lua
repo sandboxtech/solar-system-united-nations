@@ -34,9 +34,6 @@ function M.ensure()
     if storage.faction_initial_technologies_granted == nil then
         storage.faction_initial_technologies_granted = {}
     end
-    if storage.faction_initial_recipes_granted == nil then
-        storage.faction_initial_recipes_granted = {}
-    end
     if storage.tech_leak_unlocked_forces == nil then
         storage.tech_leak_unlocked_forces = {}
     end

@@ -78,6 +78,7 @@ M.faction_initial_technologies_recursive_by_planet = {
     },
 }
 M.faction_initial_recipes = {
+    'ice-melting',
     'loader',
     'fast-loader',
     'express-loader',
@@ -165,6 +166,13 @@ M.tech_leak_interval_hours = 1
 M.tech_leak_coefficient_max_percent = 0.25
 M.tech_leak_max_affected = 5
 M.tech_leak_unlock_technology = M.faction_diplomacy_technology
+M.tech_leak_chance_multiplier_by_planet = {
+    nauvis = 1,
+    vulcanus = 1,
+    gleba = 1,
+    fulgora = 1,
+    aquilo = 0.001,
+}
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute

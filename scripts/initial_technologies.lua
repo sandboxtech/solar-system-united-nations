@@ -27,26 +27,6 @@ local function research(force, name)
     end
 end
 
-local function research_recursively(force, roots)
-    local seen = {}
-    local function visit(name)
-        if seen[name] then return end
-        seen[name] = true
-        local technology = force.technologies[name]
-        if not (technology and technology.valid) then return end
-        local prerequisites = {}
-        for prerequisite_name in pairs(technology.prerequisites or {}) do
-            prerequisites[#prerequisites + 1] = prerequisite_name
-        end
-        table.sort(prerequisites)
-        for _, prerequisite_name in ipairs(prerequisites) do
-            visit(prerequisite_name)
-        end
-        research(force, name)
-    end
-    for _, name in ipairs(roots) do visit(name) end
-end
-
 local function grant(force, planet_name)
     local direct = sorted_unique_names(
         config.faction_initial_technologies,
@@ -57,7 +37,13 @@ local function grant(force, planet_name)
         config.faction_initial_technologies_recursive_by_planet[planet_name]
     )
     for _, name in ipairs(direct) do research(force, name) end
-    research_recursively(force, recursive)
+    for _, name in ipairs(recursive) do
+        local technology = force.technologies[name]
+        if technology and technology.valid then
+            technology.enabled = true
+            technology.research_recursive()
+        end
+    end
 end
 
 local function grant_recipes(force)
@@ -67,6 +53,10 @@ local function grant_recipes(force)
     end
 end
 
+function M.ensure_recipes(force)
+    if force and force.valid then grant_recipes(force) end
+end
+
 function M.ensure()
     state.ensure()
     for _, entry in ipairs(factions.all()) do
@@ -74,10 +64,7 @@ function M.ensure()
             grant(entry.force, entry.planet_name)
             storage.faction_initial_technologies_granted[entry.force.name] = true
         end
-        if not storage.faction_initial_recipes_granted[entry.force.name] then
-            grant_recipes(entry.force)
-            storage.faction_initial_recipes_granted[entry.force.name] = true
-        end
+        grant_recipes(entry.force)
     end
 end
 

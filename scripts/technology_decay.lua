@@ -1,6 +1,7 @@
 local config = require('config')
 local events = require('scripts.events')
 local factions = require('scripts.factions')
+local initial_technologies = require('scripts.initial_technologies')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local state = require('scripts.state')
@@ -75,8 +76,12 @@ local function run_force(force)
         storage.tech_leak_unlocked_forces[force.name] = true
     end
     if not storage.tech_leak_unlocked_forces[force.name] then return 0 end
+    local planet_name = factions.planet_of_force(force)
+    local chance_multiplier = config.tech_leak_chance_multiplier_by_planet[
+        planet_name
+    ] or 1
     local coefficient = math.random()
-        * settings.get('tech_leak_max_percent')
+        * settings.get('tech_leak_max_percent') * chance_multiplier
     local protected = protected_prerequisites(force)
     local immune = immune_technologies()
     local lost = {}
@@ -133,6 +138,7 @@ local function run_force(force)
             table.concat(downgraded, ' '),
         })
     end
+    initial_technologies.ensure_recipes(force)
     return #lost + #downgraded
 end
 

@@ -1721,6 +1721,7 @@ local function render_help_page(player, frame, content, mode)
             'un.help-detail-tech-leak-formula',
             settings.get('tech_leak_max_percent'),
             settings.get('tech_leak_max_affected'),
+            config.tech_leak_chance_multiplier_by_planet.aquilo,
         })
     else
         local security = add_help_card(details, {
