@@ -26,6 +26,10 @@ local HUD_RESET_COUNTDOWN_NAME = 'un_hud_reset_countdown'
 local HUD_MENU_NAME = 'un_hud_menu'
 local HUD_LAST_PROPERTY_NAME = 'un_hud_last_property'
 local FRAME_NAME = 'un_main_frame'
+local FRAME_WIDTH_FRACTION = 0.60
+local FRAME_MIN_WIDTH = 900
+local FRAME_MAX_WIDTH = 1600
+local FRAME_SCREEN_MARGIN = 80
 local CLOSE_NAME = 'un_main_close'
 local CONTENT_NAME = 'un_main_content'
 local NAVIGATION_NAME = 'un_main_navigation'
@@ -2388,6 +2392,16 @@ local function close_frame(player)
     if frame and frame.valid then frame.destroy() end
 end
 
+local function apply_frame_width(player, frame)
+    if not (player and player.valid and frame and frame.valid) then return end
+    local scale = math.max(player.display_scale, 0.1)
+    local screen_width = player.display_resolution.width / scale
+    local width = math.floor(screen_width * FRAME_WIDTH_FRACTION)
+    width = math.max(FRAME_MIN_WIDTH, math.min(FRAME_MAX_WIDTH, width))
+    width = math.min(width, math.max(640, math.floor(screen_width - FRAME_SCREEN_MARGIN)))
+    frame.style.width = width
+end
+
 local function open_frame(player, initial_page)
     close_frame(player)
     local frame = player.gui.screen.add{
@@ -2395,6 +2409,7 @@ local function open_frame(player, initial_page)
         name = FRAME_NAME,
         direction = 'vertical',
     }
+    apply_frame_width(player, frame)
 
     local title = frame.add{type = 'flow', direction = 'horizontal'}
     title.drag_target = frame
@@ -2479,6 +2494,22 @@ end
 
 events.on(defines.events.on_player_created, ensure_player)
 events.on(defines.events.on_player_joined_game, ensure_player)
+local function update_frame_for_display_change(event)
+    local player = game.get_player(event.player_index)
+    local frame = player and player.gui.screen[FRAME_NAME]
+    if not (frame and frame.valid) then return end
+    apply_frame_width(player, frame)
+    frame.force_auto_center()
+end
+
+events.on(
+    defines.events.on_player_display_resolution_changed,
+    update_frame_for_display_change
+)
+events.on(
+    defines.events.on_player_display_scale_changed,
+    update_frame_for_display_change
+)
 events.on(defines.events.on_player_changed_surface, function(event)
     local player = game.get_player(event.player_index)
     if player then update_home_button(player) end
