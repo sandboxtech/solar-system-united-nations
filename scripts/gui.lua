@@ -2891,10 +2891,20 @@ scheduler.every(config.gui_refresh_ticks, function()
     end
 end)
 
+local PERIODIC_LIST_PAGES = {
+    ['property-build'] = true,
+    planets = true,
+    ships = true,
+    property = true,
+    factions = true,
+    players = true,
+}
+
 scheduler.every(config.gui_list_refresh_ticks, function()
     for _, player in pairs(game.connected_players) do
         local frame = player.gui.screen[FRAME_NAME]
-        if frame and frame.valid and frame.tags.page ~= 'overview' then
+        if frame and frame.valid
+                and PERIODIC_LIST_PAGES[frame.tags.page] then
             update_frame(player)
         end
     end
