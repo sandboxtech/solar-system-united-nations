@@ -71,13 +71,18 @@ local function in_core(x, y, core_half)
 end
 
 local function copy_sample_tiles(
-        source, center, destination, half_width, half_height, core_half)
+        source, center, destination, half_width, half_height,
+        sample_half_width, sample_half_height, core_half, fill_tile)
     local tiles = {}
     for y = -half_height, half_height - 1 do
         for x = -half_width, half_width - 1 do
+            local in_sample = x >= -sample_half_width and x < sample_half_width
+                and y >= -sample_half_height and y < sample_half_height
             tiles[#tiles + 1] = {
-                name = in_core(x, y, core_half) and TUTORIAL_GRID_NAME
-                    or source.get_tile(center.x + x, center.y + y).name,
+                name = in_sample and (in_core(x, y, core_half)
+                    and TUTORIAL_GRID_NAME
+                    or source.get_tile(center.x + x, center.y + y).name)
+                    or fill_tile,
                 position = {x, y},
             }
         end
@@ -98,11 +103,12 @@ local function is_rock(entity)
 end
 
 local function copy_sample_entities(
-        source, center, destination, half_width, half_height, core_half)
+        source, center, destination, sample_half_width, sample_half_height,
+        core_half)
     local entities = source.find_entities_filtered{
         area = {
-            {center.x - half_width, center.y - half_height},
-            {center.x + half_width, center.y + half_height},
+            {center.x - sample_half_width, center.y - sample_half_height},
+            {center.x + sample_half_width, center.y + sample_half_height},
         },
         type = {'tree', 'simple-entity', 'simple-entity-with-force'},
     }
@@ -132,25 +138,55 @@ local function copy_sample_entities(
 end
 
 local function apply_natural_sample(surface, property_id, half_width, half_height,
-        requested_planet)
+        requested_planet, spec)
     local planet_name = sample_planet_name(property_id, requested_planet)
     local source = ensure_planet_surface(planet_name)
     if not source then return nil, nil end
-    local center = sample_center(source, property_id, half_width, half_height)
+    local sample_half_width = math.min(half_width, (spec.sample_width or 2 * half_width) / 2)
+    local sample_half_height = math.min(
+        half_height,
+        (spec.sample_height or 2 * half_height) / 2
+    )
+    local center = sample_center(
+        source, property_id, sample_half_width, sample_half_height
+    )
     local radius = math.max(
         1,
-        math.ceil(math.max(half_width, half_height) / 32) + 1
+        math.ceil(math.max(sample_half_width, sample_half_height) / 32) + 1
     )
     source.request_to_generate_chunks(center, radius)
     source.force_generate_chunk_requests()
-    local core_half = core_half_size(half_width, half_height)
+    local core_half = core_half_size(sample_half_width, sample_half_height)
     copy_sample_tiles(
-        source, center, surface, half_width, half_height, core_half
+        source, center, surface, half_width, half_height,
+        sample_half_width, sample_half_height, core_half,
+        spec.fill_tile or TUTORIAL_GRID_NAME
     )
     copy_sample_entities(
-        source, center, surface, half_width, half_height, core_half
+        source, center, surface, sample_half_width, sample_half_height, core_half
     )
     return planet_name, center
+end
+
+local function apply_property_special_tiles(surface, half_width, half_height, spec)
+    local rows = tonumber(spec.top_tile_rows) or 0
+    local split_rows = tonumber(spec.top_split_rows) or 0
+    if rows <= 0 and split_rows <= 0 then return end
+    local tiles = {}
+    for y = -half_height, -half_height + math.max(rows, split_rows) - 1 do
+        for x = -half_width, half_width - 1 do
+            local name
+            if y < -half_height + split_rows then
+                name = x < 0 and spec.top_left_tile or spec.top_right_tile
+            elseif y < -half_height + rows then
+                name = spec.top_tile
+            end
+            if name then
+                tiles[#tiles + 1] = {name = name, position = {x, y}}
+            end
+        end
+    end
+    if #tiles > 0 then surface.set_tiles(tiles, true, false, true, false) end
 end
 
 local function apply_hospice_tiles(surface, planet_name)
@@ -295,7 +331,11 @@ function M.sync_all_property_environments()
     for _, property in pairs(storage.properties or {}) do
         local surface = game.surfaces[property.surface_name]
         if surface and surface.valid then
-            M.sync_property_environment(surface, nil, property.sample_planet)
+            M.sync_property_environment(
+                surface,
+                nil,
+                property.terrain_planet or property.sample_planet
+            )
         end
     end
 end
@@ -305,7 +345,10 @@ function M.create_property_surface(property_id, spec)
     local height = spec.height
     local half_width = width / 2
     local half_height = height / 2
-    local requested_planet = sample_planet_name(property_id, spec.sample_planet)
+    local requested_planet = sample_planet_name(
+        property_id,
+        spec.terrain_planet or spec.sample_planet
+    )
     local reset = storage.public_planet_resets
         and storage.public_planet_resets[requested_planet]
     if reset and reset.state ~= 'open' then
@@ -322,12 +365,14 @@ function M.create_property_surface(property_id, spec)
         property_id,
         half_width,
         half_height,
-        requested_planet
+        requested_planet,
+        spec
     )
     if not sample_planet then return nil, nil, nil, nil, nil end
+    apply_property_special_tiles(surface, half_width, half_height, spec)
     M.sync_property_environment(surface, nil, sample_planet)
     surface.localised_name = spec.name or {'un.property-default-name', property_id}
-    local force = factions.of_planet(sample_planet)
+    local force = factions.of_planet(spec.sample_planet)
     if force and force.valid then
         force.set_spawn_position({0, 0}, surface)
         force.chart(surface, {

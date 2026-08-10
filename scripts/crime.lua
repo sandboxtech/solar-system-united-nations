@@ -65,7 +65,8 @@ function M.attempt(player)
     if #candidates == 0 then return false, 'no-targets' end
     local property = candidates[math.random(#candidates)]
     local price = properties.current_price(property)
-    local chance = 1 / (1 + price / config.crime_price_scale)
+    local chance = math.min(1, (1 / (1 + price / config.crime_price_scale))
+        * (tonumber(property.crime_chance_multiplier) or 1))
 
     if not stamina.spend(player.index, config.crime_stamina_cost) then
         return false, 'insufficient-stamina'

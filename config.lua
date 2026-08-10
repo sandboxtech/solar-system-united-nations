@@ -243,26 +243,88 @@ M.property_build_stamina_cost = 50000
 M.property_build_price_per_experience = 10
 M.property_build_experience_base = 1000
 M.property_build_experience_per_level = 100
+local function property_build_type(spec)
+    spec.base_width = spec.base_width or 32
+    spec.width_per_level = spec.width_per_level or 1
+    spec.height = spec.height or 32
+    spec.initial_price_multiplier = spec.initial_price_multiplier or 1
+    spec.base_decay_hours = spec.base_decay_hours or 36
+    spec.decay_hours_per_level = spec.decay_hours_per_level or 0.6
+    spec.base_lifetime_hours = spec.base_lifetime_hours or 108
+    spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 9
+    return spec
+end
 M.property_build_types = {
-    {
+    property_build_type{
         pack = 'automation-science-pack',
         key = 'shelter',
-        base_width = 32,
-        height = 32,
         base_decay_hours = 6,
         decay_hours_per_level = 0.1,
         base_lifetime_hours = 12,
         lifetime_hours_per_level = 1,
     },
-    {
+    property_build_type{
         pack = 'logistic-science-pack',
         key = 'cottage',
-        base_width = 32,
-        height = 32,
+        initial_price_multiplier = 2,
         base_decay_hours = 12,
         decay_hours_per_level = 0.2,
-        base_lifetime_hours = 24,
-        lifetime_hours_per_level = 1,
+        base_lifetime_hours = 36,
+        lifetime_hours_per_level = 3,
+    },
+    property_build_type{
+        pack = 'military-science-pack',
+        key = 'secure-cottage',
+        initial_price_multiplier = 3,
+        crime_chance_multiplier = 0.1,
+    },
+    property_build_type{
+        pack = 'space-science-pack',
+        key = 'sky-cottage',
+        base_width = 96,
+        width_per_level = 3,
+        height = 96,
+        initial_price_multiplier = 9,
+        sample_base_width = 32,
+        sample_width_per_level = 1,
+        sample_height = 32,
+        fill_tile = 'empty-space',
+    },
+    property_build_type{
+        pack = 'metallurgic-science-pack',
+        key = 'lava-cottage',
+        initial_price_multiplier = 4,
+        terrain_planet = 'vulcanus',
+        top_tile = 'lava',
+        top_tile_rows = 2,
+    },
+    property_build_type{
+        pack = 'electromagnetic-science-pack',
+        key = 'oil-cottage',
+        initial_price_multiplier = 5,
+        terrain_planet = 'fulgora',
+        top_tile = 'oil-ocean-deep',
+        top_tile_rows = 2,
+    },
+    property_build_type{
+        pack = 'agricultural-science-pack',
+        key = 'garden-cottage',
+        initial_price_multiplier = 6,
+        terrain_planet = 'gleba',
+        top_split_rows = 8,
+        top_left_tile = 'natural-yumako-soil',
+        top_right_tile = 'natural-jellynut-soil',
+    },
+    property_build_type{
+        pack = 'cryogenic-science-pack',
+        key = 'cryogenic-cottage',
+        initial_price_multiplier = 8,
+        base_decay_hours = 192,
+        decay_hours_per_level = 3.2,
+        base_lifetime_hours = 288,
+        lifetime_hours_per_level = 24,
+        terrain_planet = 'aquilo',
+        crime_chance_multiplier = 11,
     },
 }
 M.property_lifecycle_ticks = M.ticks_per_minute

@@ -208,10 +208,18 @@ end
 function M.feature_description(property)
     local width = property.width or property.size or 0
     local height = property.height or property.size or 0
-    return {
+    local dimensions = {
         'un.property-features',
         width,
         height,
+    }
+    local multiplier = tonumber(property.crime_chance_multiplier)
+    if not multiplier or multiplier == 1 then return dimensions end
+    return {
+        '',
+        dimensions,
+        '\n',
+        {'un.property-feature-crime-multiplier', multiplier * 100},
     }
 end
 
@@ -338,11 +346,20 @@ local function create(spec)
 
     local id = next_available_property_id()
     local min_brightness = config.property_min_brightness
-    local surface, half_width, half_height, sample_planet, sample_position
+    local surface, half_width, half_height, terrain_planet, sample_position
         = surfaces.create_property_surface(id, {
         width = width,
         height = height,
         sample_planet = spec.sample_planet,
+        terrain_planet = spec.terrain_planet,
+        sample_width = spec.sample_width,
+        sample_height = spec.sample_height,
+        fill_tile = spec.fill_tile,
+        top_tile = spec.top_tile,
+        top_tile_rows = spec.top_tile_rows,
+        top_split_rows = spec.top_split_rows,
+        top_left_tile = spec.top_left_tile,
+        top_right_tile = spec.top_right_tile,
     })
     if not surface then return nil, 'surface-create-failed' end
     storage.next_property_id = id + 1
@@ -362,7 +379,8 @@ local function create(spec)
         height = height,
         solar = solar,
         min_brightness = min_brightness,
-        sample_planet = sample_planet,
+        sample_planet = spec.sample_planet,
+        terrain_planet = terrain_planet,
         sample_position = sample_position,
         linked_chest_positions = central_chest_positions(),
         created_tick = game.tick,
@@ -373,8 +391,9 @@ local function create(spec)
         construction_type = type(spec.construction_type) == 'string'
             and spec.construction_type or nil,
         construction_level = tonumber(spec.construction_level),
+        crime_chance_multiplier = tonumber(spec.crime_chance_multiplier),
         planet_property_number = permanent
-            and next_planet_property_number(sample_planet, id) or nil,
+            and next_planet_property_number(spec.sample_planet, id) or nil,
         system_key = spec.system_key,
     }
     assign_owner(property, spec.owner_index)
@@ -478,14 +497,20 @@ function M.build_requirements(player, planet_name, build_type_index)
         return nil
     end
     local level = experience.total_level(player.index)
-    local width = math.floor((build_type.base_width + level) / 2) * 2
+    local width = math.floor((build_type.base_width
+        + (build_type.width_per_level or 1) * level) / 2) * 2
     width = math.min(config.property_max_size, width)
+    local sample_width = build_type.sample_base_width and math.floor(
+        (build_type.sample_base_width
+            + (build_type.sample_width_per_level or 1) * level) / 2
+    ) * 2 or nil
     local experience_cost = config.property_build_experience_base
         + config.property_build_experience_per_level * level
     local initial_price = math.min(
         config.property_price_cap,
         math.ceil(experience_cost
-            * settings.get('property_build_price_multiplier'))
+            * settings.get('property_build_price_multiplier')
+            * (build_type.initial_price_multiplier or 1))
     )
     return {
         planet_name = planet_name,
@@ -500,6 +525,10 @@ function M.build_requirements(player, planet_name, build_type_index)
                 + build_type.decay_hours_per_level * level,
         },
         size = {width = width, height = build_type.height},
+        sample_size = sample_width and {
+            width = sample_width,
+            height = build_type.sample_height,
+        } or nil,
         experience_cost = experience_cost,
         initial_price = initial_price,
         stamina_cost = config.property_build_stamina_cost,
@@ -558,6 +587,15 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
     local ok, property, create_err = pcall(create, {
         owner_index = player.index,
         sample_planet = planet_name,
+        terrain_planet = requirement.build_type.terrain_planet,
+        sample_width = requirement.sample_size and requirement.sample_size.width,
+        sample_height = requirement.sample_size and requirement.sample_size.height,
+        fill_tile = requirement.build_type.fill_tile,
+        top_tile = requirement.build_type.top_tile,
+        top_tile_rows = requirement.build_type.top_tile_rows,
+        top_split_rows = requirement.build_type.top_split_rows,
+        top_left_tile = requirement.build_type.top_left_tile,
+        top_right_tile = requirement.build_type.top_right_tile,
         price = requirement.initial_price,
         lifetime_hours = requirement.lifetime.hours,
         decay_hours = requirement.lifetime.decay_hours,
@@ -567,6 +605,7 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         construction_value = requirement.initial_price,
         construction_type = requirement.build_type.key,
         construction_level = requirement.total_level,
+        crime_chance_multiplier = requirement.build_type.crime_chance_multiplier,
     })
     if not ok or not property then
         experience.record(player.index, {{
