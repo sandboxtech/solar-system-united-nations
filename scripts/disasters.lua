@@ -573,7 +573,8 @@ local function prepare_new_round(name, surface, record)
 
     record.round = record.round + 1
     record.seed = map_settings.seed
-    record.evolution = name == 'nauvis' and math.random() ^ 2 or nil
+    record.evolution = (name == 'nauvis' or name == 'gleba')
+        and math.random() ^ 2 or nil
     record.min_brightness = math.random() * 0.2
     record.peaceful = math.random() < config.public_planet_peaceful_chance
     local half_day = 0.1 + math.random() * 0.3
@@ -604,7 +605,7 @@ local function apply_round_environment(name, surface, record)
         surface.min_brightness = record.min_brightness
         surface.peaceful_mode = record.peaceful == true
     end)
-    if name == 'nauvis' and record.evolution then
+    if (name == 'nauvis' or name == 'gleba') and record.evolution then
         game.forces.enemy.set_evolution_factor(record.evolution, surface)
     end
 end

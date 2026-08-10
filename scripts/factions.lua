@@ -137,16 +137,16 @@ end
 
 function M.toggle_diplomacy_after_reset(planet_name)
     if not planet_set[planet_name] then return false end
-    if game.tick < config.faction_diplomacy_start_hours
-            * config.ticks_per_hour then
-        return false
-    end
     state.ensure()
     ensure_diplomacy_state()
-    local friendly = not storage.faction_diplomacy_friendly[planet_name]
-    storage.faction_diplomacy_friendly[planet_name] = friendly
     local source = M.of_planet(planet_name)
     if not (source and source.valid) then return false end
+    local technology = source.technologies[
+        config.faction_diplomacy_technology
+    ]
+    if not (technology and technology.researched) then return false end
+    local friendly = not storage.faction_diplomacy_friendly[planet_name]
+    storage.faction_diplomacy_friendly[planet_name] = friendly
     for _, other_name in ipairs(config.public_planets) do
         if other_name ~= planet_name then
             local other = M.of_planet(other_name)

@@ -21,7 +21,7 @@ M.faction_chat_colors = {
 }
 M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
 M.faction_force_prefix = 'un-faction-'
-M.faction_diplomacy_start_hours = 12
+M.faction_diplomacy_technology = 'space-platform-thruster'
 M.public_planet_arrival_radius = 128
 M.public_planet_reset_min_hours = 0.5
 M.public_planet_reset_max_hours = 2.5

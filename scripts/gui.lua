@@ -1235,7 +1235,6 @@ local function render_factions_page(player, frame, content)
         'un.faction-page-tooltip',
         config.suicide_stamina_cost,
         config.normal_respawn_seconds,
-        config.faction_diplomacy_start_hours,
     })
     local list = content.add{
         type = 'table',
@@ -1572,7 +1571,6 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(forces, {
             'un.help-story-factions',
             config.suicide_stamina_cost,
-            config.faction_diplomacy_start_hours,
         })
     elseif mode == 'brief' then
         local income = add_help_card(details, {'un.help-card-income'})
