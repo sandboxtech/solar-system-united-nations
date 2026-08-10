@@ -12,6 +12,7 @@ local function targets(planet_name, player_index)
     for _, property in ipairs(properties.list(planet_name)) do
         local surface = game.surfaces[property.surface_name]
         if property.owner_index and property.owner_index ~= player_index
+                and not properties.all_open(property.owner_index)
                 and surface and surface.valid then
             result[#result + 1] = property
         end
