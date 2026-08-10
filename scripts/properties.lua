@@ -1076,16 +1076,6 @@ local function expire_due_properties()
     for _, property in ipairs(due) do expire_property(property) end
 end
 
-function M.admin_repair(player)
-    if not (player and player.valid and player.admin) then
-        return false, 'not-admin'
-    end
-    M.ensure()
-    for _, property in ipairs(M.list()) do ensure_linked_chests(property) end
-    bump_revision()
-    return true, #M.list()
-end
-
 function M.admin_set_tax(player, percent)
     if not (player and player.valid and player.admin) then
         return false, 'not-admin'

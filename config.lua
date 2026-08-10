@@ -22,7 +22,7 @@ M.faction_initial_technologies_by_planet = {
     -- technology prototype.
     nauvis = {},
     vulcanus = {
-        -- 'planet-discovery-vulcanus',
+        'planet-discovery-vulcanus',
         'calcite-processing',
         'tungsten-carbide',
         'big-mining-drill',
@@ -31,7 +31,7 @@ M.faction_initial_technologies_by_planet = {
         'metallurgic-science-pack',
     },
     gleba = {
-        -- 'planet-discovery-gleba',
+        'planet-discovery-gleba',
         'agriculture',
         'heating-tower',
         'yumako',
@@ -45,14 +45,14 @@ M.faction_initial_technologies_by_planet = {
         -- 'biter-egg-handling',
     },
     fulgora = {
-        -- 'planet-discovery-fulgora',
+        'planet-discovery-fulgora',
         'recycling',
         'holmium-processing',
         'electromagnetic-plant',
         'electromagnetic-science-pack',
     },
     aquilo = {
-        -- 'planet-discovery-aquilo',
+        'planet-discovery-aquilo',
         'heating-tower',
         'lithium-processing',
         'cryogenic-plant',
@@ -77,10 +77,13 @@ M.faction_initial_technologies_recursive_by_planet = {
         'cryogenic-science-pack',
     },
 }
-M.faction_initial_recipes = {}
-M.faction_enabled_recipes = {'lightning-rod'}
-M.faction_disabled_technologies = {}
-M.faction_disabled_recipes = {'logistic-robot'}
+M.tech_leak_immune_technologies = {
+    'logistic-robotics',
+    'planet-discovery-vulcanus',
+    'planet-discovery-gleba',
+    'planet-discovery-fulgora',
+    'planet-discovery-aquilo',
+}
 M.faction_chat_colors = {
     nauvis = '0.35,0.70,1.00',
     vulcanus = '1.00,0.45,0.25',
@@ -155,6 +158,8 @@ M.tech_leak_unlock_technology = M.faction_diplomacy_technology
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute
+M.logistic_network_roboport_limit = 100
+M.logistic_network_logistic_robot_limit = 1000
 M.science_pack_credit = {
     ['automation-science-pack'] = 1,
     ['logistic-science-pack'] = 1,

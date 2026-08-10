@@ -1,12 +1,27 @@
 local config = require('config')
 local events = require('scripts.events')
 local factions = require('scripts.factions')
-local restrictions = require('scripts.restrictions')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local state = require('scripts.state')
 
 local M = {}
+
+local function default_immune_technologies()
+    local result = {}
+    for _, name in ipairs(config.tech_leak_immune_technologies or {}) do
+        result[name] = true
+    end
+    return result
+end
+
+local function immune_technologies()
+    state.ensure()
+    if type(storage.tech_leak_immune_technologies) ~= 'table' then
+        storage.tech_leak_immune_technologies = default_immune_technologies()
+    end
+    return storage.tech_leak_immune_technologies
+end
 
 local function interval_ticks()
     return math.max(
@@ -63,6 +78,7 @@ local function run_force(force)
     local coefficient = math.random()
         * settings.get('tech_leak_max_percent')
     local protected = protected_prerequisites(force)
+    local immune = immune_technologies()
     local lost = {}
     local downgraded = {}
     local affected_limit = settings.get('tech_leak_max_affected')
@@ -71,7 +87,8 @@ local function run_force(force)
     for _, name in ipairs(sorted_technology_names(force)) do
         local technology = force.technologies[name]
         local prototype = technology.prototype
-        local eligible = not protected[name]
+        local eligible = not immune[name]
+            and not protected[name]
             and not prototype.research_trigger
             and (technology.researched or can_downgrade(technology))
         if eligible then
@@ -101,8 +118,6 @@ local function run_force(force)
     end
     table.sort(lost)
     table.sort(downgraded)
-
-    restrictions.apply(force)
 
     if #lost > 0 then
         force.print({
@@ -179,5 +194,62 @@ events.on(defines.events.on_research_finished, function(event)
     state.ensure()
     storage.tech_leak_unlocked_forces[event.research.force.name] = true
 end)
+
+local function command_reply(command, message)
+    local player = command.player_index and game.get_player(command.player_index)
+    if player then player.print(message) else localised_print(message) end
+end
+
+local function sorted_immune_names()
+    local result = {}
+    for name, enabled in pairs(immune_technologies()) do
+        if enabled then result[#result + 1] = name end
+    end
+    table.sort(result)
+    return result
+end
+
+local function immunity_command(command)
+    local player = command.player_index and game.get_player(command.player_index)
+    if player and not player.admin then
+        player.print({'un.admin-only'})
+        return
+    end
+
+    local action, name, extra = (command.parameter or ''):match(
+        '^%s*(%S*)%s*(%S*)%s*(.-)%s*$'
+    )
+    if action == '' or action == 'show' then
+        local names = sorted_immune_names()
+        command_reply(command, {
+            'un.tech-immunity-list',
+            #names > 0 and table.concat(names, ', ') or '-',
+        })
+        return
+    end
+    if action == 'reset' and name == '' and extra == '' then
+        storage.tech_leak_immune_technologies = default_immune_technologies()
+        command_reply(command, {'un.tech-immunity-reset'})
+        return
+    end
+    if (action ~= 'add' and action ~= 'remove')
+            or name == '' or extra ~= '' then
+        command_reply(command, {'un.tech-immunity-usage'})
+        return
+    end
+    if not prototypes.technology[name] then
+        command_reply(command, {'un.tech-immunity-invalid', name})
+        return
+    end
+
+    immune_technologies()[name] = action == 'add' or nil
+    command_reply(command, {'un.tech-immunity-updated', name, action})
+end
+
+commands.add_command(
+    'un-tech-immunity',
+    {'un.tech-immunity-command-help'},
+    immunity_command
+)
 
 return M

@@ -66,22 +66,6 @@ function M.get_balance(player_index)
     return M.ensure_account(player_index).credit
 end
 
-function M.admin_set_balance(admin_index, player_index, balance)
-    balance = tonumber(balance)
-    if not is_finite_integer(balance) or balance < 0
-            or balance > 1000000000000 then
-        return false, 'invalid-amount'
-    end
-    local account = M.ensure_account(player_index)
-    local difference = balance - account.credit
-    if difference == 0 then return true, balance end
-    return M.change(
-        player_index,
-        difference,
-        'admin-balance:' .. tostring(admin_index)
-    )
-end
-
 function M.get_ubi_capacity()
     return config.ubi_credit_per_second * config.ubi_max_seconds
 end

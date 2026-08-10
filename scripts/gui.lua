@@ -89,8 +89,6 @@ local FACTION_TABLE_NAME = 'un_faction_table'
 local FACTION_SWITCH_PREFIX = 'un_faction_switch_'
 local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
-local ADMIN_PLAYER_TABLE_NAME = 'un_admin_player_table'
-local ADMIN_PROPERTY_TABLE_NAME = 'un_admin_property_table'
 
 local ADMIN_NUMBER_SETTINGS = {
     {'initial_coin', 'un.admin-setting-initial-coin'},
@@ -430,10 +428,6 @@ end
 
 local function admin_setting_input_name(key)
     return 'un_admin_setting_' .. key
-end
-
-local function admin_balance_input_name(player_index)
-    return 'un_admin_balance_' .. tostring(player_index)
 end
 
 local function planet_label(name)
@@ -1473,59 +1467,6 @@ local function render_admin_page(player, frame, content)
         tags = {action = 'admin-setting-switch', setting = 'admin_property_access'},
     }
 
-    scroll.add{type = 'line'}
-    scroll.add{type = 'label', caption = {'un.admin-properties-title'}, style = 'heading_2_label'}
-    scroll.add{
-        type = 'button',
-        caption = {'un.admin-property-repair'},
-        tags = {action = 'admin-property-repair'},
-    }
-    local property_table = scroll.add{
-        type = 'table',
-        name = ADMIN_PROPERTY_TABLE_NAME,
-        column_count = 3,
-        style = 'bordered_table',
-    }
-    property_table.add{type = 'label', caption = {'un.admin-property-id'}}
-    property_table.add{type = 'label', caption = {'un.property-column-name'}}
-    property_table.add{type = 'label', caption = {'un.property-column-lifetime'}}
-    for _, property in ipairs(properties.list()) do
-        property_table.add{type = 'label', caption = tostring(property.id)}
-        property_table.add{type = 'label', caption = properties.surface_display_name(property)}
-        property_table.add{
-            type = 'label',
-            caption = property_lifetime_caption(property),
-        }
-    end
-
-    scroll.add{type = 'line'}
-    scroll.add{type = 'label', caption = {'un.admin-balances-title'}, style = 'heading_2_label'}
-    local player_table = scroll.add{
-        type = 'table',
-        name = ADMIN_PLAYER_TABLE_NAME,
-        column_count = 3,
-        style = 'bordered_table',
-    }
-    player_table.add{type = 'label', caption = {'un.player-column-name'}}
-    player_table.add{type = 'label', caption = {'un.credit-label'}}
-    player_table.add{type = 'label', caption = {'un.admin-operation'}}
-    for _, listed_player in ipairs(sorted_players(player.index)) do
-        player_table.add{type = 'label', caption = listed_player.name}
-        local balance = player_table.add{
-            type = 'textfield',
-            name = admin_balance_input_name(listed_player.index),
-            text = tostring(economy.get_balance(listed_player.index)),
-            numeric = true,
-            allow_decimal = false,
-            allow_negative = false,
-        }
-        balance.style.width = 150
-        player_table.add{
-            type = 'button',
-            caption = {'un.admin-set-balance'},
-            tags = {action = 'admin-balance-set', target_index = listed_player.index},
-        }
-    end
     set_frame_state(frame, 'admin')
 end
 
@@ -2688,25 +2629,6 @@ events.on(defines.events.on_gui_click, function(event)
                     permissions.refresh_connected(true)
                 end
                 player.print(ok and {'un.admin-setting-saved'}
-                    or {'un.admin-invalid-value'})
-                render_page(player, 'admin')
-                update_frame(player)
-            elseif tags.action == 'admin-property-repair' then
-                local ok, count = properties.admin_repair(player)
-                player.print(ok and {'un.property-repaired', count}
-                    or {'un.admin-operation-failed'})
-                render_page(player, 'admin')
-                update_frame(player)
-            elseif tags.action == 'admin-balance-set' then
-                local input = element.parent[
-                    admin_balance_input_name(tags.target_index)
-                ]
-                local ok = input and input.valid and economy.admin_set_balance(
-                    player.index,
-                    tags.target_index,
-                    input.text
-                )
-                player.print(ok and {'un.admin-balance-saved'}
                     or {'un.admin-invalid-value'})
                 render_page(player, 'admin')
                 update_frame(player)

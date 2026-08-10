@@ -3,7 +3,7 @@ local factions = require('scripts.factions')
 local gui = require('scripts.gui')
 local permissions = require('scripts.permissions')
 local properties = require('scripts.properties')
-local restrictions = require('scripts.restrictions')
+local initial_technologies = require('scripts.initial_technologies')
 local ships = require('scripts.ships')
 local disasters = require('scripts.disasters')
 local state = require('scripts.state')
@@ -23,7 +23,11 @@ local function run(repair)
     technology_decay.ensure()
     properties.ensure()
     permissions.ensure()
-    if repair then restrictions.repair() else restrictions.ensure() end
+    if repair then
+        initial_technologies.repair()
+    else
+        initial_technologies.ensure()
+    end
     ships.ensure()
     surfaces.sync_all_property_environments()
     gui.ensure_all()
