@@ -163,6 +163,19 @@ local function update_home_button(player, hud)
     end
 end
 
+local function update_hud_title(player, hud)
+    hud = hud or player.gui.top[HUD_FLOW_NAME]
+    local title = hud and hud.valid and hud[HUD_TITLE_NAME]
+    if not (title and title.valid) then return end
+    local planet_name = factions.of_player(player)
+    title.caption = planet_name and {
+        '',
+        {'un.hud-title'},
+        '　',
+        factions.display_name(planet_name),
+    } or {'un.hud-title'}
+end
+
 local function update_hud_reset_countdown(player, hud)
     hud = hud or player.gui.top[HUD_FLOW_NAME]
     local label = hud and hud.valid and hud[HUD_RESET_COUNTDOWN_NAME]
@@ -254,7 +267,7 @@ function M.ensure_button(player)
             and hud[HUD_MENU_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
         if complete then
-            hud[HUD_TITLE_NAME].caption = {'un.hud-title'}
+            update_hud_title(player, hud)
             update_hud_reset_countdown(player, hud)
             update_home_button(player, hud)
             return hud
@@ -307,6 +320,7 @@ function M.ensure_button(player)
         button.style.height = 40
         button.style.minimal_width = 88
     end
+    update_hud_title(player, hud)
     update_hud_reset_countdown(player, hud)
     update_home_button(player, hud)
     return hud
@@ -2421,7 +2435,10 @@ events.on(defines.events.on_player_changed_surface, function(event)
 end)
 events.on(defines.events.on_player_changed_force, function(event)
     local player = game.get_player(event.player_index)
-    if player then update_hud_reset_countdown(player) end
+    if player then
+        update_hud_title(player)
+        update_hud_reset_countdown(player)
+    end
 end)
 
 local function rebuild_for_admin_change(event)
