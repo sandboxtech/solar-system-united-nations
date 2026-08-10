@@ -248,7 +248,7 @@ local function property_build_type(spec)
     spec.width_per_level = spec.width_per_level or 1
     spec.height = spec.height or 32
     spec.initial_price_multiplier = spec.initial_price_multiplier or 1
-    spec.base_decay_hours = spec.base_decay_hours or 36
+    spec.base_decay_hours = spec.base_decay_hours or 18
     spec.decay_hours_per_level = spec.decay_hours_per_level or 0.6
     spec.base_lifetime_hours = spec.base_lifetime_hours or 108
     spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 9
