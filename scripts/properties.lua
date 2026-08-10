@@ -262,13 +262,13 @@ local function ensure_linked_chests(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
     surface.localised_name = M.surface_display_name(property)
-    property.solar = config.property_solar_multiplier
     property.min_brightness = config.property_min_brightness
     surfaces.sync_property_environment(
         surface,
         property.min_brightness,
-        property.sample_planet
+        property.terrain_planet or property.sample_planet
     )
+    property.solar = surface.solar_power_multiplier
     normalize_linked_chest_positions(property, surface)
     local force = factions.of_planet(property.sample_planet)
     if not (force and force.valid) then return false end
@@ -316,7 +316,6 @@ local function create(spec)
         price = math.floor(tonumber(spec.price) or 0)
     end
     local tax = tonumber(spec.tax) or settings.get('property_tax_percent') / 100
-    local solar = config.property_solar_multiplier
     local width = tonumber(spec.width)
     local height = tonumber(spec.height)
     if not is_positive_integer(price) or price > config.property_price_cap then
@@ -375,7 +374,7 @@ local function create(spec)
         tax = tax,
         width = width,
         height = height,
-        solar = solar,
+        solar = surface.solar_power_multiplier,
         min_brightness = min_brightness,
         sample_planet = spec.sample_planet,
         terrain_planet = terrain_planet,

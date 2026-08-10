@@ -360,10 +360,11 @@ function M.sync_property_environment(
     ))
     surface.always_day = false
     surface.freeze_daytime = false
+    local planet_solar = (defaults['solar-power']
+        or prototypes.surface_property['solar-power'].default_value) / 100
     surface.solar_power_multiplier = use_planet_solar
-        and (defaults['solar-power']
-            or prototypes.surface_property['solar-power'].default_value) / 100
-        or config.property_solar_multiplier
+        and planet_solar
+        or planet_solar * config.property_solar_multiplier
     surface.min_brightness = min_brightness or config.property_min_brightness
     local planet_surface = game.surfaces[planet_name or 'nauvis']
     if planet_surface and planet_surface.valid then
