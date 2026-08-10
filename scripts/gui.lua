@@ -118,10 +118,6 @@ local ADMIN_NUMBER_SETTINGS = {
     {'tech_leak_max_percent', 'un.admin-setting-tech-leak-strength'},
 }
 
--- GUI-only state. UBI itself never depends on this table and is calculated from
--- game.tick only when queried or claimed.
-local open_players = {}
-
 local crime_error_caption
 local update_crime_action
 
@@ -1980,10 +1976,7 @@ end
 
 local function update_frame(player)
     local frame = player.gui.screen[FRAME_NAME]
-    if not (frame and frame.valid) then
-        open_players[player.index] = nil
-        return
-    end
+    if not (frame and frame.valid) then return end
     local content = frame[CONTENT_NAME]
     if not (content and content.valid) then return end
     local page = frame.tags.page or 'overview'
@@ -2251,7 +2244,6 @@ local function update_frame(player)
 end
 
 local function close_frame(player)
-    open_players[player.index] = nil
     local frame = player.gui.screen[FRAME_NAME]
     if frame and frame.valid then frame.destroy() end
 end
@@ -2322,7 +2314,6 @@ local function open_frame(player, initial_page)
     render_page(player, initial_page or 'help')
     frame.force_auto_center()
     player.opened = frame
-    open_players[player.index] = true
     update_frame(player)
 end
 
@@ -2351,9 +2342,6 @@ events.on(defines.events.on_player_joined_game, ensure_player)
 events.on(defines.events.on_player_changed_surface, function(event)
     local player = game.get_player(event.player_index)
     if player then update_home_button(player) end
-end)
-events.on(defines.events.on_player_left_game, function(event)
-    open_players[event.player_index] = nil
 end)
 
 local function rebuild_for_admin_change(event)
@@ -2828,20 +2816,17 @@ events.on(defines.events.on_gui_closed, function(event)
 end)
 
 economy.on_balance_changed(function(player_index)
-    if not open_players[player_index] then return end
     local player = game.get_player(player_index)
     if player and player.valid then update_frame(player) end
 end)
 
--- This refreshes presentation only for currently open windows. It never grants
--- credit and never traverses offline or unrelated players.
+-- Derive open-window state from the synchronized GUI tree. A mutable module-local
+-- cache would be empty on a joining peer but populated on the running server.
 scheduler.every(config.gui_refresh_ticks, function()
-    for player_index in pairs(open_players) do
-        local player = game.get_player(player_index)
-        if player and player.valid and player.connected then
+    for _, player in pairs(game.connected_players) do
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid then
             update_frame(player)
-        else
-            open_players[player_index] = nil
         end
     end
 end)
