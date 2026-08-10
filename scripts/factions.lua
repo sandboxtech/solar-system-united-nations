@@ -13,6 +13,20 @@ end
 
 local switch_cleanup_handlers = {}
 
+local function research_trigger_technologies(force)
+    local names = {}
+    for name, technology in pairs(force.technologies) do
+        if technology.prototype.research_trigger then
+            names[#names + 1] = name
+        end
+    end
+    table.sort(names)
+    for _, name in ipairs(names) do
+        local technology = force.technologies[name]
+        if not technology.researched then technology.researched = true end
+    end
+end
+
 function M.force_name(planet_name)
     if not planet_set[planet_name] then return nil end
     return config.faction_force_prefix .. planet_name
@@ -63,6 +77,8 @@ local function configure_relations()
     local entries = M.all()
     for _, entry in ipairs(entries) do
         entry.force.friendly_fire = true
+        entry.force.share_chart = true
+        research_trigger_technologies(entry.force)
     end
     for first = 1, #entries do
         for second = first + 1, #entries do
@@ -70,8 +86,8 @@ local function configure_relations()
             local b = entries[second].force
             a.set_friend(b, false)
             b.set_friend(a, false)
-            a.set_cease_fire(b, false)
-            b.set_cease_fire(a, false)
+            a.set_cease_fire(b, true)
+            b.set_cease_fire(a, true)
         end
     end
 end
