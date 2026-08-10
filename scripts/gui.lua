@@ -20,9 +20,10 @@ local technology_decay = require('scripts.technology_decay')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 13
+local HUD_LAYOUT_VERSION = 14
 local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_TITLE_NAME = 'un_hud_title'
+local HUD_RESET_COUNTDOWN_NAME = 'un_hud_reset_countdown'
 local HUD_MENU_NAME = 'un_hud_menu'
 local HUD_LAST_PROPERTY_NAME = 'un_hud_last_property'
 local FRAME_NAME = 'un_main_frame'
@@ -162,6 +163,28 @@ local function update_home_button(player, hud)
     end
 end
 
+local function update_hud_reset_countdown(player, hud)
+    hud = hud or player.gui.top[HUD_FLOW_NAME]
+    local label = hud and hud.valid and hud[HUD_RESET_COUNTDOWN_NAME]
+    if not (label and label.valid) then return end
+
+    local planet_name = factions.of_player(player)
+    local record = planet_name and storage.public_planet_resets
+        and storage.public_planet_resets[planet_name]
+    if not record then
+        label.caption = {'un.hud-reset-unknown'}
+    elseif record.state ~= 'open' then
+        label.caption = {'un.hud-reset-rebuilding'}
+    elseif not settings.get('planet_resets_enabled') or not record.next_tick then
+        label.caption = {'un.hud-reset-paused'}
+    else
+        local minutes = math.max(0, math.ceil(
+            (record.next_tick - game.tick) / config.ticks_per_minute
+        ))
+        label.caption = {'un.hud-reset-countdown', minutes}
+    end
+end
+
 local function format_integer(value)
     local raw = string.format('%.0f', value)
     local sign, digits = raw:match('^([%-]?)(%d+)$')
@@ -227,10 +250,12 @@ function M.ensure_button(player)
     if hud and hud.valid then
         local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
             and hud[HUD_TITLE_NAME]
+            and hud[HUD_RESET_COUNTDOWN_NAME]
             and hud[HUD_MENU_NAME]
             and hud[HUD_LAST_PROPERTY_NAME]
         if complete then
             hud[HUD_TITLE_NAME].caption = {'un.hud-title'}
+            update_hud_reset_countdown(player, hud)
             update_home_button(player, hud)
             return hud
         end
@@ -256,6 +281,18 @@ function M.ensure_button(player)
     title.style.vertical_align = 'center'
     title.style.left_margin = 4
     title.style.right_margin = 6
+    local countdown = hud.add{
+        type = 'label',
+        name = HUD_RESET_COUNTDOWN_NAME,
+        caption = {'un.hud-reset-unknown'},
+    }
+    countdown.style.font = 'default-bold'
+    countdown.style.font_color = {r = 1, g = 1, b = 1}
+    countdown.style.height = 40
+    countdown.style.horizontal_align = 'center'
+    countdown.style.vertical_align = 'center'
+    countdown.style.left_margin = 6
+    countdown.style.right_margin = 6
     local buttons = {
         {HUD_MENU_NAME, {'un.hud-action-button'}, {'un.hud-menu-tooltip'}},
         {HUD_LAST_PROPERTY_NAME, {'un.hud-travel-button'}, {'un.hud-home-tooltip'}},
@@ -270,6 +307,7 @@ function M.ensure_button(player)
         button.style.height = 40
         button.style.minimal_width = 88
     end
+    update_hud_reset_countdown(player, hud)
     update_home_button(player, hud)
     return hud
 end
@@ -2381,6 +2419,10 @@ events.on(defines.events.on_player_changed_surface, function(event)
     local player = game.get_player(event.player_index)
     if player then update_home_button(player) end
 end)
+events.on(defines.events.on_player_changed_force, function(event)
+    local player = game.get_player(event.player_index)
+    if player then update_hud_reset_countdown(player) end
+end)
 
 local function rebuild_for_admin_change(event)
     local player = game.get_player(event.player_index)
@@ -2819,6 +2861,9 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
         local ok = settings.set(tags.setting, enabled)
         if ok and tags.setting == 'planet_resets_enabled' then
             disasters.apply_enabled(enabled)
+            for _, connected in pairs(game.connected_players) do
+                update_hud_reset_countdown(connected)
+            end
         end
         if ok and tags.setting == 'tech_leak_enabled' then
             technology_decay.apply_enabled(enabled)
@@ -2866,6 +2911,12 @@ scheduler.every(config.gui_refresh_ticks, function()
         if frame and frame.valid then
             update_frame(player)
         end
+    end
+end)
+
+scheduler.every(config.ticks_per_minute, function()
+    for _, player in pairs(game.connected_players) do
+        update_hud_reset_countdown(player)
     end
 end)
 
