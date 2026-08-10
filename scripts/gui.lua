@@ -44,6 +44,9 @@ local HELP_ADVANCED_NAME = 'un_help_advanced'
 local HELP_FULL_NAME = 'un_help_full'
 local HELP_ADMIN_NAME = 'un_help_admin'
 local HELP_DETAILS_NAME = 'un_help_details'
+local HELP_OPEN_OVERVIEW_NAME = 'un_help_open_overview'
+local HELP_OPEN_BUILD_NAME = 'un_help_open_build'
+local HELP_OPEN_PROPERTY_NAME = 'un_help_open_property'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
 local PROPERTY_HEADER_NAME = 'un_property_header'
@@ -1121,7 +1124,7 @@ local function render_ships_page(player, frame, content)
     frame.tags = tags
 end
 
-local function render_planets_page(frame, content)
+local function render_planets_page(player, frame, content)
     local leak_left = technology_decay.left_ticks()
     local header = content.add{
         type = 'flow',
@@ -1589,6 +1592,33 @@ local function render_help_page(player, frame, content, mode)
         intro.style.single_line = false
         intro.style.maximal_width = 700
         intro.style.font_color = {0.72, 0.72, 0.72}
+        if mode == 'brief' then
+            local quick = details.add{type = 'flow', direction = 'horizontal'}
+            quick.style.vertical_align = 'center'
+            local quick_label = quick.add{
+                type = 'label',
+                caption = {'un.help-quick-actions'},
+            }
+            quick_label.style.font = 'default-bold'
+            quick.add{
+                type = 'button',
+                name = HELP_OPEN_OVERVIEW_NAME,
+                caption = {'un.page-overview'},
+                tooltip = {'un.help-quick-overview-tooltip'},
+            }
+            quick.add{
+                type = 'button',
+                name = HELP_OPEN_BUILD_NAME,
+                caption = {'un.page-property-build'},
+                tooltip = {'un.help-quick-build-tooltip'},
+            }
+            quick.add{
+                type = 'button',
+                name = HELP_OPEN_PROPERTY_NAME,
+                caption = {'un.page-property'},
+                tooltip = {'un.help-quick-property-tooltip'},
+            }
+        end
         add_help_gap(details)
     end
 
@@ -1863,7 +1893,7 @@ local function render_page(player, page)
     elseif page == 'property' then
         render_property_table(player, frame, content)
     elseif page == 'planets' then
-        render_planets_page(frame, content)
+        render_planets_page(player, frame, content)
     elseif page == 'ships' then
         render_ships_page(player, frame, content)
     elseif page == 'players' then
@@ -2332,15 +2362,15 @@ local function open_frame(player, initial_page)
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
     navigation.add{
         type = 'button',
-        name = NAV_FACTIONS_NAME,
-        caption = {'un.page-factions'},
-    }
-    navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
-    navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
-    navigation.add{
-        type = 'button',
         name = NAV_PROPERTY_BUILD_NAME,
         caption = {'un.page-property-build'},
+    }
+    navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
+    navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
+    navigation.add{
+        type = 'button',
+        name = NAV_FACTIONS_NAME,
+        caption = {'un.page-factions'},
     }
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
@@ -2444,6 +2474,15 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == NAV_UBI_NAME then
         render_page(player, 'overview')
+        update_frame(player)
+    elseif element.name == HELP_OPEN_OVERVIEW_NAME then
+        render_page(player, 'overview')
+        update_frame(player)
+    elseif element.name == HELP_OPEN_BUILD_NAME then
+        render_page(player, 'property-build')
+        update_frame(player)
+    elseif element.name == HELP_OPEN_PROPERTY_NAME then
+        render_page(player, 'property')
         update_frame(player)
     elseif element.name == NAV_PROPERTY_BUILD_NAME then
         render_page(player, 'property-build')
