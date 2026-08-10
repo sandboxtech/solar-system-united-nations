@@ -195,10 +195,23 @@ local function refund(inventory, entries)
 end
 
 function M.get_inventory(player)
-    return player.force.get_linked_inventory(
+    if not (player and player.valid) then return nil end
+
+    -- This project's personal and property chests belong to the player's
+    -- faction, so the force lookup is the cheapest normal path. Unlike
+    -- personal_pocket_factory, its receiving chests are not neutral-force.
+    local inventory = player.force.get_linked_inventory(
         config.linked_chest_name,
         player.index
     )
+    if inventory and inventory.valid then return inventory end
+
+    -- Fall back to the real registered drop-off so an unexpected failed force
+    -- lookup does not silently disable that player's periodic conversion.
+    local chest = resolve_record(player.index)
+    inventory = chest and chest.valid
+        and chest.get_inventory(defines.inventory.chest) or nil
+    return inventory and inventory.valid and inventory or nil
 end
 
 function M.has_active_dropoff(player_index)

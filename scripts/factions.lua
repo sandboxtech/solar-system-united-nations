@@ -120,7 +120,7 @@ local function configure_relations()
     end
 end
 
-function M.toggle_diplomacy_after_reset(planet_name)
+function M.update_diplomacy_after_reset(planet_name)
     if not planet_set[planet_name] then return false end
     state.ensure()
     ensure_diplomacy_state()
@@ -130,7 +130,14 @@ function M.toggle_diplomacy_after_reset(planet_name)
         config.faction_diplomacy_technology
     ]
     if not (technology and technology.researched) then return false end
-    local friendly = not storage.faction_diplomacy_friendly[planet_name]
+
+    local was_friendly = storage.faction_diplomacy_friendly[planet_name]
+    local transition_chance = was_friendly
+        and config.faction_friendly_to_hostile_chance
+        or config.faction_hostile_to_friendly_chance
+    if math.random() >= transition_chance then return false end
+
+    local friendly = not was_friendly
     storage.faction_diplomacy_friendly[planet_name] = friendly
     for _, other_name in ipairs(config.public_planets) do
         if other_name ~= planet_name then
