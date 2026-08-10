@@ -438,11 +438,13 @@ end
 
 local function add_property_sort_header(list, frame, field, caption)
     local selected, descending = property_sort_state(frame)
-    local marker = selected == field and (descending and ' ▼' or ' ▲') or ''
     local button = list.add{
         type = 'button',
-        caption = {'', caption, marker},
-        tooltip = {'un.property-sort-column-tooltip'},
+        caption = caption,
+        tooltip = selected == field and {
+            descending and 'un.property-sort-descending-tooltip'
+                or 'un.property-sort-ascending-tooltip',
+        } or {'un.property-sort-column-tooltip'},
         tags = {action = 'property-sort-column', field = field},
     }
     button.style.horizontally_stretchable = true
@@ -662,11 +664,10 @@ local function update_property_build_page(player, content)
     local available_label = form[PROPERTY_BUILD_AVAILABLE_NAME]
     local stamina_cost_label = form[PROPERTY_BUILD_STAMINA_COST_NAME]
     local stamina_available_label = form[PROPERTY_BUILD_STAMINA_AVAILABLE_NAME]
-    local cooldown_label = form[PROPERTY_BUILD_COOLDOWN_NAME]
     local button = form[PROPERTY_BUILD_BUTTON_NAME]
     if not (planet_name and lifetime and size and cost_label
             and available_label and stamina_cost_label and stamina_available_label
-            and cooldown_label and button) then return end
+            and button) then return end
     local can_build, err, requirement = properties.build_availability(
         player,
         planet_name,
@@ -689,12 +690,8 @@ local function update_property_build_page(player, content)
     }
     stamina_cost_label.caption = format_integer(requirement.stamina_cost)
     stamina_available_label.caption = format_integer(stamina.get(player.index))
-    local cooldown = properties.build_cooldown_left_ticks(player.index)
-    cooldown_label.caption = cooldown > 0
-        and format_countdown(cooldown) or {'un.property-build-ready'}
     button.enabled = can_build
     button.tooltip = can_build and {'un.property-build'}
-        or err == 'build-cooldown' and {'un.property-build-cooldown-active'}
         or err == 'property-limit' and {'un.property-build-limit'}
         or err == 'planet-closed' and {'un.travel-planet-closed'}
         or err == 'insufficient-stamina' and {'un.stamina-insufficient'}
@@ -730,12 +727,22 @@ local function render_property_build_page(player, frame, content)
             config.property_name_max_characters,
         },
     }
-    form.add{type = 'label', caption = {'un.property-build-lifetime'}}
+    local lifetime_tooltip = {
+        'un.property-build-lifetime-tooltip',
+        settings.get('property_price_factor'),
+    }
+    form.add{
+        type = 'label',
+        caption = {'un.property-build-lifetime'},
+        tooltip = lifetime_tooltip,
+    }
     local lifetime_items = {}
     for _, option in ipairs(properties.build_lifetime_options()) do
         lifetime_items[#lifetime_items + 1] = {
             'un.property-build-lifetime-option',
             option.hours,
+            option.decay_hours,
+            option.cost_multiplier,
         }
     end
     form.add{
@@ -743,6 +750,7 @@ local function render_property_build_page(player, frame, content)
         name = PROPERTY_BUILD_LIFETIME_NAME,
         items = lifetime_items,
         selected_index = 1,
+        tooltip = lifetime_tooltip,
     }
     form.add{type = 'label', caption = {'un.property-build-size'}}
     local size_items = {}
@@ -767,8 +775,6 @@ local function render_property_build_page(player, frame, content)
     form.add{type = 'label', name = PROPERTY_BUILD_STAMINA_COST_NAME}
     form.add{type = 'label', caption = {'un.property-build-stamina-owned'}}
     form.add{type = 'label', name = PROPERTY_BUILD_STAMINA_AVAILABLE_NAME}
-    form.add{type = 'label', caption = {'un.property-build-cooldown'}}
-    form.add{type = 'label', name = PROPERTY_BUILD_COOLDOWN_NAME}
     form.add{type = 'label', caption = ''}
     form.add{
         type = 'button',
@@ -830,14 +836,14 @@ local function render_ubi_section(content)
         value = 0,
         tooltip = ubi_tooltip,
     }
-    progress.style.width = 300
+    progress.style.width = PERSONAL_ACTION_WIDTH
     local claim = content.add{
         type = 'button',
         name = UBI_CLAIM_NAME,
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
         tooltip = ubi_tooltip,
     }
-    claim.style.width = 300
+    claim.style.width = PERSONAL_ACTION_WIDTH
 
     local kit = content.add{
         type = 'button',
@@ -851,7 +857,7 @@ local function render_ubi_section(content)
         tooltip = {'un.starter-kit-tooltip'},
         tags = {action = 'starter-kit-buy'},
     }
-    kit.style.width = 360
+    kit.style.width = PERSONAL_ACTION_WIDTH
 
     local wood = content.add{
         type = 'button',
@@ -870,7 +876,7 @@ local function render_ubi_section(content)
         },
         tags = {action = 'wood-supply-buy'},
     }
-    wood.style.width = 360
+    wood.style.width = PERSONAL_ACTION_WIDTH
 end
 
 local function render_ship_actions(player, content)
@@ -904,12 +910,13 @@ local function render_experience_section(content)
     heading.style.vertical_align = 'center'
     heading.add{type = 'label', caption = {'un.experience-title'}}
     add_info_sprite(heading, {'un.experience-tooltip'})
-    heading.add{
+    local convert = content.add{
         type = 'button',
         name = SCIENCE_CONVERT_NAME,
         caption = {'un.science-convert'},
         tooltip = {'un.science-convert-tooltip'},
     }
+    convert.style.width = PERSONAL_ACTION_WIDTH
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
@@ -934,6 +941,9 @@ local function render_overview_page(player, frame, content)
     content.add{type = 'line'}
     render_experience_section(content)
     set_frame_state(frame, 'overview')
+    local tags = frame.tags
+    tags.list_refresh_experience = nil
+    frame.tags = tags
 end
 
 
@@ -1480,9 +1490,9 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(property, {
             'un.help-brief-property',
             config.property_build_experience_per_point,
+            config.property_build_base_lifetime_hours,
             config.property_build_stamina_cost,
             config.stamina_max,
-            config.property_build_cooldown_hours,
         })
         add_help_gap(details)
         local travel = add_help_card(details, {'un.help-card-travel'})
@@ -1503,7 +1513,7 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(property, {
             'un.help-detail-property-build',
             config.property_build_experience_per_point,
-            config.property_build_cooldown_hours,
+            config.property_build_base_lifetime_hours,
             settings.get('property_lifetime_1_hours'),
             settings.get('property_lifetime_2_hours'),
             settings.get('property_lifetime_3_hours'),
@@ -1764,9 +1774,6 @@ local function property_error(err)
     end
     if err == 'invalid-build-option' then
         return {'un.property-build-invalid'}
-    end
-    if err == 'build-cooldown' then
-        return {'un.property-build-cooldown-active'}
     end
     if err == 'insufficient-stamina' then return {'un.stamina-insufficient'} end
     if err == 'property-limit' then return {'un.property-build-limit'} end
@@ -2059,9 +2066,10 @@ local function update_frame(player)
         end
     elseif page == 'property' then
         update_property_salvage_action(player, content)
-        local sort_index = property_sort_index(frame)
+        local sort_field = property_sort_state(frame)
         local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
-        local price_sort_changed = sort_index >= 3
+        local price_sort_changed = (sort_field == 'price'
+                or sort_field == 'change')
             and frame.tags.property_sort_bucket ~= sort_bucket
         local refresh_rows = list_refresh_due(frame, 'property')
         if (frame.tags.property_revision or -1)
@@ -2450,7 +2458,20 @@ events.on(defines.events.on_gui_click, function(event)
         local frame = player.gui.screen[FRAME_NAME]
         local content = frame and frame.valid and frame[CONTENT_NAME]
         if not (content and content.valid) then return end
-        if tags.action and tags.action:match('^admin%-') then
+        if tags.action == 'property-sort-column' then
+            if not PROPERTY_SORT_FIELDS[tags.field] then return end
+            local frame_tags = frame.tags
+            if frame_tags.property_sort_field == tags.field then
+                frame_tags.property_sort_descending
+                    = frame_tags.property_sort_descending ~= true
+            else
+                frame_tags.property_sort_field = tags.field
+                frame_tags.property_sort_descending = false
+            end
+            frame.tags = frame_tags
+            render_property_table(player, frame, content)
+            update_frame(player)
+        elseif tags.action and tags.action:match('^admin%-') then
             if not player.admin then
                 player.print({'un.admin-only'})
                 render_page(player, 'help')
@@ -2640,15 +2661,6 @@ events.on(defines.events.on_gui_selection_state_changed, function(event)
     local player = game.get_player(event.player_index)
     local frame = player and player.gui.screen[FRAME_NAME]
     local content = frame and frame.valid and frame[CONTENT_NAME]
-    if element.name == PROPERTY_SORT_NAME then
-        if not (player and content and content.valid) then return end
-        local tags = frame.tags
-        tags.property_sort = element.selected_index
-        frame.tags = tags
-        render_property_table(player, frame, content)
-        update_frame(player)
-        return
-    end
     if element.name ~= PROPERTY_BUILD_LIFETIME_NAME
             and element.name ~= PROPERTY_BUILD_SIZE_NAME then
         return
