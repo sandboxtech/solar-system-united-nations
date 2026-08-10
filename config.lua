@@ -241,8 +241,8 @@ M.property_initial_price_min = 1000
 M.property_initial_price_max = 3000
 M.property_build_stamina_cost = 50000
 M.property_build_price_per_experience = 10
-M.property_build_experience_base = 10000
-M.property_build_experience_per_level = 1000
+M.property_build_experience_base = 2000
+M.property_build_experience_per_level = 200
 local function property_build_type(spec)
     spec.base_width = spec.base_width or 32
     spec.width_per_level = spec.width_per_level or 1
