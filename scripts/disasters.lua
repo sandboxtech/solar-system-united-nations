@@ -5,6 +5,7 @@ local linked_inventory = require('scripts.linked_inventory')
 local playtime = require('scripts.playtime')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
+local stamina = require('scripts.stamina')
 local state = require('scripts.state')
 local surfaces = require('scripts.surfaces')
 
@@ -46,6 +47,10 @@ local PLANET_TRAITS = {
         {id = 'nauvis-quiet-wilds', kind = 'category', category = 'enemy',
             group = 'nauvis-enemies', weight = 4,
             frequency = 0.125, size = 0.25, richness = 1},
+        {id = 'nauvis-close-nests', kind = 'starting-area',
+            group = 'nauvis-starting-area', weight = 3, factor = 0.25},
+        {id = 'nauvis-wide-frontier', kind = 'starting-area',
+            group = 'nauvis-starting-area', weight = 3, factor = 4},
         {id = 'nauvis-bright-sun', kind = 'solar',
             group = 'nauvis-solar', weight = 4, factor = 10},
         {id = 'nauvis-dim-sun', kind = 'solar',
@@ -394,8 +399,11 @@ local function randomize_autoplace(map_settings, record)
     end
 
     if enemy_control then
-        map_settings.starting_area = (map_settings.starting_area or 1)
-            * power_of_two(config.public_planet_enemy_spread)
+        map_settings.starting_area = math.max(
+            1,
+            (map_settings.starting_area or 1)
+                * power_of_two(config.public_planet_starting_area_spread)
+        )
     end
 
     local cliffs = map_settings.cliff_settings
@@ -526,6 +534,12 @@ local function apply_trait(map_settings, record, trait)
     elseif trait.kind == 'day' then
         record.day_factor = record.day_factor * trait.factor
         applied = true
+    elseif trait.kind == 'starting-area' then
+        map_settings.starting_area = math.max(
+            0,
+            (map_settings.starting_area or 1) * trait.factor
+        )
+        applied = true
     end
     return applied
 end
@@ -614,6 +628,7 @@ local function begin_reset(name, surface, record)
     record.state = 'clearing'
     record.next_tick = nil
     record.warned = {}
+    record.acceleration_votes = {}
     record.surface_index = surface.index
     record.clear_started_tick = game.tick
     game.print({'un.planet-reset-started', planet_label(name)})
@@ -725,6 +740,68 @@ function M.list()
         }
     end
     return result
+end
+
+function M.can_accelerate_reset(player)
+    if not (player and player.valid) then
+        return false, 'invalid-player'
+    end
+    local name = factions.of_player(player)
+    if not name then return false, 'invalid-faction' end
+    local record = ensure_record(name)
+    if record.state ~= 'open' then
+        return false, 'rebuilding', name
+    end
+    if not settings.get('planet_resets_enabled') or not record.next_tick then
+        return false, 'paused', name
+    end
+    local left_ticks = math.max(0, record.next_tick - game.tick)
+    local minimum_ticks = config.planet_reset_acceleration_min_remaining_minutes
+        * config.ticks_per_minute
+    if left_ticks <= minimum_ticks then
+        return false, 'too-late', name, left_ticks
+    end
+    local votes = record.acceleration_votes or {}
+    if votes[player.index] then
+        return false, 'already-voted', name, left_ticks
+    end
+    if stamina.get(player.index)
+            < config.planet_reset_acceleration_stamina_cost then
+        return false, 'insufficient-stamina', name, left_ticks
+    end
+    return true, nil, name, left_ticks
+end
+
+function M.accelerate_reset(player)
+    local ok, err, name, left_ticks = M.can_accelerate_reset(player)
+    if not ok then return false, err, name, left_ticks end
+    if not stamina.spend(
+            player.index,
+            config.planet_reset_acceleration_stamina_cost
+        ) then
+        return false, 'insufficient-stamina', name, left_ticks
+    end
+
+    local record = storage.public_planet_resets[name]
+    if not record.acceleration_votes then record.acceleration_votes = {} end
+    record.acceleration_votes[player.index] = true
+    local reduction = math.max(
+        1,
+        math.floor(left_ticks * config.planet_reset_acceleration_fraction + 0.5)
+    )
+    record.next_tick = record.next_tick - reduction
+    local new_left_ticks = math.max(0, record.next_tick - game.tick)
+    local force = factions.of_planet(name)
+    if force and force.valid then
+        force.print({
+            'un.planet-reset-accelerated',
+            player.name,
+            planet_label(name),
+            math.floor(config.planet_reset_acceleration_fraction * 100 + 0.5),
+            math.ceil(new_left_ticks / config.ticks_per_minute),
+        })
+    end
+    return true, nil, name, new_left_ticks
 end
 
 function M.apply_enabled(enabled)

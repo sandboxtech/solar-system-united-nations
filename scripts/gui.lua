@@ -79,6 +79,8 @@ local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_SCROLL_NAME = 'un_player_scroll'
 local PLAYER_TABLE_NAME = 'un_player_table'
 local PLANET_HEADER_NAME = 'un_planet_header'
+local PLANET_ACTIONS_NAME = 'un_planet_actions'
+local PLANET_ACCELERATE_NAME = 'un_planet_accelerate'
 local PLANET_TABLE_NAME = 'un_planet_table'
 local TECH_LEAK_COUNTDOWN_NAME = 'un_tech_leak_countdown'
 local CRIME_ACTIONS_NAME = 'un_crime_actions'
@@ -390,6 +392,10 @@ local function planet_traits_name(name)
     return 'un_planet_traits_' .. name
 end
 
+local function planet_label(name)
+    return {'', '[planet=' .. name .. '] ', {'space-location-name.' .. name}}
+end
+
 local function render_planet_traits(container, item)
     local signature = tostring(item.round or 0)
         .. ':' .. table.concat(item.traits, '|')
@@ -414,12 +420,37 @@ local function render_planet_traits(container, item)
     container.tags = {trait_signature = signature}
 end
 
-local function admin_setting_input_name(key)
-    return 'un_admin_setting_' .. key
+local function planet_acceleration_tooltip(player)
+    local ok, err, planet_name = disasters.can_accelerate_reset(player)
+    local base = {
+        'un.planet-reset-accelerate-tooltip',
+        planet_label(planet_name or factions.of_player(player) or 'nauvis'),
+        config.planet_reset_acceleration_stamina_cost,
+        math.floor(config.planet_reset_acceleration_fraction * 100 + 0.5),
+        config.planet_reset_acceleration_min_remaining_minutes,
+    }
+    if ok then return base end
+    return {
+        '',
+        base,
+        '\n\n',
+        {'un.planet-reset-accelerate-error-' .. tostring(err),
+            config.planet_reset_acceleration_min_remaining_minutes,
+            config.planet_reset_acceleration_stamina_cost},
+    }
 end
 
-local function planet_label(name)
-    return {'', '[planet=' .. name .. '] ', {'space-location-name.' .. name}}
+local function update_planet_acceleration_action(player, content)
+    local actions = content[PLANET_ACTIONS_NAME]
+    local button = actions and actions.valid and actions[PLANET_ACCELERATE_NAME]
+    if not (button and button.valid) then return end
+    local ok = disasters.can_accelerate_reset(player)
+    button.enabled = ok
+    button.tooltip = planet_acceleration_tooltip(player)
+end
+
+local function admin_setting_input_name(key)
+    return 'un_admin_setting_' .. key
 end
 
 local function format_countdown(ticks)
@@ -1108,6 +1139,20 @@ local function render_planets_page(frame, content)
         tooltip = {'un.tech-leak-tooltip'},
     }
     add_info_sprite(header, {'un.planet-page-note'})
+    local actions = content.add{
+        type = 'flow',
+        name = PLANET_ACTIONS_NAME,
+        direction = 'horizontal',
+    }
+    actions.add{
+        type = 'button',
+        name = PLANET_ACCELERATE_NAME,
+        caption = {
+            'un.planet-reset-accelerate-button',
+            config.planet_reset_acceleration_stamina_cost,
+        },
+    }
+    update_planet_acceleration_action(player, content)
     local list = content.add{
         type = 'table',
         name = PLANET_TABLE_NAME,
@@ -1560,10 +1605,7 @@ local function render_help_page(player, frame, content, mode)
         })
     elseif mode == 'brief' then
         local income = add_help_card(details, {'un.help-card-income'})
-        add_help_line(income, {
-            'un.help-brief-start',
-            settings.get('deconstruction_min_online_hours'),
-        })
+        add_help_line(income, {'un.help-brief-start'})
         add_help_gap(details)
         local property = add_help_card(details, {'un.help-card-property'})
         add_help_line(property, {
@@ -1579,6 +1621,10 @@ local function render_help_page(player, frame, content, mode)
         add_help_gap(details)
         local project = add_help_card(details, {'un.help-card-project'})
         add_help_line(project, {'un.help-brief-project'})
+        add_help_line(project, {
+            'un.help-brief-deconstruction',
+            settings.get('deconstruction_min_online_hours'),
+        })
     elseif mode == 'advanced' then
         local beginner = add_help_card(details, {'un.help-section-beginner'})
         add_help_line(beginner, {'un.help-detail-linked-chest'})
@@ -2105,6 +2151,7 @@ local function update_frame(player)
     elseif page == 'property-build' then
         update_property_build_page(player, content)
     elseif page == 'planets' then
+        update_planet_acceleration_action(player, content)
         local planet_header = content[PLANET_HEADER_NAME]
         local leak = planet_header and planet_header.valid
             and planet_header[TECH_LEAK_COUNTDOWN_NAME]
@@ -2406,6 +2453,27 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_PLANETS_NAME then
         render_page(player, 'planets')
         update_frame(player)
+    elseif element.name == PLANET_ACCELERATE_NAME then
+        local ok, err, planet_name = disasters.accelerate_reset(player)
+        if not ok then
+            player.print({
+                'un.planet-reset-accelerate-error-' .. tostring(err),
+                config.planet_reset_acceleration_min_remaining_minutes,
+                config.planet_reset_acceleration_stamina_cost,
+            })
+        else
+            for _, connected in pairs(game.connected_players) do
+                if factions.of_player(connected) == planet_name then
+                    update_hud_reset_countdown(connected)
+                end
+            end
+        end
+        local frame = player.gui.screen[FRAME_NAME]
+        local content = frame and frame.valid and frame[CONTENT_NAME]
+        if content and content.valid then
+            update_planet_acceleration_action(player, content)
+            update_frame(player)
+        end
     elseif element.name == NAV_SHIPS_NAME then
         render_page(player, 'ships')
         update_frame(player)
