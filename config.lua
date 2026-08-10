@@ -35,7 +35,7 @@ M.property_price_factor = 2
 
 M.initial_credit = 10000
 M.ubi_credit_per_second = 1
-M.ubi_max_seconds = 30 * 60 * 60
+M.ubi_max_seconds = 100000
 M.ledger_record_limit = 2000
 M.transfer_min_amount = 1000
 M.transfer_fee_rate = 0.001
@@ -59,6 +59,9 @@ M.starter_kit_equipment = {
 M.starter_kit_items = {
     {name = 'construction-robot', count = 5},
 }
+M.wood_supply_count = 100
+M.wood_supply_coin_cost = 100
+M.wood_supply_stamina_cost = 100
 
 M.property_limit_per_planet = 100
 M.tech_leak_interval_hours = 1
@@ -116,6 +119,7 @@ M.property_link_id_unowned = 0
 M.property_max_size = 256
 M.property_name_max_characters = 64
 M.property_name_max_bytes = 256
+M.property_salvage_percent = 20
 M.property_sample_planets = M.public_planets
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 3000

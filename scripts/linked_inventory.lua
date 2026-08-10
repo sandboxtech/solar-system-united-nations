@@ -239,13 +239,12 @@ function M.clear_surface_dropoffs(surface_name)
     end
 end
 
-function M.convert_player(player)
-    local inventory = M.get_inventory(player)
+local function convert_inventory(player, inventory, reason)
     if not (inventory and inventory.valid) then return 0, 0 end
     local removed, total_items, total_credit = appraise_and_remove(inventory)
     if total_credit <= 0 then return 0, 0 end
 
-    local ok = economy.change(player.index, total_credit, 'science-sale')
+    local ok = economy.change(player.index, total_credit, reason)
     if not ok then
         refund(inventory, removed)
         return 0, 0
@@ -259,6 +258,23 @@ function M.convert_player(player)
     }
     experience.record(player.index, removed)
     return total_items, total_credit
+end
+
+function M.convert_player(player)
+    return convert_inventory(
+        player,
+        M.get_inventory(player),
+        'science-sale'
+    )
+end
+
+function M.convert_main_inventory(player)
+    local inventory = player and player.get_main_inventory()
+    return convert_inventory(
+        player,
+        inventory,
+        'backpack-science-sale'
+    )
 end
 
 events.on(defines.events.on_built_entity, on_player_built)

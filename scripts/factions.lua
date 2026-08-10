@@ -43,6 +43,10 @@ function M.of_player(player)
     return player and M.planet_of_force(player.force) or nil
 end
 
+function M.switch_stamina_cost(target_planet)
+    return target_planet == 'nauvis' and 0 or config.suicide_stamina_cost
+end
+
 function M.all()
     local result = {}
     for _, planet_name in ipairs(config.public_planets) do
@@ -108,13 +112,14 @@ function M.switch_by_suicide(player, target_planet)
     local source_planet = M.of_player(player)
     if not source_planet then return false, 'invalid-faction' end
     if source_planet == target_planet then return false, 'same-faction' end
-    if stamina.get(player.index) < config.suicide_stamina_cost then
+    local stamina_cost = M.switch_stamina_cost(target_planet)
+    if stamina.get(player.index) < stamina_cost then
         return false, 'insufficient-stamina'
     end
     local character = character_of(player)
     if not character then return false, 'no-character' end
 
-    if not stamina.spend(player.index, config.suicide_stamina_cost) then
+    if not stamina.spend(player.index, stamina_cost) then
         return false, 'insufficient-stamina'
     end
 
@@ -122,13 +127,14 @@ function M.switch_by_suicide(player, target_planet)
         source_planet = source_planet,
         target_planet = target_planet,
         requested_tick = game.tick,
+        stamina_cost = stamina_cost,
     }
     storage.respawn_hospice_planets[player.index] = target_planet
     local died = character.die(game.forces.neutral)
     if not died then
         storage.pending_faction_switches[player.index] = nil
         storage.respawn_hospice_planets[player.index] = nil
-        stamina.refund(player.index, config.suicide_stamina_cost)
+        stamina.refund(player.index, stamina_cost)
         return false, 'death-failed'
     end
     return true

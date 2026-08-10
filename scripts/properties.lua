@@ -369,6 +369,7 @@ local function create(spec)
         expires_tick = expires_tick,
         lifetime_hours = lifetime_hours,
         permanent = permanent,
+        construction_value = tonumber(spec.construction_value),
         planet_property_number = permanent
             and next_planet_property_number(sample_planet, id) or nil,
         system_key = spec.system_key,
@@ -568,6 +569,11 @@ function M.build(player, planet_name, lifetime_index, size_index, custom_name)
         width = requirement.size.width,
         height = requirement.size.height,
         custom_name = normalized_name,
+        construction_value = math.min(
+            config.property_price_cap,
+            math.ceil(requirement.experience_cost
+                * settings.get('property_build_price_multiplier'))
+        ),
     })
     if not ok or not property then
         experience.record(player.index, {{
@@ -842,7 +848,7 @@ function M.home_travel(player)
     return surfaces.to_planet_origin(player, planet_name)
 end
 
-local function evacuate_expired_property(property, surface)
+local function evacuate_property(property, surface)
     local hospice = surfaces.ensure_hospice(property.sample_planet)
     for _, player in pairs(game.players) do
         if player.controller_type == defines.controllers.remote
@@ -882,6 +888,102 @@ local function evacuate_expired_property(property, surface)
     end
 end
 
+local function delete_property_surface(property)
+    local surface = game.surfaces[property.surface_name]
+    if not (surface and surface.valid) then return false, 'surface-missing' end
+    evacuate_property(property, surface)
+    property.status = 'deleting'
+    storage.deleting_properties[surface.index] = property.id
+    if game.delete_surface(surface) then
+        bump_revision()
+        return true
+    end
+    storage.deleting_properties[surface.index] = nil
+    property.status = 'active'
+    return false, 'surface-delete-failed'
+end
+
+function M.salvage_value(property)
+    if not property or property.permanent then return nil end
+    local construction_value = tonumber(property.construction_value)
+    local created_tick = tonumber(property.created_tick)
+    local expires_tick = tonumber(property.expires_tick)
+    if not construction_value or construction_value <= 0
+            or not created_tick or not expires_tick
+            or expires_tick <= created_tick then
+        return nil
+    end
+    local remaining_ticks = math.max(0, expires_tick - game.tick)
+    if remaining_ticks <= 0 then return nil end
+    local value = math.floor(
+        construction_value
+            * settings.get('property_salvage_percent') / 100
+            * remaining_ticks / (expires_tick - created_tick)
+    )
+    return math.max(1, value)
+end
+
+function M.salvage_availability(player, property)
+    if not property then return false, 'missing' end
+    if not valid_surface(property) then return false, 'surface-missing' end
+    if not (player.physical_surface
+            and player.physical_surface.index == property.surface_index) then
+        return false, 'not-inside'
+    end
+    if property.owner_index ~= player.index then return false, 'not-owner' end
+    if property.permanent then return false, 'permanent' end
+    local value = M.salvage_value(property)
+    if not value then return false, 'not-player-built' end
+    return true, nil, value
+end
+
+function M.salvage_at_player_availability(player)
+    state.ensure()
+    local surface = player and player.physical_surface
+    if not (surface and surface.valid) then return false, 'not-inside' end
+    for _, property in pairs(storage.properties) do
+        if property.status == 'active'
+                and property.surface_index == surface.index then
+            local available, err, value = M.salvage_availability(
+                player,
+                property
+            )
+            return available, err, property, value
+        end
+    end
+    return false, 'not-inside'
+end
+
+function M.salvage(player, property_id, quoted_value)
+    local property = M.get(property_id)
+    local available, err, value = M.salvage_availability(player, property)
+    if not available then return false, err end
+    quoted_value = tonumber(quoted_value)
+    if quoted_value and value < quoted_value then
+        return false, 'salvage-value-changed', value
+    end
+    local property_name = M.display_name(property)
+    local ok, delete_err = delete_property_surface(property)
+    if not ok then return false, delete_err end
+    local paid, credit_err = economy.change(
+        player.index,
+        value,
+        'property-salvage'
+    )
+    if not paid then
+        log('[un] property salvage payout failed for property '
+            .. property.id .. ': ' .. tostring(credit_err))
+        return false, credit_err
+    end
+    game.print({
+        'un.property-salvage-broadcast',
+        player.name,
+        property_name,
+        value,
+    })
+    return true, value
+end
+
 local function expire_property(property)
     local expired_name = M.display_name(property)
     local surface = game.surfaces[property.surface_name]
@@ -892,16 +994,10 @@ local function expire_property(property)
         game.print({'un.property-expired', expired_name})
         return true
     end
-    evacuate_expired_property(property, surface)
-    property.status = 'deleting'
-    storage.deleting_properties[surface.index] = property.id
-    if game.delete_surface(surface) then
-        bump_revision()
+    if delete_property_surface(property) then
         game.print({'un.property-expired', expired_name})
         return true
     end
-    storage.deleting_properties[surface.index] = nil
-    property.status = 'active'
     log('[un] failed to delete expired property ' .. property.id)
     return false
 end

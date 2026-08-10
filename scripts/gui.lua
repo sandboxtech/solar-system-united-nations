@@ -5,6 +5,7 @@ local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
 local factions = require('scripts.factions')
+local linked_inventory = require('scripts.linked_inventory')
 local properties = require('scripts.properties')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
@@ -45,12 +46,14 @@ local HELP_DETAILS_NAME = 'un_help_details'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
 local PROPERTY_HEADER_NAME = 'un_property_header'
+local PROPERTY_SALVAGE_BUTTON_NAME = 'un_property_salvage_button'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local STAMINA_NAME = 'un_stamina'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
 local STARTER_KIT_NAME = 'un_starter_kit'
+local WOOD_SUPPLY_NAME = 'un_wood_supply'
 local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
@@ -71,8 +74,10 @@ local PROPERTY_BUILD_COOLDOWN_NAME = 'un_property_build_cooldown'
 local PROPERTY_BUILD_BUTTON_NAME = 'un_property_build_button'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
+local SCIENCE_CONVERT_NAME = 'un_science_convert'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_TABLE_NAME = 'un_player_table'
+local PLANET_HEADER_NAME = 'un_planet_header'
 local PLANET_TABLE_NAME = 'un_planet_table'
 local TECH_LEAK_COUNTDOWN_NAME = 'un_tech_leak_countdown'
 local CRIME_ACTIONS_NAME = 'un_crime_actions'
@@ -100,6 +105,7 @@ local ADMIN_NUMBER_SETTINGS = {
     {'asteroid_spawning_rate', 'un.admin-setting-asteroid-rate'},
     {'property_limit_per_planet', 'un.admin-setting-property-limit'},
     {'property_build_price_multiplier', 'un.admin-setting-property-build-price'},
+    {'property_salvage_percent', 'un.admin-setting-property-salvage'},
     {'property_lifetime_1_hours', 'un.admin-setting-property-lifetime-1'},
     {'property_lifetime_2_hours', 'un.admin-setting-property-lifetime-2'},
     {'property_lifetime_3_hours', 'un.admin-setting-property-lifetime-3'},
@@ -291,6 +297,18 @@ local function disabled_tooltip(action, err)
     if action == 'enter' and err == 'not-owner' then
         return {'un.property-enter-disabled-private'}
     end
+    if action == 'salvage' and err == 'not-owner' then
+        return {'un.property-salvage-not-owner'}
+    end
+    if action == 'salvage' and err == 'permanent' then
+        return {'un.property-salvage-permanent'}
+    end
+    if action == 'salvage' and err == 'not-player-built' then
+        return {'un.property-salvage-unavailable'}
+    end
+    if action == 'salvage' and err == 'not-inside' then
+        return {'un.property-salvage-not-inside'}
+    end
     return {'un.property-error-unavailable'}
 end
 
@@ -416,6 +434,29 @@ local function render_property_access_section(player, content)
     }
 end
 
+local function update_property_salvage_action(player, content)
+    local header = content[PROPERTY_HEADER_NAME]
+    local button = header and header.valid
+        and header[PROPERTY_SALVAGE_BUTTON_NAME]
+    if not (button and button.valid) then return end
+    local available, err, property, value
+        = properties.salvage_at_player_availability(player)
+    button.enabled = available
+    button.tooltip = available and {
+        'un.property-salvage-tooltip',
+        settings.get('property_salvage_percent'),
+        format_integer(value),
+    } or disabled_tooltip('salvage', err)
+    if not available or button.tags.action ~= 'property-confirm-salvage'
+            or button.tags.property_id ~= property.id then
+        button.caption = {'un.property-salvage'}
+        button.tags = {
+            action = 'property-salvage',
+            property_id = property and property.id or 0,
+        }
+    end
+end
+
 local function render_property_table(player, frame, content)
     local old_header = content[PROPERTY_HEADER_NAME]
     if old_header and old_header.valid then old_header.destroy() end
@@ -445,6 +486,13 @@ local function render_property_table(player, frame, content)
         caption = {'un.property-current-faction', planet_label(selected)},
     }
     add_info_sprite(header, {'un.property-page-tooltip'})
+    header.add{
+        type = 'button',
+        name = PROPERTY_SALVAGE_BUTTON_NAME,
+        caption = {'un.property-salvage'},
+        tags = {action = 'property-salvage', property_id = 0},
+    }
+    update_property_salvage_action(player, content)
     local crime_actions = content.add{
         type = 'flow',
         name = CRIME_ACTIONS_NAME,
@@ -709,14 +757,23 @@ local function render_ubi_section(content)
         config.fast_respawn_seconds,
         config.normal_respawn_seconds,
     }
+    local coin_tooltip = {'un.coin-tooltip'}
     local balance = content.add{
         type = 'table',
         name = BALANCE_TABLE_NAME,
         column_count = 2,
         style = 'bordered_table',
     }
-    balance.add{type = 'label', caption = {'un.credit-label'}}
-    balance.add{type = 'label', name = BALANCE_NAME}
+    balance.add{
+        type = 'label',
+        caption = {'un.credit-label'},
+        tooltip = coin_tooltip,
+    }
+    balance.add{
+        type = 'label',
+        name = BALANCE_NAME,
+        tooltip = coin_tooltip,
+    }
     balance.add{
         type = 'label',
         caption = {'un.stamina-label'},
@@ -756,6 +813,25 @@ local function render_ubi_section(content)
         tags = {action = 'starter-kit-buy'},
     }
     kit.style.width = 360
+
+    local wood = content.add{
+        type = 'button',
+        name = WOOD_SUPPLY_NAME,
+        caption = {
+            'un.wood-supply-buy',
+            config.wood_supply_count,
+            config.wood_supply_coin_cost,
+            config.wood_supply_stamina_cost,
+        },
+        tooltip = {
+            'un.wood-supply-tooltip',
+            config.wood_supply_count,
+            config.wood_supply_coin_cost,
+            config.wood_supply_stamina_cost,
+        },
+        tags = {action = 'wood-supply-buy'},
+    }
+    wood.style.width = 360
 end
 
 local function render_ship_actions(player, content)
@@ -788,6 +864,12 @@ local function render_experience_section(content)
     heading.style.vertical_align = 'center'
     heading.add{type = 'label', caption = {'un.experience-title'}}
     add_info_sprite(heading, {'un.experience-tooltip'})
+    heading.add{
+        type = 'button',
+        name = SCIENCE_CONVERT_NAME,
+        caption = {'un.science-convert'},
+        tooltip = {'un.science-convert-tooltip'},
+    }
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
@@ -877,7 +959,13 @@ end
 
 local function render_planets_page(frame, content)
     local leak_left = technology_decay.left_ticks()
-    content.add{
+    local header = content.add{
+        type = 'flow',
+        name = PLANET_HEADER_NAME,
+        direction = 'horizontal',
+    }
+    header.style.vertical_align = 'center'
+    header.add{
         type = 'label',
         name = TECH_LEAK_COUNTDOWN_NAME,
         caption = leak_left and {
@@ -886,6 +974,7 @@ local function render_planets_page(frame, content)
         } or {'un.tech-leak-paused'},
         tooltip = {'un.tech-leak-tooltip'},
     }
+    add_info_sprite(header, {'un.planet-page-note'})
     local list = content.add{
         type = 'table',
         name = PLANET_TABLE_NAME,
@@ -905,9 +994,6 @@ local function render_planets_page(frame, content)
         }
         render_planet_traits(traits, item)
     end
-    local note = content.add{type = 'label', caption = {'un.planet-page-note'}}
-    note.style.single_line = false
-    note.style.maximal_width = 640
     set_frame_state(frame, 'planets')
 end
 
@@ -956,6 +1042,7 @@ local function update_factions_page(player, content)
         local property_count = list[faction_element_name('properties', planet_name)]
         local ship_count = list[faction_element_name('ships', planet_name)]
         local button = list[FACTION_SWITCH_PREFIX .. planet_name]
+        local switch_cost = factions.switch_stamina_cost(planet_name)
         if status and status.valid then
             status.caption = current == planet_name
                 and {'un.faction-current'} or {'un.faction-hostile'}
@@ -971,16 +1058,20 @@ local function update_factions_page(player, content)
         end
         if button and button.valid then
             button.enabled = current ~= planet_name
-                and stamina.get(player.index) >= config.suicide_stamina_cost
+                and stamina.get(player.index) >= switch_cost
             if current == planet_name then
                 button.tooltip = {'un.faction-already-current'}
             else
-                button.tooltip = {
+                button.tooltip = switch_cost == 0 and {
+                    'un.faction-switch-tooltip-free',
+                    planet_label(planet_name),
+                    config.normal_respawn_seconds,
+                } or {
                     '',
                     {
                     'un.faction-switch-tooltip',
                     planet_label(planet_name),
-                    config.suicide_stamina_cost,
+                    switch_cost,
                     config.normal_respawn_seconds,
                     },
                     button.enabled and '' or {
@@ -1146,6 +1237,7 @@ local function render_admin_page(player, frame, content)
                 or key == 'tech_leak_interval_hours'
                 or key == 'tech_leak_max_percent'
                 or key == 'property_build_price_multiplier'
+                or key == 'property_salvage_percent'
                 or key:match('^property_lifetime_') ~= nil
                 or key:match('^property_decay_') ~= nil,
             allow_negative = false,
@@ -1422,6 +1514,7 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(formulas, {
             'un.help-detail-property-trade',
             settings.get('property_tax_percent'),
+            settings.get('property_salvage_percent'),
         })
         add_help_gap(details)
 
@@ -1640,6 +1733,12 @@ local function property_error(err)
             config.property_name_max_characters,
         }
     end
+    if err == 'salvage-value-changed' then
+        return {'un.property-salvage-value-changed'}
+    end
+    if err == 'not-player-built' or err == 'permanent' then
+        return {'un.property-salvage-unavailable'}
+    end
     return {'un.property-error-unavailable'}
 end
 
@@ -1700,6 +1799,7 @@ local function update_property_row(player, property_table, property)
         enter.tooltip = can_enter and {'un.property-enter'}
             or disabled_tooltip('enter', enter_error)
     end
+
 end
 
 local function update_ship_actions(player, content)
@@ -1796,6 +1896,30 @@ local function update_frame(player)
                 kit.tags = {action = 'starter-kit-buy'}
             end
         end
+        local wood = content[WOOD_SUPPLY_NAME]
+        if wood and wood.valid then
+            local can_buy, buy_error = starter.can_buy_wood(player)
+            wood.enabled = can_buy
+            wood.tooltip = can_buy and {
+                'un.wood-supply-tooltip',
+                config.wood_supply_count,
+                config.wood_supply_coin_cost,
+                config.wood_supply_stamina_cost,
+            } or buy_error == 'insufficient-credit'
+                and {'un.wood-supply-insufficient-coin'}
+                or buy_error == 'insufficient-stamina'
+                and {'un.wood-supply-insufficient-stamina'}
+                or {'un.wood-supply-unavailable'}
+            if wood.tags.action ~= 'wood-supply-confirm' then
+                wood.caption = {
+                    'un.wood-supply-buy',
+                    config.wood_supply_count,
+                    config.wood_supply_coin_cost,
+                    config.wood_supply_stamina_cost,
+                }
+                wood.tags = {action = 'wood-supply-buy'}
+            end
+        end
         if list_refresh_due(frame, 'experience') then
             local data = experience.get(player.index)
             local grid = content[EXPERIENCE_TABLE_NAME]
@@ -1827,7 +1951,9 @@ local function update_frame(player)
     elseif page == 'property-build' then
         update_property_build_page(player, content)
     elseif page == 'planets' then
-        local leak = content[TECH_LEAK_COUNTDOWN_NAME]
+        local planet_header = content[PLANET_HEADER_NAME]
+        local leak = planet_header and planet_header.valid
+            and planet_header[TECH_LEAK_COUNTDOWN_NAME]
         if leak and leak.valid then
             local leak_left = technology_decay.left_ticks()
             leak.caption = leak_left and {
@@ -1878,6 +2004,7 @@ local function update_frame(player)
             end
         end
     elseif page == 'property' then
+        update_property_salvage_action(player, content)
         local sort_index = property_sort_index(frame)
         local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
         local price_sort_changed = sort_index >= 3
@@ -2138,6 +2265,15 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
         update_frame(player)
+    elseif element.name == SCIENCE_CONVERT_NAME then
+        local items, coins = linked_inventory.convert_main_inventory(player)
+        player.print(items > 0 and {
+            'un.science-convert-success',
+            items,
+            coins,
+        } or {'un.science-convert-empty'})
+        render_page(player, 'overview')
+        update_frame(player)
     elseif element.name == STARTER_KIT_NAME then
         if element.tags.action == 'starter-kit-confirm' then
             local ok, err = starter.buy(player)
@@ -2156,6 +2292,28 @@ events.on(defines.events.on_gui_click, function(event)
                 config.starter_kit_stamina_cost,
             }
             element.tags = {action = 'starter-kit-confirm'}
+        end
+    elseif element.name == WOOD_SUPPLY_NAME then
+        if element.tags.action == 'wood-supply-confirm' then
+            local ok, err = starter.buy_wood(player)
+            player.print(ok and {
+                'un.wood-supply-purchased',
+                config.wood_supply_count,
+            } or err == 'insufficient-credit'
+                and {'un.wood-supply-insufficient-coin'}
+                or err == 'insufficient-stamina'
+                and {'un.wood-supply-insufficient-stamina'}
+                or {'un.wood-supply-unavailable'})
+            render_page(player, 'overview')
+            update_frame(player)
+        else
+            element.caption = {
+                'un.wood-supply-confirm',
+                config.wood_supply_count,
+                config.wood_supply_coin_cost,
+                config.wood_supply_stamina_cost,
+            }
+            element.tags = {action = 'wood-supply-confirm'}
         end
     elseif element.name == SHIP_CREATE_NAME then
         local planet_name = factions.of_player(player)
@@ -2186,6 +2344,7 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name:sub(1, #FACTION_SWITCH_PREFIX)
             == FACTION_SWITCH_PREFIX then
         local planet_name = element.tags.planet
+        local switch_cost = factions.switch_stamina_cost(planet_name)
         if element.tags.action == 'faction-switch-confirm' then
             local ok, err = factions.switch_by_suicide(player, planet_name)
             if ok then
@@ -2197,23 +2356,33 @@ events.on(defines.events.on_gui_click, function(event)
                     or {'un.suicide-unavailable'})
             end
         else
-            element.caption = {
+            element.caption = switch_cost == 0 and {
+                'un.faction-switch-confirm-free',
+                planet_label(planet_name),
+            } or {
                 'un.faction-switch-confirm',
                 planet_label(planet_name),
-                config.suicide_stamina_cost,
+                switch_cost,
             }
             element.tooltip = {
                 '',
-                {
+                switch_cost == 0 and {
+                    'un.faction-switch-confirm-free',
+                    planet_label(planet_name),
+                } or {
                     'un.faction-switch-confirm',
                     planet_label(planet_name),
-                    config.suicide_stamina_cost,
+                    switch_cost,
                 },
                 '\n',
-                {
+                switch_cost == 0 and {
+                    'un.faction-switch-tooltip-free',
+                    planet_label(planet_name),
+                    config.normal_respawn_seconds,
+                } or {
                     'un.faction-switch-tooltip',
                     planet_label(planet_name),
-                    config.suicide_stamina_cost,
+                    switch_cost,
                     config.normal_respawn_seconds,
                 },
             }
@@ -2321,6 +2490,31 @@ events.on(defines.events.on_gui_click, function(event)
                 or property_error(err))
             render_page(player, 'property-build')
             update_frame(player)
+        elseif tags.action == 'property-salvage' then
+            local property = properties.get(tags.property_id)
+            local can_salvage, err, value
+                = properties.salvage_availability(player, property)
+            if not can_salvage then
+                if not property_disappeared(err) then
+                    player.print(property_error(err))
+                end
+                render_property_table(player, frame, content)
+                update_frame(player)
+                return
+            end
+            element.caption = {
+                'un.property-salvage-confirm',
+                format_integer(value),
+            }
+            element.tooltip = {
+                'un.property-salvage-confirm-tooltip',
+                format_integer(value),
+            }
+            element.tags = {
+                action = 'property-confirm-salvage',
+                property_id = property.id,
+                quoted_value = value,
+            }
         elseif tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
             if not property then
@@ -2358,6 +2552,17 @@ events.on(defines.events.on_gui_click, function(event)
             update_frame(player)
         elseif tags.action == 'property-confirm-buy' then
             local ok, err = properties.buy(player, tags.property_id, tags.quoted_price)
+            if not ok and not property_disappeared(err) then
+                player.print(property_error(err))
+            end
+            render_property_table(player, frame, content)
+            update_frame(player)
+        elseif tags.action == 'property-confirm-salvage' then
+            local ok, err = properties.salvage(
+                player,
+                tags.property_id,
+                tags.quoted_value
+            )
             if not ok and not property_disappeared(err) then
                 player.print(property_error(err))
             end

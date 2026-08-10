@@ -57,6 +57,11 @@ local DEFINITIONS = {
         min = 0.001,
         max = 1000000,
     },
+    property_salvage_percent = {
+        default = config.property_salvage_percent,
+        min = 0.01,
+        max = 100,
+    },
     property_lifetime_1_hours = {
         default = config.property_lifetime_options[1].hours,
         min = 0.1,
