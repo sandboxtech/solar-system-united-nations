@@ -8,6 +8,7 @@ M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
 M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
 M.faction_force_prefix = 'un-faction-'
+M.faction_diplomacy_start_hours = 12
 M.public_planet_arrival_radius = 64
 M.public_planet_reset_min_hours = 0.5
 M.public_planet_reset_max_hours = 2.5

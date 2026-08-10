@@ -73,7 +73,39 @@ function M.all()
     return result
 end
 
+local function pair_key(first, second)
+    if first > second then first, second = second, first end
+    return first .. ':' .. second
+end
+
+local function apply_relation(first_force, second_force, friendly)
+    first_force.set_friend(second_force, friendly)
+    second_force.set_friend(first_force, friendly)
+    first_force.set_cease_fire(second_force, friendly)
+    second_force.set_cease_fire(first_force, friendly)
+end
+
+local function ensure_diplomacy_state()
+    for _, planet_name in ipairs(config.public_planets) do
+        if storage.faction_diplomacy_friendly[planet_name] == nil then
+            storage.faction_diplomacy_friendly[planet_name] = true
+        end
+    end
+    for first = 1, #config.public_planets do
+        for second = first + 1, #config.public_planets do
+            local key = pair_key(
+                config.public_planets[first],
+                config.public_planets[second]
+            )
+            if storage.faction_pair_relations[key] == nil then
+                storage.faction_pair_relations[key] = true
+            end
+        end
+    end
+end
+
 local function configure_relations()
+    ensure_diplomacy_state()
     local entries = M.all()
     for _, entry in ipairs(entries) do
         entry.force.friendly_fire = true
@@ -84,12 +116,48 @@ local function configure_relations()
         for second = first + 1, #entries do
             local a = entries[first].force
             local b = entries[second].force
-            a.set_friend(b, true)
-            b.set_friend(a, true)
-            a.set_cease_fire(b, true)
-            b.set_cease_fire(a, true)
+            local key = pair_key(
+                entries[first].planet_name,
+                entries[second].planet_name
+            )
+            apply_relation(a, b, storage.faction_pair_relations[key])
         end
     end
+end
+
+function M.toggle_diplomacy_after_reset(planet_name)
+    if not planet_set[planet_name] then return false end
+    if game.tick < config.faction_diplomacy_start_hours
+            * config.ticks_per_hour then
+        return false
+    end
+    state.ensure()
+    ensure_diplomacy_state()
+    local friendly = not storage.faction_diplomacy_friendly[planet_name]
+    storage.faction_diplomacy_friendly[planet_name] = friendly
+    local source = M.of_planet(planet_name)
+    if not (source and source.valid) then return false end
+    for _, other_name in ipairs(config.public_planets) do
+        if other_name ~= planet_name then
+            local other = M.of_planet(other_name)
+            if other and other.valid then
+                local key = pair_key(planet_name, other_name)
+                storage.faction_pair_relations[key] = friendly
+                apply_relation(source, other, friendly)
+            end
+        end
+    end
+    return true, friendly
+end
+
+function M.relation_caption(first_planet, second_planet)
+    local first = M.of_planet(first_planet)
+    local second = M.of_planet(second_planet)
+    if first and second and first.get_friend(second)
+            and second.get_friend(first) then
+        return {'un.faction-friendly'}
+    end
+    return {'un.faction-hostile'}
 end
 
 function M.ensure()

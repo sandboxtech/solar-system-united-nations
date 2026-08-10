@@ -681,6 +681,14 @@ local function finish_reset(name, surface, record)
     end
     record.warned = {}
     game.print({'un.planet-reset-finished', planet_label(name)})
+    local changed, friendly = factions.toggle_diplomacy_after_reset(name)
+    if changed then
+        game.print({
+            'un.faction-diplomacy-changed',
+            factions.display_name(name),
+            friendly and {'un.faction-friendly'} or {'un.faction-hostile'},
+        })
+    end
 end
 
 function M.apply_global_settings()

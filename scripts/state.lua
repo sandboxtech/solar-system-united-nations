@@ -22,6 +22,12 @@ function M.ensure()
     if storage.pending_faction_switches == nil then
         storage.pending_faction_switches = {}
     end
+    if storage.faction_diplomacy_friendly == nil then
+        storage.faction_diplomacy_friendly = {}
+    end
+    if storage.faction_pair_relations == nil then
+        storage.faction_pair_relations = {}
+    end
     if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then
         storage.ledger = {first_id = 1, next_id = 1, records = {}}
