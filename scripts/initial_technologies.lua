@@ -60,6 +60,13 @@ local function grant(force, planet_name)
     research_recursively(force, recursive)
 end
 
+local function grant_recipes(force)
+    for _, name in ipairs(config.faction_initial_recipes or {}) do
+        local recipe = force.recipes[name]
+        if recipe and recipe.valid then recipe.enabled = true end
+    end
+end
+
 function M.ensure()
     state.ensure()
     for _, entry in ipairs(factions.all()) do
@@ -67,14 +74,10 @@ function M.ensure()
             grant(entry.force, entry.planet_name)
             storage.faction_initial_technologies_granted[entry.force.name] = true
         end
-    end
-end
-
-function M.repair()
-    state.ensure()
-    for _, entry in ipairs(factions.all()) do
-        grant(entry.force, entry.planet_name)
-        storage.faction_initial_technologies_granted[entry.force.name] = true
+        if not storage.faction_initial_recipes_granted[entry.force.name] then
+            grant_recipes(entry.force)
+            storage.faction_initial_recipes_granted[entry.force.name] = true
+        end
     end
 end
 

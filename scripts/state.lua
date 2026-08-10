@@ -34,10 +34,12 @@ function M.ensure()
     if storage.faction_initial_technologies_granted == nil then
         storage.faction_initial_technologies_granted = {}
     end
+    if storage.faction_initial_recipes_granted == nil then
+        storage.faction_initial_recipes_granted = {}
+    end
     if storage.tech_leak_unlocked_forces == nil then
         storage.tech_leak_unlocked_forces = {}
     end
-    if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then
         storage.ledger = {first_id = 1, next_id = 1, records = {}}
     end

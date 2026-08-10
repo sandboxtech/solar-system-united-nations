@@ -77,6 +77,12 @@ M.faction_initial_technologies_recursive_by_planet = {
         'cryogenic-science-pack',
     },
 }
+M.faction_initial_recipes = {
+    'loader',
+    'fast-loader',
+    'express-loader',
+    'turbo-loader',
+}
 M.tech_leak_immune_technologies = {
     'logistic-robotics',
     'planet-discovery-vulcanus',
@@ -158,8 +164,8 @@ M.tech_leak_unlock_technology = M.faction_diplomacy_technology
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute
-M.logistic_network_roboport_limit = 32
-M.logistic_network_logistic_robot_limit = 320
+M.logistic_network_roboport_limit = 16
+M.logistic_network_logistic_robot_limit = 512
 M.science_pack_credit = {
     ['automation-science-pack'] = 1,
     ['logistic-science-pack'] = 1,
@@ -266,16 +272,9 @@ M.ship_build_min_online_hours = 1
 M.deconstruction_min_online_hours = 1
 M.ship_width_per_level = 2
 M.ship_base_width = 16
-M.ship_height = 512
+M.ship_height = 128
 M.ship_home_planet = 'nauvis'
 M.ship_lock_native_creation = true
 M.ship_lifecycle_ticks = M.ticks_per_minute
-
--- Stage 0 uses an isolated surface and reserved link IDs. Player link IDs start
--- at their positive player index, so these high IDs will not collide in normal
--- operation.
-M.stage0_surface_name = 'un-stage0-lab'
-M.stage0_link_id_a = 4294967295
-M.stage0_link_id_b = 4294967294
 
 return M

@@ -12,7 +12,7 @@ local technology_decay = require('scripts.technology_decay')
 
 local M = {}
 
-local function run(repair)
+local function run()
     state.ensure()
     factions.ensure()
     for _, name in ipairs(config.public_planets) do
@@ -23,39 +23,14 @@ local function run(repair)
     technology_decay.ensure()
     properties.ensure()
     permissions.ensure()
-    if repair then
-        initial_technologies.repair()
-    else
-        initial_technologies.ensure()
-    end
+    initial_technologies.ensure()
     ships.ensure()
     surfaces.sync_all_property_environments()
     gui.ensure_all()
 end
 
 function M.run()
-    run(false)
+    run()
 end
-
-local function command_reply(command, message)
-    local player = command.player_index and game.get_player(command.player_index)
-    if player then player.print(message) else localised_print(message) end
-end
-
-local function repair_command(command)
-    local player = command.player_index and game.get_player(command.player_index)
-    if player and not player.admin then
-        player.print({'un.admin-only'})
-        return
-    end
-    run(true)
-    command_reply(command, {'un.repair-state-finished'})
-end
-
-commands.add_command(
-    'un-repair-state',
-    {'un.repair-state-command-help'},
-    repair_command
-)
 
 return M

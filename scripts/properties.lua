@@ -1133,8 +1133,6 @@ local function refresh_owned_name_renderings(event)
     for _, property in ipairs(M.list()) do
         if property.owner_index == player.index then
             request_property_name_translation(property, player)
-        elseif not property.owner_index then
-            request_property_name_translation(property, player)
         end
     end
 end

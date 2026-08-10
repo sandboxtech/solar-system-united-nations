@@ -21,7 +21,6 @@ local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
 local HUD_LAYOUT_VERSION = 14
-local LEGACY_BUTTON_NAME = 'un_main_button'
 local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_RESET_COUNTDOWN_NAME = 'un_hud_reset_countdown'
 local HUD_MENU_NAME = 'un_hud_menu'
@@ -246,9 +245,6 @@ end
 
 function M.ensure_button(player)
     local root = player.gui.top
-    local old = root[LEGACY_BUTTON_NAME]
-    if old and old.valid then old.destroy() end
-
     local hud = root[HUD_FLOW_NAME]
     if hud and hud.valid then
         local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
@@ -1760,10 +1756,9 @@ local function render_players_page(viewer, frame, content)
     local list = scroll.add{
         type = 'table',
         name = PLAYER_TABLE_NAME,
-        column_count = 8,
+        column_count = 7,
         style = 'bordered_table',
     }
-    list.add{type = 'label', caption = {'un.player-column-status'}}
     list.add{type = 'label', caption = {'un.player-column-name'}}
     list.add{type = 'label', caption = {'un.player-column-faction'}}
     list.add{type = 'label', caption = {'un.player-column-online-hours'}}
@@ -1773,7 +1768,6 @@ local function render_players_page(viewer, frame, content)
     list.add{type = 'label', caption = {'un.player-column-friend'}}
 
     for _, player in ipairs(sorted_players(viewer.index)) do
-        list.add{type = 'label', name = player_element_name('status', player.index)}
         list.add{type = 'label', caption = player.name}
         list.add{
             type = 'label',
@@ -2211,16 +2205,11 @@ local function update_frame(player)
             )
             if list and list.valid then
                 for _, listed_player in pairs(game.connected_players) do
-                    local status = list[player_element_name('status', listed_player.index)]
                     local faction = list[player_element_name('faction', listed_player.index)]
                     local online = list[player_element_name('online', listed_player.index)]
                     local locale = list[player_element_name('locale', listed_player.index)]
                     local coins = list[player_element_name('coins', listed_player.index)]
                     local level = list[player_element_name('level', listed_player.index)]
-                    if status and status.valid then
-                        status.caption = listed_player.connected
-                            and {'un.player-online'} or {'un.player-offline'}
-                    end
                     if faction and faction.valid then
                         local planet_name = factions.of_player(listed_player)
                         faction.caption = player_faction_icon(listed_player)
@@ -2827,7 +2816,16 @@ end)
 scheduler.every(config.gui_refresh_ticks, function()
     for _, player in pairs(game.connected_players) do
         local frame = player.gui.screen[FRAME_NAME]
-        if frame and frame.valid then
+        if frame and frame.valid and frame.tags.page == 'overview' then
+            update_frame(player)
+        end
+    end
+end)
+
+scheduler.every(config.gui_list_refresh_ticks, function()
+    for _, player in pairs(game.connected_players) do
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid and frame.tags.page ~= 'overview' then
             update_frame(player)
         end
     end
