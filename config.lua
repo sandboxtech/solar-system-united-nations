@@ -6,12 +6,15 @@ M.ticks_per_hour = 60 * M.ticks_per_minute
 
 M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
-M.faction_initial_recipes = {
-    'ice-melting',
-    'lubricant',
-    'concrete',
-    'refined-concrete',
+M.faction_initial_technologies = {
+    '@trigger',
+    'electric-energy-distribution-2',
+    'electric-engine',
+    'solar-energy',
 }
+M.faction_initial_recipes = {}
+M.faction_disabled_technologies = {}
+M.faction_disabled_recipes = {'logistic-robot'}
 M.faction_chat_colors = {
     nauvis = '0.35,0.70,1.00',
     vulcanus = '1.00,0.45,0.25',
@@ -79,6 +82,8 @@ M.wood_supply_stamina_cost = 1000
 M.property_limit_per_planet = 100
 M.tech_leak_interval_hours = 1
 M.tech_leak_coefficient_max_percent = 0.25
+M.tech_leak_max_affected = 5
+M.tech_leak_unlock_technology = 'space-platform-thruster'
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute

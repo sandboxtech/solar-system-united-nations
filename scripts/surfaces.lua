@@ -252,6 +252,17 @@ function M.sync_property_environment(surface, min_brightness, planet_name)
     if not (surface and surface.valid) then return false end
     local planet = game.surfaces[planet_name or 'nauvis']
     if not (planet and planet.valid) then return false end
+    local property_names = {}
+    for name in pairs(prototypes.surface_property) do
+        property_names[#property_names + 1] = name
+    end
+    table.sort(property_names)
+    for _, name in ipairs(property_names) do
+        local ok, value = pcall(function() return planet.get_property(name) end)
+        if ok then
+            pcall(function() surface.set_property(name, value) end)
+        end
+    end
     surface.daytime_parameters = planet.daytime_parameters
     surface.ticks_per_day = planet.ticks_per_day
     surface.daytime = planet.daytime

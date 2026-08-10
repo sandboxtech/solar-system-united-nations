@@ -13,20 +13,6 @@ end
 
 local switch_cleanup_handlers = {}
 
-local function research_trigger_technologies(force)
-    local names = {}
-    for name, technology in pairs(force.technologies) do
-        if technology.prototype.research_trigger then
-            names[#names + 1] = name
-        end
-    end
-    table.sort(names)
-    for _, name in ipairs(names) do
-        local technology = force.technologies[name]
-        if not technology.researched then technology.researched = true end
-    end
-end
-
 function M.force_name(planet_name)
     if not planet_set[planet_name] then return nil end
     return config.faction_force_prefix .. planet_name
@@ -120,7 +106,6 @@ local function configure_relations()
     for _, entry in ipairs(entries) do
         entry.force.friendly_fire = true
         entry.force.share_chart = true
-        research_trigger_technologies(entry.force)
     end
     for first = 1, #entries do
         for second = first + 1, #entries do
@@ -272,11 +257,43 @@ local function finish_switch(player)
 end
 
 events.on(defines.events.on_player_created, function(event)
-    M.ensure_player(game.get_player(event.player_index))
+    local player = game.get_player(event.player_index)
+    if M.ensure_player(player) then
+        storage.suppress_foreign_join_notifications[player.index] = true
+        game.print({
+            'un.faction-switch-broadcast',
+            player.name,
+            M.display_name(M.of_player(player)),
+        })
+    end
 end)
 
 events.on(defines.events.on_player_joined_game, function(event)
-    M.ensure_player(game.get_player(event.player_index))
+    local player = game.get_player(event.player_index)
+    if not player then return end
+    state.ensure()
+    if M.ensure_player(player) then
+        game.print({
+            'un.faction-switch-broadcast',
+            player.name,
+            M.display_name(M.of_player(player)),
+        })
+        return
+    end
+    if storage.suppress_foreign_join_notifications[player.index] then
+        storage.suppress_foreign_join_notifications[player.index] = nil
+        return
+    end
+    local planet_name = M.of_player(player)
+    for _, entry in ipairs(M.all()) do
+        if entry.force ~= player.force then
+            entry.force.print({
+                'un.player-joined-foreign',
+                player.name,
+                M.display_name(planet_name),
+            })
+        end
+    end
 end)
 
 events.on(defines.events.on_player_respawned, function(event)

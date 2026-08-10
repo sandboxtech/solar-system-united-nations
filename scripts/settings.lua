@@ -123,6 +123,12 @@ local DEFINITIONS = {
         min = 0,
         max = 100,
     },
+    tech_leak_max_affected = {
+        default = config.tech_leak_max_affected,
+        min = 0,
+        max = 100000,
+        integer = true,
+    },
     planet_resets_enabled = {default = true, boolean = true},
     tech_leak_enabled = {default = true, boolean = true},
     admin_property_access = {default = false, boolean = true},

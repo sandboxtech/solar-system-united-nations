@@ -22,11 +22,20 @@ function M.ensure()
     if storage.pending_faction_switches == nil then
         storage.pending_faction_switches = {}
     end
+    if storage.suppress_foreign_join_notifications == nil then
+        storage.suppress_foreign_join_notifications = {}
+    end
     if storage.faction_diplomacy_friendly == nil then
         storage.faction_diplomacy_friendly = {}
     end
     if storage.faction_pair_relations == nil then
         storage.faction_pair_relations = {}
+    end
+    if storage.faction_initial_technologies_granted == nil then
+        storage.faction_initial_technologies_granted = {}
+    end
+    if storage.tech_leak_unlocked_forces == nil then
+        storage.tech_leak_unlocked_forces = {}
     end
     if storage.stage0 == nil then storage.stage0 = {} end
     if storage.ledger == nil then

@@ -1,8 +1,10 @@
 local config = require('config')
+local events = require('scripts.events')
 local factions = require('scripts.factions')
 local restrictions = require('scripts.restrictions')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
+local state = require('scripts.state')
 
 local M = {}
 
@@ -52,11 +54,19 @@ end
 
 local function run_force(force)
     if not (force and force.valid) then return 0 end
+    state.ensure()
+    local unlock = force.technologies[config.tech_leak_unlock_technology]
+    if unlock and unlock.researched then
+        storage.tech_leak_unlocked_forces[force.name] = true
+    end
+    if not storage.tech_leak_unlocked_forces[force.name] then return 0 end
     local coefficient = math.random()
         * settings.get('tech_leak_max_percent')
     local protected = protected_prerequisites(force)
     local lost = {}
     local downgraded = {}
+    local affected_limit = settings.get('tech_leak_max_affected')
+    local hits = {}
 
     for _, name in ipairs(sorted_technology_names(force)) do
         local technology = force.technologies[name]
@@ -67,18 +77,30 @@ local function run_force(force)
         if eligible then
             local chance = math.min(1, coefficient * pack_count(technology) / 100)
             if chance > 0 and math.random() < chance then
-                local icon = '[technology=' .. name .. ']'
-                if can_downgrade(technology) then
-                    technology.level = technology.level - 1
-                    downgraded[#downgraded + 1] = icon
-                        .. ' Lv.' .. technology.level
-                else
-                    technology.researched = false
-                    lost[#lost + 1] = icon
-                end
+                hits[#hits + 1] = name
             end
         end
     end
+
+    local affected = math.min(affected_limit, #hits)
+    for index = 1, affected do
+        local chosen = math.random(index, #hits)
+        hits[index], hits[chosen] = hits[chosen], hits[index]
+    end
+    for index = 1, affected do
+        local name = hits[index]
+        local technology = force.technologies[name]
+        local icon = '[technology=' .. name .. ']'
+        if can_downgrade(technology) then
+            technology.level = technology.level - 1
+            downgraded[#downgraded + 1] = icon .. ' Lv.' .. technology.level
+        else
+            technology.researched = false
+            lost[#lost + 1] = icon
+        end
+    end
+    table.sort(lost)
+    table.sort(downgraded)
 
     restrictions.apply(force)
 
@@ -108,6 +130,15 @@ function M.run()
 end
 
 function M.ensure()
+    state.ensure()
+    for _, entry in ipairs(factions.all()) do
+        local technology = entry.force.technologies[
+            config.tech_leak_unlock_technology
+        ]
+        if technology and technology.researched then
+            storage.tech_leak_unlocked_forces[entry.force.name] = true
+        end
+    end
     if not settings.get('tech_leak_enabled') then
         storage.tech_leak_next_tick = nil
         return
@@ -141,6 +172,12 @@ local function check()
     storage.tech_leak_next_tick = game.tick + interval_ticks()
 end
 
-scheduler.every(config.ticks_per_second, check)
+scheduler.every(config.ticks_per_minute, check)
+
+events.on(defines.events.on_research_finished, function(event)
+    if event.research.name ~= config.tech_leak_unlock_technology then return end
+    state.ensure()
+    storage.tech_leak_unlocked_forces[event.research.force.name] = true
+end)
 
 return M

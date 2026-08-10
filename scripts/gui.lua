@@ -119,6 +119,7 @@ local ADMIN_NUMBER_SETTINGS = {
     {'property_decay_3_hours', 'un.admin-setting-property-decay-3'},
     {'tech_leak_interval_hours', 'un.admin-setting-tech-leak-interval'},
     {'tech_leak_max_percent', 'un.admin-setting-tech-leak-strength'},
+    {'tech_leak_max_affected', 'un.admin-setting-tech-leak-limit'},
 }
 
 local crime_error_caption
@@ -1688,6 +1689,7 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(world, {
             'un.help-detail-tech-leak-formula',
             settings.get('tech_leak_max_percent'),
+            settings.get('tech_leak_max_affected'),
         })
     else
         local security = add_help_card(details, {
