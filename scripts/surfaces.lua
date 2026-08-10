@@ -177,16 +177,52 @@ end
 local function apply_fixed_property_tiles(surface, half_width, half_height, layout)
     local middle_half = (tonumber(layout.middle_size) or 0) / 2
     local core_half = (tonumber(layout.core_size) or 0) / 2
+    local chunk_size = tonumber(layout.chunk_size) or 0
+    local chunk_inner_size = tonumber(layout.chunk_inner_size) or 0
+    local chunk_margin = (chunk_size - chunk_inner_size) / 2
+    local railway_room_width = tonumber(layout.railway_room_width) or 0
+    local railway_corridor_half
+        = (tonumber(layout.railway_corridor_height) or 0) / 2
     local tiles = {}
     for y = -half_height, half_height - 1 do
         for x = -half_width, half_width - 1 do
-            local in_core = x >= -core_half and x < core_half
+            local in_core = core_half > 0
+                and x >= -core_half and x < core_half
                 and y >= -core_half and y < core_half
-            local in_middle = x >= -middle_half and x < middle_half
+            local in_middle = middle_half > 0
+                and x >= -middle_half and x < middle_half
                 and y >= -middle_half and y < middle_half
+            local tile_name = in_core and layout.core_tile or nil
+            if not tile_name and layout.rectangles then
+                for _, rectangle in ipairs(layout.rectangles) do
+                    if x >= rectangle.left and x < rectangle.right
+                            and y >= rectangle.top and y < rectangle.bottom then
+                        tile_name = rectangle.tile
+                        break
+                    end
+                end
+            end
+            if not tile_name and railway_room_width > 0 then
+                local in_room = x < -half_width + railway_room_width
+                    or x >= half_width - railway_room_width
+                local in_corridor = y >= -railway_corridor_half
+                    and y < railway_corridor_half
+                if in_room or in_corridor then
+                    tile_name = layout.railway_tile
+                end
+            end
+            if not tile_name and chunk_size > 0 and chunk_inner_size > 0 then
+                local local_x = x % chunk_size
+                local local_y = y % chunk_size
+                if local_x >= chunk_margin
+                        and local_x < chunk_size - chunk_margin
+                        and local_y >= chunk_margin
+                        and local_y < chunk_size - chunk_margin then
+                    tile_name = layout.chunk_grid_tile
+                end
+            end
             tiles[#tiles + 1] = {
-                name = in_core and layout.core_tile
-                    or in_middle and layout.middle_tile
+                name = tile_name or in_middle and layout.middle_tile
                     or layout.fill_tile,
                 position = {x, y},
             }

@@ -503,7 +503,10 @@ function M.build_requirements(player, planet_name, build_type_index, selected_le
     end
     local width = math.floor((build_type.base_width
         + (build_type.width_per_level or 1) * level) / 2) * 2
-    width = math.min(config.property_max_size, width)
+    width = math.min(build_type.max_width, width)
+    local height = math.floor((build_type.height
+        + (build_type.height_per_level or 0) * level) / 2) * 2
+    height = math.min(build_type.max_height, height)
     local experience_cost = config.property_build_experience_base
         + config.property_build_experience_per_level * level
     local initial_price = math.min(
@@ -525,7 +528,7 @@ function M.build_requirements(player, planet_name, build_type_index, selected_le
             decay_hours = build_type.base_decay_hours
                 + build_type.decay_hours_per_level * level,
         },
-        size = {width = width, height = build_type.height},
+        size = {width = width, height = height},
         experience_cost = experience_cost,
         initial_price = initial_price,
         stamina_cost = config.property_build_stamina_cost,

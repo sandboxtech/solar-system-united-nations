@@ -232,7 +232,7 @@ M.property_daytime_parameters = {
     dawn = 0.75,
 }
 M.property_link_id_unowned = 0
-M.property_max_size = 256
+M.property_max_size = 1024
 M.property_name_max_characters = 64
 M.property_name_max_bytes = 256
 M.property_salvage_percent = 20
@@ -247,6 +247,9 @@ local function property_build_type(spec)
     spec.base_width = spec.base_width or 32
     spec.width_per_level = spec.width_per_level or 1
     spec.height = spec.height or 32
+    spec.height_per_level = spec.height_per_level or 0
+    spec.max_width = spec.max_width or 256
+    spec.max_height = spec.max_height or 256
     spec.initial_price_multiplier = spec.initial_price_multiplier or 1
     spec.base_decay_hours = spec.base_decay_hours or 18
     spec.decay_hours_per_level = spec.decay_hours_per_level or 0.6
@@ -277,6 +280,46 @@ M.property_build_types = {
         key = 'secure-cottage',
         initial_price_multiplier = 3,
         crime_chance_multiplier = 0.1,
+    },
+    property_build_type{
+        pack = 'chemical-science-pack',
+        key = 'shore-cottage',
+        initial_price_multiplier = 4,
+        terrain_planet = 'nauvis',
+        top_tile = 'water',
+        top_tile_rows = 2,
+    },
+    property_build_type{
+        pack = 'production-science-pack',
+        key = 'rail-estate',
+        base_width = 512,
+        width_per_level = 2,
+        max_width = 1024,
+        height = 64,
+        initial_price_multiplier = 5,
+        fixed_layout = {
+            fill_tile = 'out-of-map',
+            railway_tile = 'tutorial-grid',
+            railway_room_width = 64,
+            railway_corridor_height = 8,
+        },
+    },
+    property_build_type{
+        pack = 'utility-science-pack',
+        key = 'utility-grid',
+        base_width = 128,
+        width_per_level = 1,
+        height = 128,
+        height_per_level = 1,
+        initial_price_multiplier = 6,
+        fixed_layout = {
+            fill_tile = 'out-of-map',
+            chunk_grid_tile = 'tutorial-grid',
+            chunk_size = 32,
+            chunk_inner_size = 24,
+            core_tile = 'tutorial-grid',
+            core_size = 16,
+        },
     },
     property_build_type{
         pack = 'space-science-pack',
