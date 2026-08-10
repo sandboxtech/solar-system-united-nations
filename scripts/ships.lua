@@ -37,6 +37,24 @@ local function is_ready(platform)
     return surface and surface.valid or false
 end
 
+function M.is_public(player_index)
+    state.ensure()
+    local account = storage.players[player_index]
+    return type(account) ~= 'table' or account.ship_public ~= false
+end
+
+local function apply_visibility(platform, owner_index)
+    if not (platform and platform.valid) then return end
+    local public = not owner_index or M.is_public(owner_index)
+    platform.hidden = not public
+    local surface = platform.surface
+    if not (surface and surface.valid) then return end
+    for _, entry in ipairs(factions.all()) do
+        local visible = public or entry.force == platform.force
+        entry.force.set_surface_hidden(surface, not visible)
+    end
+end
+
 local function reconcile()
     local registered = records()
     for _, entry in ipairs(factions.all()) do
@@ -99,7 +117,7 @@ function M.of(player_index)
     return best_platform, best_record
 end
 
-function M.list()
+function M.list(viewer_index)
     reconcile()
     local result = {}
     for index, record in pairs(records()) do
@@ -108,12 +126,15 @@ function M.list()
             records()[index] = nil
         elseif record.owner_index
                 and not (record.scuttled_tick or is_scheduled(platform)) then
-            result[#result + 1] = {
-                index = index,
-                platform = platform,
-                record = record,
-                owner_index = record.owner_index,
-            }
+            if not viewer_index or record.owner_index == viewer_index
+                    or M.is_public(record.owner_index) then
+                result[#result + 1] = {
+                    index = index,
+                    platform = platform,
+                    record = record,
+                    owner_index = record.owner_index,
+                }
+            end
         end
     end
     table.sort(result, function(a, b)
@@ -123,6 +144,20 @@ function M.list()
         return a.index < b.index
     end)
     return result
+end
+
+
+function M.set_public(player_index, public)
+    state.ensure()
+    local account = storage.players[player_index]
+    if type(account) ~= 'table' then
+        account = {}
+        storage.players[player_index] = account
+    end
+    account.ship_public = public == true
+    local platform = M.of(player_index)
+    if platform then apply_visibility(platform, player_index) end
+    return true
 end
 
 function M.enforce_lock()
@@ -191,6 +226,7 @@ function M.create(player, planet_name)
 
     if is_ready(platform) then record.built_tick = game.tick end
     apply_bounds(platform, player.index)
+    apply_visibility(platform, player.index)
     game.print({
         'un.ship-built-broadcast',
         player.name,
@@ -239,7 +275,10 @@ function M.ensure()
     M.enforce_lock()
     for index, record in pairs(records()) do
         local platform = platform_of(index, record)
-        if platform then apply_bounds(platform, record.owner_index) end
+        if platform then
+            apply_bounds(platform, record.owner_index)
+            apply_visibility(platform, record.owner_index)
+        end
     end
 end
 
@@ -259,6 +298,7 @@ local function on_platform_surface(surface)
     end
     record.built_tick = record.built_tick or game.tick
     apply_bounds(platform, record.owner_index)
+    apply_visibility(platform, record.owner_index)
 end
 
 events.on(defines.events.on_surface_created, function(event)

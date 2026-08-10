@@ -68,6 +68,7 @@ local SHIP_STATUS_NAME = 'un_ship_status'
 local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
+local SHIP_VISIBILITY_NAME = 'un_ship_visibility'
 local SHIP_SCROLL_NAME = 'un_ship_scroll'
 local SHIP_TABLE_NAME = 'un_ship_table'
 local PROPERTY_SCROLL_NAME = 'un_property_scroll'
@@ -75,6 +76,9 @@ local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
 local PROPERTY_BUILD_NAME_NAME = 'un_property_build_name'
 local PROPERTY_BUILD_TYPE_NAME = 'un_property_build_type'
+local PROPERTY_BUILD_LEVEL_FLOW_NAME = 'un_property_build_level_flow'
+local PROPERTY_BUILD_LEVEL_NAME = 'un_property_build_level'
+local PROPERTY_BUILD_LEVEL_VALUE_NAME = 'un_property_build_level_value'
 local PROPERTY_BUILD_DIMENSIONS_NAME = 'un_property_build_dimensions'
 local PROPERTY_BUILD_HALF_LIFE_NAME = 'un_property_build_half_life'
 local PROPERTY_BUILD_TOTAL_LIFE_NAME = 'un_property_build_total_life'
@@ -835,6 +839,11 @@ local function update_property_build_page(player, content)
     if not (form and form.valid) then return end
     local planet_name = property_build_planet(player)
     local build_type = form[PROPERTY_BUILD_TYPE_NAME]
+    local level_flow = form[PROPERTY_BUILD_LEVEL_FLOW_NAME]
+    local level_slider = level_flow and level_flow.valid
+        and level_flow[PROPERTY_BUILD_LEVEL_NAME]
+    local level_value = level_flow and level_flow.valid
+        and level_flow[PROPERTY_BUILD_LEVEL_VALUE_NAME]
     local dimensions = form[PROPERTY_BUILD_DIMENSIONS_NAME]
     local half_life = form[PROPERTY_BUILD_HALF_LIFE_NAME]
     local total_life = form[PROPERTY_BUILD_TOTAL_LIFE_NAME]
@@ -844,14 +853,29 @@ local function update_property_build_page(player, content)
     local stamina_cost_label = form[PROPERTY_BUILD_STAMINA_COST_NAME]
     local stamina_available_label = form[PROPERTY_BUILD_STAMINA_AVAILABLE_NAME]
     local button = form[PROPERTY_BUILD_BUTTON_NAME]
-    if not (planet_name and build_type and dimensions and half_life
+    if not (planet_name and build_type and level_slider and level_value
+            and dimensions and half_life
             and total_life and price_label and cost_label
             and available_label and stamina_cost_label and stamina_available_label
             and button) then return end
+    local current_level = experience.total_level(player.index)
+    local selected_level = math.min(
+        current_level,
+        math.max(0, math.floor(level_slider.slider_value + 0.5))
+    )
+    level_slider.set_slider_minimum_maximum(0, math.max(1, current_level))
+    level_slider.enabled = current_level > 0
+    level_slider.slider_value = selected_level
+    level_value.caption = {
+        'un.property-build-level-value',
+        selected_level,
+        current_level,
+    }
     local can_build, err, requirement = properties.build_availability(
         player,
         planet_name,
-        build_type.selected_index
+        build_type.selected_index,
+        selected_level
     )
     if not requirement then return end
     dimensions.caption = {
@@ -935,6 +959,32 @@ local function render_property_build_page(player, frame, content)
         name = PROPERTY_BUILD_TYPE_NAME,
         items = build_type_items,
         selected_index = 1,
+    }
+    form.add{type = 'label', caption = {'un.property-build-level'}}
+    local level_flow = form.add{
+        type = 'flow',
+        name = PROPERTY_BUILD_LEVEL_FLOW_NAME,
+        direction = 'horizontal',
+    }
+    level_flow.style.vertical_align = 'center'
+    local total_level = experience.total_level(player.index)
+    local level_slider = level_flow.add{
+        type = 'slider',
+        name = PROPERTY_BUILD_LEVEL_NAME,
+        minimum_value = 0,
+        maximum_value = math.max(1, total_level),
+        value = total_level,
+        value_step = 1,
+        discrete_values = true,
+        tooltip = {'un.property-build-level-tooltip'},
+    }
+    level_slider.style.width = 260
+    level_slider.enabled = total_level > 0
+    level_flow.add{
+        type = 'label',
+        name = PROPERTY_BUILD_LEVEL_VALUE_NAME,
+        caption = {'un.property-build-level-value', total_level, total_level},
+        tooltip = {'un.property-build-level-tooltip'},
     }
     form.add{type = 'label', caption = {'un.property-build-dimensions'}}
     form.add{type = 'label', name = PROPERTY_BUILD_DIMENSIONS_NAME}
@@ -1086,6 +1136,16 @@ local function render_ship_actions(player, content)
         caption = {'un.ship-scuttle'},
         tooltip = {'un.ship-scuttle-tooltip'},
     }
+    content.add{
+        type = 'switch',
+        name = SHIP_VISIBILITY_NAME,
+        switch_state = ships.is_public(player.index) and 'right' or 'left',
+        left_label_caption = {'un.ship-visibility-private'},
+        right_label_caption = {'un.ship-visibility-public'},
+        left_label_tooltip = {'un.ship-visibility-tooltip'},
+        right_label_tooltip = {'un.ship-visibility-tooltip'},
+        tags = {action = 'ship-visibility'},
+    }
     content.add{type = 'label', name = SHIP_STATUS_NAME}
 end
 
@@ -1143,7 +1203,7 @@ end
 local function render_ships_page(player, frame, content)
     render_ship_actions(player, content)
     content.add{type = 'line'}
-    local list_data = ships.list()
+    local list_data = ships.list(player.index)
     local scroll = add_list_scroll(content, SHIP_SCROLL_NAME)
     local list = scroll.add{
         type = 'table',
@@ -2276,7 +2336,7 @@ local function update_frame(player)
         end
     elseif page == 'ships' then
         if list_refresh_due(frame, 'ships') then
-            local list_data = ships.list()
+            local list_data = ships.list(player.index)
             local signature = ship_signature(list_data)
             if frame.tags.ship_signature ~= signature then
                 content.clear()
@@ -2823,6 +2883,11 @@ events.on(defines.events.on_gui_click, function(event)
             if not (form and form.valid) then return end
             local planet_name = property_build_planet(player)
             local build_type_index = form[PROPERTY_BUILD_TYPE_NAME].selected_index
+            local level_flow = form[PROPERTY_BUILD_LEVEL_FLOW_NAME]
+            local level_slider = level_flow and level_flow.valid
+                and level_flow[PROPERTY_BUILD_LEVEL_NAME]
+            if not (level_slider and level_slider.valid) then return end
+            local selected_level = math.floor(level_slider.slider_value + 0.5)
             local name_field = form[PROPERTY_BUILD_NAME_NAME]
             local custom_name, name_err = properties.normalize_build_name(
                 name_field and name_field.valid and name_field.text or ''
@@ -2834,7 +2899,8 @@ events.on(defines.events.on_gui_click, function(event)
             local can_build, err, requirement = properties.build_availability(
                 player,
                 planet_name,
-                build_type_index
+                build_type_index,
+                selected_level
             )
             if not can_build then
                 player.print(property_error(err))
@@ -2971,12 +3037,30 @@ events.on(defines.events.on_gui_selection_state_changed, function(event)
     update_property_build_page(player, content)
 end)
 
+events.on(defines.events.on_gui_value_changed, function(event)
+    local element = event.element
+    if not (element and element.valid
+            and element.name == PROPERTY_BUILD_LEVEL_NAME) then return end
+    local player = game.get_player(event.player_index)
+    local frame = player and player.gui.screen[FRAME_NAME]
+    local content = frame and frame.valid and frame[CONTENT_NAME]
+    local form = content and content.valid and content[PROPERTY_BUILD_FORM_NAME]
+    local button = form and form.valid and form[PROPERTY_BUILD_BUTTON_NAME]
+    if not (player and button and button.valid) then return end
+    button.tags = {action = 'property-build'}
+    update_property_build_page(player, content)
+end)
+
 events.on(defines.events.on_gui_switch_state_changed, function(event)
     local element = event.element
     if not (element and element.valid) then return end
     local player = game.get_player(event.player_index)
     if not player then return end
     local tags = element.tags
+    if tags.action == 'ship-visibility' then
+        ships.set_public(player.index, element.switch_state == 'right')
+        return
+    end
     if tags.action == 'admin-setting-switch' then
         if not player.admin then
             player.print({'un.admin-only'})

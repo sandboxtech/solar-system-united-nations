@@ -488,13 +488,19 @@ function M.left_ticks(property)
     return math.max(0, property.expires_tick - game.tick)
 end
 
-function M.build_requirements(player, planet_name, build_type_index)
+function M.build_requirements(player, planet_name, build_type_index, selected_level)
     local build_type = config.property_build_types[tonumber(build_type_index)]
     if not (player and player.valid and build_planets[planet_name]
             and build_type) then
         return nil
     end
-    local level = experience.total_level(player.index)
+    local current_level = experience.total_level(player.index)
+    local level = selected_level == nil
+        and current_level or tonumber(selected_level)
+    if not level or level ~= math.floor(level)
+            or level < 0 or level > current_level then
+        return nil
+    end
     local width = math.floor((build_type.base_width
         + (build_type.width_per_level or 1) * level) / 2) * 2
     width = math.min(config.property_max_size, width)
@@ -512,6 +518,7 @@ function M.build_requirements(player, planet_name, build_type_index)
         build_type = build_type,
         pack = build_type.pack,
         total_level = level,
+        current_total_level = current_level,
         lifetime = {
             hours = build_type.base_lifetime_hours
                 + build_type.lifetime_hours_per_level * level,
@@ -525,8 +532,10 @@ function M.build_requirements(player, planet_name, build_type_index)
     }
 end
 
-function M.build_availability(player, planet_name, build_type_index)
-    local requirement = M.build_requirements(player, planet_name, build_type_index)
+function M.build_availability(player, planet_name, build_type_index, selected_level)
+    local requirement = M.build_requirements(
+        player, planet_name, build_type_index, selected_level
+    )
     if not requirement then return false, 'invalid-build-option' end
     if factions.of_player(player) ~= planet_name then
         return false, 'wrong-faction', requirement
@@ -553,13 +562,10 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
     local available, err, requirement = M.build_availability(
         player,
         planet_name,
-        build_type_index
+        build_type_index,
+        expected_level
     )
     if not available then return nil, err, requirement end
-    if expected_level ~= nil
-            and requirement.total_level ~= tonumber(expected_level) then
-        return nil, 'invalid-build-option', requirement
-    end
     if not experience.spend(
         player.index,
         requirement.pack,

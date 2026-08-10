@@ -106,11 +106,18 @@ local function ensure_diplomacy_state()
     end
 end
 
+local function reveal_surface_to_observer(force, surface)
+    if not (force and force.valid and surface and surface.valid) then return end
+    local platform = surface.platform
+    if platform and platform.valid then platform.hidden = false end
+    force.set_surface_hidden(surface, false)
+end
+
 local function reveal_all_surfaces_to_observer()
     local force = M.of_planet(OBSERVER_PLANET)
     if not (force and force.valid) then return end
     for _, surface in pairs(game.surfaces) do
-        if surface.valid then force.set_surface_hidden(surface, false) end
+        reveal_surface_to_observer(force, surface)
     end
 end
 
@@ -327,9 +334,7 @@ end)
 events.on(defines.events.on_surface_created, function(event)
     local force = M.of_planet(OBSERVER_PLANET)
     local surface = force and game.surfaces[event.surface_index]
-    if force and force.valid and surface and surface.valid then
-        force.set_surface_hidden(surface, false)
-    end
+    reveal_surface_to_observer(force, surface)
 end)
 
 return M

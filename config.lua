@@ -289,7 +289,7 @@ M.property_build_types = {
             fill_tile = 'empty-space',
             middle_tile = 'space-platform-foundation',
             middle_size = 16,
-            core_tile = 'lab-dark-1',
+            core_tile = 'tutorial-grid',
             core_size = 8,
         },
     },
