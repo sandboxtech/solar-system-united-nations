@@ -180,12 +180,19 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
     local chunk_size = tonumber(layout.chunk_size) or 0
     local chunk_inner_size = tonumber(layout.chunk_inner_size) or 0
     local chunk_margin = (chunk_size - chunk_inner_size) / 2
-    local railway_room_width = tonumber(layout.railway_room_width) or 0
+    local railway_corridor_length
+        = tonumber(layout.railway_corridor_length) or 0
     local railway_corridor_half
         = (tonumber(layout.railway_corridor_height) or 0) / 2
+    local width = math.floor(half_width * 2 + 0.5)
+    local height = math.floor(half_height * 2 + 0.5)
+    local left = -math.floor(width / 2)
+    local top = -math.floor(height / 2)
+    local right = left + width
+    local bottom = top + height
     local tiles = {}
-    for y = -half_height, half_height - 1 do
-        for x = -half_width, half_width - 1 do
+    for y = top, bottom - 1 do
+        for x = left, right - 1 do
             local in_core = core_half > 0
                 and x >= -core_half and x < core_half
                 and y >= -core_half and y < core_half
@@ -202,9 +209,10 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
                     end
                 end
             end
-            if not tile_name and railway_room_width > 0 then
-                local in_room = x < -half_width + railway_room_width
-                    or x >= half_width - railway_room_width
+            if not tile_name and railway_corridor_length > 0 then
+                local corridor_left = -math.floor(railway_corridor_length / 2)
+                local corridor_right = corridor_left + railway_corridor_length
+                local in_room = x < corridor_left or x >= corridor_right
                 local in_corridor = y >= -railway_corridor_half
                     and y < railway_corridor_half
                 if in_room or in_corridor then

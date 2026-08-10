@@ -501,11 +501,15 @@ function M.build_requirements(player, planet_name, build_type_index, selected_le
             or level < 0 or level > current_level then
         return nil
     end
-    local width = math.floor((build_type.base_width
-        + (build_type.width_per_level or 1) * level) / 2) * 2
+    local raw_width = build_type.base_width
+        + (build_type.width_per_level or 1) * level
+    local width = build_type.exact_dimensions and math.floor(raw_width)
+        or math.floor(raw_width / 2) * 2
     width = math.min(build_type.max_width, width)
-    local height = math.floor((build_type.height
-        + (build_type.height_per_level or 0) * level) / 2) * 2
+    local raw_height = build_type.height
+        + (build_type.height_per_level or 0) * level
+    local height = build_type.exact_dimensions and math.floor(raw_height)
+        or math.floor(raw_height / 2) * 2
     height = math.min(build_type.max_height, height)
     local experience_cost = config.property_build_experience_base
         + config.property_build_experience_per_level * level
