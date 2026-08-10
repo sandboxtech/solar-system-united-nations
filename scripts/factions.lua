@@ -84,8 +84,8 @@ local function configure_relations()
         for second = first + 1, #entries do
             local a = entries[first].force
             local b = entries[second].force
-            a.set_friend(b, false)
-            b.set_friend(a, false)
+            a.set_friend(b, true)
+            b.set_friend(a, true)
             a.set_cease_fire(b, true)
             b.set_cease_fire(a, true)
         end
