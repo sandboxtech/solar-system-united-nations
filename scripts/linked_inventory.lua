@@ -52,7 +52,20 @@ local function resolve_record(player_index)
             and chest.force == player.force) then
         return nil
     end
+    chest.operable = false
     return chest
+end
+
+function M.ensure()
+    state.ensure()
+    local indexes = {}
+    for player_index in pairs(storage.dropoffs) do
+        indexes[#indexes + 1] = player_index
+    end
+    table.sort(indexes)
+    for _, player_index in ipairs(indexes) do
+        resolve_record(player_index)
+    end
 end
 
 local function evict_previous(player, new_surface_name, new_position)

@@ -4,6 +4,7 @@ local gui = require('scripts.gui')
 local permissions = require('scripts.permissions')
 local properties = require('scripts.properties')
 local initial_technologies = require('scripts.initial_technologies')
+local linked_inventory = require('scripts.linked_inventory')
 local ships = require('scripts.ships')
 local disasters = require('scripts.disasters')
 local state = require('scripts.state')
@@ -15,6 +16,7 @@ local M = {}
 local function run()
     state.ensure()
     factions.ensure()
+    linked_inventory.ensure()
     for _, name in ipairs(config.public_planets) do
         surfaces.ensure_hospice(name)
     end
