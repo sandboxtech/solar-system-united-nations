@@ -446,7 +446,15 @@ local function update_property_salvage_action(player, content)
         'un.property-salvage-tooltip',
         settings.get('property_salvage_percent'),
         format_integer(value),
-    } or disabled_tooltip('salvage', err)
+    } or {
+        '',
+        disabled_tooltip('salvage', err),
+        '\n\n',
+        {
+            'un.property-salvage-rule-tooltip',
+            settings.get('property_salvage_percent'),
+        },
+    }
     if not available or button.tags.action ~= 'property-confirm-salvage'
             or button.tags.property_id ~= property.id then
         button.caption = {'un.property-salvage'}
@@ -791,14 +799,14 @@ local function render_ubi_section(content)
         value = 0,
         tooltip = ubi_tooltip,
     }
-    progress.style.width = 360
+    progress.style.width = 300
     local claim = content.add{
         type = 'button',
         name = UBI_CLAIM_NAME,
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
         tooltip = ubi_tooltip,
     }
-    claim.style.width = 360
+    claim.style.width = 300
 
     local kit = content.add{
         type = 'button',
@@ -855,6 +863,7 @@ local function render_ship_actions(player, content)
         type = 'button',
         name = SHIP_SCUTTLE_NAME,
         caption = {'un.ship-scuttle'},
+        tooltip = {'un.ship-scuttle-tooltip'},
     }
     content.add{type = 'label', name = SHIP_STATUS_NAME}
 end
@@ -1882,10 +1891,15 @@ local function update_frame(player)
         if kit and kit.valid then
             local can_buy, buy_error = starter.can_buy(player)
             kit.enabled = can_buy
-            kit.tooltip = can_buy and {'un.starter-kit-tooltip'}
-                or buy_error == 'insufficient-stamina'
+            local kit_details = {'un.starter-kit-tooltip'}
+            kit.tooltip = can_buy and kit_details or {
+                '',
+                buy_error == 'insufficient-stamina'
                     and {'un.starter-kit-insufficient'}
-                    or {'un.starter-kit-unavailable'}
+                    or {'un.starter-kit-unavailable'},
+                '\n\n',
+                kit_details,
+            }
             if kit.tags.action ~= 'starter-kit-confirm' then
                 kit.caption = {
                     'un.starter-kit-buy',
@@ -1900,16 +1914,22 @@ local function update_frame(player)
         if wood and wood.valid then
             local can_buy, buy_error = starter.can_buy_wood(player)
             wood.enabled = can_buy
-            wood.tooltip = can_buy and {
+            local wood_details = {
                 'un.wood-supply-tooltip',
                 config.wood_supply_count,
                 config.wood_supply_coin_cost,
                 config.wood_supply_stamina_cost,
-            } or buy_error == 'insufficient-credit'
-                and {'un.wood-supply-insufficient-coin'}
-                or buy_error == 'insufficient-stamina'
-                and {'un.wood-supply-insufficient-stamina'}
-                or {'un.wood-supply-unavailable'}
+            }
+            wood.tooltip = can_buy and wood_details or {
+                '',
+                buy_error == 'insufficient-credit'
+                    and {'un.wood-supply-insufficient-coin'}
+                    or buy_error == 'insufficient-stamina'
+                    and {'un.wood-supply-insufficient-stamina'}
+                    or {'un.wood-supply-unavailable'},
+                '\n\n',
+                wood_details,
+            }
             if wood.tags.action ~= 'wood-supply-confirm' then
                 wood.caption = {
                     'un.wood-supply-buy',
