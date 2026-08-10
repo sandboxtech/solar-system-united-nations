@@ -158,8 +158,8 @@ M.tech_leak_unlock_technology = M.faction_diplomacy_technology
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute
-M.logistic_network_roboport_limit = 100
-M.logistic_network_logistic_robot_limit = 1000
+M.logistic_network_roboport_limit = 32
+M.logistic_network_logistic_robot_limit = 320
 M.science_pack_credit = {
     ['automation-science-pack'] = 1,
     ['logistic-science-pack'] = 1,
