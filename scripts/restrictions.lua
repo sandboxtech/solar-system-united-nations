@@ -23,6 +23,12 @@ local RULE_SPECS = {
         key = 'initial_recipes',
         defaults = 'faction_initial_recipes',
         prototype = 'recipe',
+        initial_recipe = true,
+    },
+    ['enabled-recipe'] = {
+        key = 'enabled_recipes',
+        defaults = 'faction_enabled_recipes',
+        prototype = 'recipe',
     },
     ['disabled-tech'] = {
         key = 'disabled_technologies',
@@ -64,6 +70,7 @@ for _, planet_name in ipairs(config.public_planets) do
     RULE_ORDER[#RULE_ORDER + 1] = recursive_category
 end
 RULE_ORDER[#RULE_ORDER + 1] = 'initial-recipe'
+RULE_ORDER[#RULE_ORDER + 1] = 'enabled-recipe'
 RULE_ORDER[#RULE_ORDER + 1] = 'disabled-tech'
 RULE_ORDER[#RULE_ORDER + 1] = 'disabled-recipe'
 
@@ -182,13 +189,19 @@ end
 local function grant_all_initial(force, rules)
     local direct, recursive = initial_technology_sets(force, rules)
     grant_initial_sets(force, rules, direct, recursive)
+    for _, name in ipairs(sorted_names(rules.initial_recipes)) do
+        local recipe = force.recipes[name]
+        if recipe and recipe.valid and not rules.disabled_recipes[name] then
+            recipe.enabled = true
+        end
+    end
 end
 
 function M.apply(force)
     if not (force and force.valid) then return end
     local rules = ensure_rules()
 
-    for _, name in ipairs(sorted_names(rules.initial_recipes)) do
+    for _, name in ipairs(sorted_names(rules.enabled_recipes)) do
         local recipe = force.recipes[name]
         if recipe and recipe.valid then recipe.enabled = true end
     end
@@ -215,6 +228,19 @@ local function grant_all_initial_to_all()
     local rules = ensure_rules()
     for _, entry in ipairs(factions.all()) do
         grant_all_initial(entry.force, rules)
+        M.apply(entry.force)
+    end
+end
+
+local function grant_initial_recipes_to_all()
+    local rules = ensure_rules()
+    for _, entry in ipairs(factions.all()) do
+        for _, name in ipairs(sorted_names(rules.initial_recipes)) do
+            local recipe = entry.force.recipes[name]
+            if recipe and recipe.valid and not rules.disabled_recipes[name] then
+                recipe.enabled = true
+            end
+        end
         M.apply(entry.force)
     end
 end
@@ -248,6 +274,7 @@ end
 
 function M.repair()
     reset_recipe_states()
+    grant_initial_recipes_to_all()
     M.ensure()
 end
 
@@ -270,6 +297,7 @@ local function rebuild_after_change(previous_disabled_technologies)
         rules.disabled_technologies
     )
     apply_all()
+    grant_initial_recipes_to_all()
 end
 
 local function command_reply(command, message)
@@ -333,7 +361,8 @@ local function rules_command(command)
             )
         end
         rebuild_after_change(previous)
-        if category == '' or RULE_SPECS[category].initial_technology then
+        if category == '' or RULE_SPECS[category].initial_technology
+                or RULE_SPECS[category].initial_recipe then
             grant_all_initial_to_all()
         end
         command_reply(command, {'un.force-rules-reset'})
@@ -356,6 +385,8 @@ local function rules_command(command)
     rebuild_after_change(previous)
     if action == 'add' and spec.initial_technology then
         grant_initial_rule(name, spec)
+    elseif action == 'add' and spec.initial_recipe then
+        grant_initial_recipes_to_all()
     end
     command_reply(command, {'un.force-rules-updated', category, name})
 end

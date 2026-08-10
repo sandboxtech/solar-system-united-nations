@@ -71,7 +71,8 @@ M.faction_initial_technologies_recursive_by_planet = {
     fulgora = {},
     aquilo = {},
 }
-M.faction_initial_recipes = {'lightning-rod'}
+M.faction_initial_recipes = {}
+M.faction_enabled_recipes = {'lightning-rod'}
 M.faction_disabled_technologies = {}
 M.faction_disabled_recipes = {'logistic-robot'}
 M.faction_chat_colors = {
@@ -192,6 +193,12 @@ M.property_surface_prefix = 'un-property-'
 M.property_default_tax = 0.10
 M.property_solar_multiplier = 0.10
 M.property_min_brightness = 0.05
+M.property_daytime_parameters = {
+    dusk = 0.25,
+    evening = 0.45,
+    morning = 0.55,
+    dawn = 0.75,
+}
 M.property_link_id_unowned = 0
 M.property_max_size = 256
 M.property_name_max_characters = 64

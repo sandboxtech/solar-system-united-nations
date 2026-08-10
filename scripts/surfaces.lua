@@ -251,24 +251,29 @@ end
 
 function M.sync_property_environment(surface, min_brightness, planet_name)
     if not (surface and surface.valid) then return false end
-    local planet = game.surfaces[planet_name or 'nauvis']
+    local planet = game.planets[planet_name or 'nauvis']
     if not (planet and planet.valid) then return false end
+    local defaults = planet.prototype.surface_properties or {}
     local property_names = {}
     for name in pairs(prototypes.surface_property) do
         property_names[#property_names + 1] = name
     end
     table.sort(property_names)
     for _, name in ipairs(property_names) do
-        local ok, value = pcall(function() return planet.get_property(name) end)
-        if ok then
-            pcall(function() surface.set_property(name, value) end)
+        local value = defaults[name]
+        if value == nil then
+            value = prototypes.surface_property[name].default_value
         end
+        pcall(function() surface.set_property(name, value) end)
     end
-    surface.daytime_parameters = planet.daytime_parameters
-    surface.ticks_per_day = planet.ticks_per_day
-    surface.daytime = planet.daytime
-    surface.always_day = planet.always_day
-    surface.freeze_daytime = planet.freeze_daytime
+    surface.daytime_parameters = config.property_daytime_parameters
+    surface.ticks_per_day = math.max(1, math.floor(
+        (defaults['day-night-cycle']
+            or prototypes.surface_property['day-night-cycle'].default_value)
+            + 0.5
+    ))
+    surface.always_day = false
+    surface.freeze_daytime = false
     surface.solar_power_multiplier = config.property_solar_multiplier
     surface.min_brightness = min_brightness or config.property_min_brightness
     return true

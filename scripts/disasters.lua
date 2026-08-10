@@ -663,8 +663,6 @@ local function finish_reset(name, surface, record)
         end
     end
     apply_round_environment(name, surface, record)
-    surfaces.sync_hospice_environment(name)
-    surfaces.sync_all_property_environments()
     local force = factions.of_planet(name)
     if force and force.valid then force.set_spawn_position({0, 0}, surface) end
     surface.request_to_generate_chunks({0, 0}, 1)
