@@ -748,8 +748,38 @@ function M.ensure()
     if not settings.get('planet_resets_enabled') then M.apply_enabled(false) end
 end
 
+local function active_reset_name()
+    for _, name in ipairs(config.public_planets) do
+        local record = storage.public_planet_resets[name]
+        if record and record.state == 'clearing' then return name end
+    end
+    return nil
+end
+
+function M.request_reset(name)
+    local valid_name = false
+    for _, candidate in ipairs(config.public_planets) do
+        if candidate == name then valid_name = true; break end
+    end
+    if not valid_name then return false, 'invalid-planet' end
+
+    local active = active_reset_name()
+    if active then return false, 'reset-in-progress', active end
+
+    local record, surface = ensure_record(name)
+    if record.state ~= 'open' then
+        return false, 'reset-in-progress', name
+    end
+    if not (surface and surface.valid) then return false, 'surface-missing' end
+
+    begin_reset(name, surface, record)
+    if record.state ~= 'clearing' then return false, 'reset-failed' end
+    return true
+end
+
 local function check_resets()
     if not settings.get('planet_resets_enabled') then return end
+    local reset_in_progress = active_reset_name() ~= nil
     for _, name in ipairs(config.public_planets) do
         local record, surface = ensure_record(name)
         if record.state == 'open' and record.next_tick then
@@ -761,10 +791,51 @@ local function check_resets()
                     game.print({'un.planet-reset-warning', planet_label(name), minutes})
                 end
             end
-            if left <= 0 and surface and surface.valid then
+            if left <= 0 and not reset_in_progress
+                    and surface and surface.valid then
                 begin_reset(name, surface, record)
+                -- surface.clear(true) is asynchronous. Keep every other
+                -- overdue planet queued until this one's completion event.
+                if record.state == 'clearing' then reset_in_progress = true end
             end
         end
+    end
+end
+
+local function command_reply(command, message)
+    local player = command.player_index and game.get_player(command.player_index)
+    if player then player.print(message) else localised_print(message) end
+end
+
+local function reset_command(command)
+    local player = command.player_index and game.get_player(command.player_index)
+    if player and not player.admin then
+        player.print({'un.admin-only'})
+        return
+    end
+    local name = (command.parameter or ''):match('^%s*(%S+)%s*$')
+    if not name then
+        command_reply(command, {'un.planet-reset-command-usage'})
+        return
+    end
+    local ok, err, active = M.request_reset(name)
+    if ok then
+        command_reply(command, {
+            'un.planet-reset-command-started',
+            planet_label(name),
+        })
+    elseif err == 'reset-in-progress' then
+        command_reply(command, {
+            'un.planet-reset-command-busy',
+            planet_label(active),
+        })
+    elseif err == 'invalid-planet' then
+        command_reply(command, {'un.planet-reset-command-usage'})
+    else
+        command_reply(command, {
+            'un.planet-reset-command-failed',
+            planet_label(name),
+        })
     end
 end
 
@@ -791,5 +862,10 @@ events.on(defines.events.on_player_changed_surface, function(event)
 end)
 
 scheduler.every(config.public_planet_check_ticks, check_resets)
+commands.add_command(
+    'un-reset-planet',
+    {'un.planet-reset-command-help'},
+    reset_command
+)
 
 return M

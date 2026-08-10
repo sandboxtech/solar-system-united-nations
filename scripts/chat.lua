@@ -16,6 +16,9 @@ events.on(defines.events.on_console_chat, function(event)
         player.name,
         event.message,
     }
+    -- Factorio already delivers the original line inside the sender's force.
+    -- Forward one labelled copy to every other faction so cross-force chat is
+    -- audible without duplicating the message for the sender's own faction.
     for _, target_planet in ipairs(config.public_planets) do
         if target_planet ~= source_planet then
             local force = factions.of_planet(target_planet)

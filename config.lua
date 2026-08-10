@@ -124,9 +124,9 @@ M.property_sample_planets = M.public_planets
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 3000
 M.property_build_experience_per_point = 10000
+M.property_build_base_lifetime_hours = 30
 M.property_build_stamina_cost = 50000
 M.property_build_price_per_experience = 10
-M.property_build_cooldown_hours = 20
 M.property_build_pack_by_planet = {
     nauvis = 'automation-science-pack',
     vulcanus = 'automation-science-pack',
@@ -135,9 +135,9 @@ M.property_build_pack_by_planet = {
     aquilo = 'automation-science-pack',
 }
 M.property_lifetime_options = {
-    {hours = 30, cost = 1, decay_hours = 3},
-    {hours = 120, cost = 3, decay_hours = 12},
-    {hours = 480, cost = 5, decay_hours = 48},
+    {hours = 30, decay_hours = 3},
+    {hours = 120, decay_hours = 12},
+    {hours = 480, decay_hours = 48},
 }
 M.property_size_options = {
     {width = 64, height = 32, cost = 1},

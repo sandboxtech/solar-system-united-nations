@@ -473,9 +473,10 @@ function M.build_lifetime_options()
     for index, option in ipairs(config.property_lifetime_options) do
         result[index] = {
             hours = settings.get('property_lifetime_' .. index .. '_hours'),
-            cost = option.cost,
             decay_hours = settings.get('property_decay_' .. index .. '_hours'),
         }
+        result[index].cost_multiplier = result[index].hours
+            / config.property_build_base_lifetime_hours
     end
     return result
 end
@@ -492,15 +493,10 @@ function M.build_requirements(planet_name, lifetime_index, size_index)
         pack = pack,
         lifetime = lifetime,
         size = size,
-        experience_cost = config.property_build_experience_per_point
-            * lifetime.cost * size.cost,
+        experience_cost = math.ceil(config.property_build_experience_per_point
+            * lifetime.cost_multiplier * size.cost),
         stamina_cost = config.property_build_stamina_cost,
     }
-end
-
-function M.build_cooldown_left_ticks(player_index)
-    local account = economy.ensure_account(player_index)
-    return math.max(0, (account.property_build_ready_tick or 0) - game.tick)
 end
 
 function M.build_availability(player, planet_name, lifetime_index, size_index)
@@ -512,9 +508,6 @@ function M.build_availability(player, planet_name, lifetime_index, size_index)
     if not requirement then return false, 'invalid-build-option' end
     if factions.of_player(player) ~= planet_name then
         return false, 'wrong-faction', requirement
-    end
-    if M.build_cooldown_left_ticks(player.index) > 0 then
-        return false, 'build-cooldown', requirement
     end
     if #M.list(planet_name) >= settings.get('property_limit_per_planet') then
         return false, 'property-limit', requirement
@@ -587,8 +580,6 @@ function M.build(player, planet_name, lifetime_index, size_index, custom_name)
         end
         return nil, create_err, requirement
     end
-    economy.ensure_account(player.index).property_build_ready_tick = game.tick
-        + config.property_build_cooldown_hours * config.ticks_per_hour
     game.print({
         'un.property-built-broadcast',
         player.name,

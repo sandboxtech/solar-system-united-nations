@@ -37,14 +37,15 @@ local function resolve_record(player_index)
     state.ensure()
     local record = storage.dropoffs[player_index]
     if not record then return nil end
-    if record.surface ~= 'nauvis' then return nil end
+    local player = game.get_player(player_index)
+    local home_planet = player and factions.of_player(player)
+    if not home_planet or record.surface ~= home_planet then return nil end
     local surface = game.surfaces[record.surface]
     if not (surface and surface.valid) then return nil end
     local chest = surface.find_entity(
         config.linked_chest_name,
         {record.x, record.y}
     )
-    local player = game.get_player(player_index)
     if not (chest and chest.valid
             and player
             and chest.link_id == player_index
@@ -79,7 +80,11 @@ local function on_player_built(event)
     if not player then return end
 
     if entity.name ~= config.wooden_chest_name then return end
-    if entity.surface.name ~= 'nauvis' then return end
+    local home_planet = factions.of_player(player)
+    if not home_planet or entity.surface.name ~= home_planet
+            or entity.force ~= player.force then
+        return
+    end
 
     state.ensure()
     evict_previous(player, entity.surface.name, entity.position)

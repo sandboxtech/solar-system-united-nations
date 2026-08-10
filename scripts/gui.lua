@@ -59,8 +59,6 @@ local SHIP_ACTIONS_NAME = 'un_ship_actions'
 local SHIP_CREATE_NAME = 'un_ship_create'
 local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local SHIP_TABLE_NAME = 'un_ship_table'
-local PROPERTY_SORT_FLOW_NAME = 'un_property_sort_flow'
-local PROPERTY_SORT_NAME = 'un_property_sort'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
 local PROPERTY_BUILD_NAME_NAME = 'un_property_build_name'
@@ -70,7 +68,6 @@ local PROPERTY_BUILD_COST_NAME = 'un_property_build_cost'
 local PROPERTY_BUILD_AVAILABLE_NAME = 'un_property_build_available'
 local PROPERTY_BUILD_STAMINA_COST_NAME = 'un_property_build_stamina_cost'
 local PROPERTY_BUILD_STAMINA_AVAILABLE_NAME = 'un_property_build_stamina_available'
-local PROPERTY_BUILD_COOLDOWN_NAME = 'un_property_build_cooldown'
 local PROPERTY_BUILD_BUTTON_NAME = 'un_property_build_button'
 local EXPERIENCE_SUMMARY_NAME = 'un_experience_summary'
 local EXPERIENCE_TABLE_NAME = 'un_experience_table'
@@ -123,11 +120,14 @@ local open_players = {}
 local crime_error_caption
 local update_crime_action
 
-local PROPERTY_SORT_OPTIONS = {
-    {'un.property-sort-expiry-ascending'},
-    {'un.property-sort-expiry-descending'},
-    {'un.property-sort-price-ascending'},
-    {'un.property-sort-price-descending'},
+local PERSONAL_ACTION_WIDTH = 300
+local PROPERTY_SORT_FIELDS = {
+    name = true,
+    owner = true,
+    expiry = true,
+    price = true,
+    change = true,
+    period = true,
 }
 
 local function update_home_button(player, hud)
@@ -389,21 +389,42 @@ local function set_frame_state(frame, page, property_revision)
     frame.tags = tags
 end
 
-local function property_sort_index(frame)
-    local index = tonumber(frame.tags.property_sort) or 1
-    if index < 1 or index > #PROPERTY_SORT_OPTIONS then return 1 end
-    return math.floor(index)
+local function property_sort_state(frame)
+    local field = frame.tags.property_sort_field
+    if not PROPERTY_SORT_FIELDS[field] then field = 'expiry' end
+    return field, frame.tags.property_sort_descending == true
 end
 
-local function sort_properties(property_list, sort_index)
-    local values = {}
-    local by_expiry = sort_index == 1 or sort_index == 2
-    for _, property in ipairs(property_list) do
-        values[property.id] = by_expiry
-            and (property.expires_tick or math.huge)
-            or properties.current_price(property)
+local function property_sort_name(property)
+    if type(property.custom_name) == 'string' then
+        return string.lower(property.custom_name)
     end
-    local descending = sort_index == 2 or sort_index == 4
+    local owner = properties.owner_name(property) or ''
+    local number = property.owner_index and property.owner_property_number
+        or property.planet_property_number or property.id
+    return string.lower(owner) .. string.format('\0%012d', number or 0)
+end
+
+local function sort_properties(property_list, field, descending)
+    local values = {}
+    for _, property in ipairs(property_list) do
+        local price = properties.current_price(property)
+        if field == 'name' then
+            values[property.id] = property_sort_name(property)
+        elseif field == 'owner' then
+            values[property.id] = string.lower(
+                properties.owner_name(property) or ''
+            )
+        elseif field == 'price' then
+            values[property.id] = price
+        elseif field == 'change' then
+            values[property.id] = price - property.base_price
+        elseif field == 'period' then
+            values[property.id] = property.decay_ticks
+        else
+            values[property.id] = property.expires_tick or math.huge
+        end
+    end
     table.sort(property_list, function(a, b)
         local a_value = values[a.id]
         local b_value = values[b.id]
@@ -413,6 +434,18 @@ local function sort_properties(property_list, sort_index)
         end
         return a.id < b.id
     end)
+end
+
+local function add_property_sort_header(list, frame, field, caption)
+    local selected, descending = property_sort_state(frame)
+    local marker = selected == field and (descending and ' ▼' or ' ▲') or ''
+    local button = list.add{
+        type = 'button',
+        caption = {'', caption, marker},
+        tooltip = {'un.property-sort-column-tooltip'},
+        tags = {action = 'property-sort-column', field = field},
+    }
+    button.style.horizontally_stretchable = true
 end
 
 local function render_property_access_section(player, content)
@@ -472,8 +505,6 @@ local function render_property_table(player, frame, content)
     if old_crime and old_crime.valid then old_crime.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
     if old_access and old_access.valid then old_access.destroy() end
-    local old_sort = content[PROPERTY_SORT_FLOW_NAME]
-    if old_sort and old_sort.valid then old_sort.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
     local selected = factions.of_player(player) or 'nauvis'
@@ -481,8 +512,8 @@ local function render_property_table(player, frame, content)
     tags.property_planet = selected
     frame.tags = tags
     local property_list = properties.list(selected)
-    local sort_index = property_sort_index(frame)
-    sort_properties(property_list, sort_index)
+    local sort_field, sort_descending = property_sort_state(frame)
+    sort_properties(property_list, sort_field, sort_descending)
     local header = content.add{
         type = 'flow',
         name = PROPERTY_HEADER_NAME,
@@ -517,19 +548,6 @@ local function render_property_table(player, frame, content)
         },
     }
     crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
-    local sort_flow = content.add{
-        type = 'flow',
-        name = PROPERTY_SORT_FLOW_NAME,
-        direction = 'horizontal',
-    }
-    sort_flow.style.vertical_align = 'center'
-    sort_flow.add{type = 'label', caption = {'un.property-sort-label'}}
-    sort_flow.add{
-        type = 'drop-down',
-        name = PROPERTY_SORT_NAME,
-        items = PROPERTY_SORT_OPTIONS,
-        selected_index = sort_index,
-    }
     if properties.owned_count(player.index) > 0 then
         render_property_access_section(player, content)
     end
@@ -539,12 +557,24 @@ local function render_property_table(player, frame, content)
         column_count = 8,
         style = 'bordered_table',
     }
-    list.add{type = 'label', caption = {'un.property-column-name'}}
-    list.add{type = 'label', caption = {'un.property-column-owner'}}
-    list.add{type = 'label', caption = {'un.property-column-lifetime'}}
-    list.add{type = 'label', caption = {'un.property-column-price'}}
-    list.add{type = 'label', caption = {'un.property-column-price-change'}}
-    list.add{type = 'label', caption = {'un.property-column-price-period'}}
+    add_property_sort_header(
+        list, frame, 'name', {'un.property-column-name'}
+    )
+    add_property_sort_header(
+        list, frame, 'owner', {'un.property-column-owner'}
+    )
+    add_property_sort_header(
+        list, frame, 'expiry', {'un.property-column-lifetime'}
+    )
+    add_property_sort_header(
+        list, frame, 'price', {'un.property-column-price'}
+    )
+    add_property_sort_header(
+        list, frame, 'change', {'un.property-column-price-change'}
+    )
+    add_property_sort_header(
+        list, frame, 'period', {'un.property-column-price-period'}
+    )
     list.add{type = 'label', caption = {'un.property-buy'}}
     list.add{type = 'label', caption = {'un.property-enter'}}
 
@@ -611,7 +641,8 @@ local function render_property_table(player, frame, content)
     end
     set_frame_state(frame, 'property', storage.property_revision or 0)
     local tags = frame.tags
-    tags.property_sort = sort_index
+    tags.property_sort_field = sort_field
+    tags.property_sort_descending = sort_descending
     tags.property_sort_bucket = math.floor(game.tick / config.ticks_per_minute)
     frame.tags = tags
     update_crime_action(player, content)
@@ -1448,7 +1479,10 @@ local function render_help_page(player, frame, content, mode)
         local property = add_help_card(details, {'un.help-card-property'})
         add_help_line(property, {
             'un.help-brief-property',
+            config.property_build_experience_per_point,
             config.property_build_stamina_cost,
+            config.stamina_max,
+            config.property_build_cooldown_hours,
         })
         add_help_gap(details)
         local travel = add_help_card(details, {'un.help-card-travel'})
