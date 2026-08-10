@@ -370,6 +370,9 @@ local function create(spec)
         lifetime_hours = lifetime_hours,
         permanent = permanent,
         construction_value = tonumber(spec.construction_value),
+        construction_type = type(spec.construction_type) == 'string'
+            and spec.construction_type or nil,
+        construction_level = tonumber(spec.construction_level),
         planet_property_number = permanent
             and next_planet_property_number(sample_planet, id) or nil,
         system_key = spec.system_key,
@@ -468,19 +471,6 @@ function M.left_ticks(property)
     return math.max(0, property.expires_tick - game.tick)
 end
 
-function M.build_lifetime_options()
-    local result = {}
-    for index, option in ipairs(config.property_lifetime_options) do
-        result[index] = {
-            hours = settings.get('property_lifetime_' .. index .. '_hours'),
-            decay_hours = settings.get('property_decay_' .. index .. '_hours'),
-        }
-        result[index].cost_multiplier = result[index].hours
-            / config.property_build_base_lifetime_hours
-    end
-    return result
-end
-
 function M.build_requirements(player, planet_name, build_type_index)
     local build_type = config.property_build_types[tonumber(build_type_index)]
     if not (player and player.valid and build_planets[planet_name]
@@ -575,6 +565,8 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         height = requirement.size.height,
         custom_name = normalized_name,
         construction_value = requirement.initial_price,
+        construction_type = requirement.build_type.key,
+        construction_level = requirement.total_level,
     })
     if not ok or not property then
         experience.record(player.index, {{

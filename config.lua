@@ -239,8 +239,6 @@ M.property_salvage_percent = 20
 M.property_sample_planets = M.public_planets
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 3000
-M.property_build_experience_per_point = 10000
-M.property_build_base_lifetime_hours = 30
 M.property_build_stamina_cost = 50000
 M.property_build_price_per_experience = 10
 M.property_build_experience_base = 1000
@@ -266,23 +264,6 @@ M.property_build_types = {
         base_lifetime_hours = 24,
         lifetime_hours_per_level = 1,
     },
-}
-M.property_build_pack_by_planet = {
-    nauvis = 'automation-science-pack',
-    vulcanus = 'automation-science-pack',
-    gleba = 'automation-science-pack',
-    fulgora = 'automation-science-pack',
-    aquilo = 'automation-science-pack',
-}
-M.property_lifetime_options = {
-    {hours = 30, decay_hours = 3},
-    {hours = 120, decay_hours = 12},
-    {hours = 480, decay_hours = 48},
-}
-M.property_size_options = {
-    {width = 64, height = 32, cost = 1},
-    {width = 128, height = 64, cost = 3},
-    {width = 256, height = 128, cost = 5},
 }
 M.property_lifecycle_ticks = M.ticks_per_minute
 M.property_permanent_defaults = {

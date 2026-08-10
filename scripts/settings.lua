@@ -83,36 +83,6 @@ local DEFINITIONS = {
         min = 0.01,
         max = 100,
     },
-    property_lifetime_1_hours = {
-        default = config.property_lifetime_options[1].hours,
-        min = 0.1,
-        max = 100000,
-    },
-    property_lifetime_2_hours = {
-        default = config.property_lifetime_options[2].hours,
-        min = 0.1,
-        max = 100000,
-    },
-    property_lifetime_3_hours = {
-        default = config.property_lifetime_options[3].hours,
-        min = 0.1,
-        max = 100000,
-    },
-    property_decay_1_hours = {
-        default = config.property_lifetime_options[1].decay_hours,
-        min = 0.1,
-        max = 100000,
-    },
-    property_decay_2_hours = {
-        default = config.property_lifetime_options[2].decay_hours,
-        min = 0.1,
-        max = 100000,
-    },
-    property_decay_3_hours = {
-        default = config.property_lifetime_options[3].decay_hours,
-        min = 0.1,
-        max = 100000,
-    },
     tech_leak_interval_hours = {
         default = config.tech_leak_interval_hours,
         min = 0.1,

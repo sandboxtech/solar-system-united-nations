@@ -485,6 +485,17 @@ local function property_lifetime_caption(property)
     return format_countdown(properties.left_ticks(property))
 end
 
+local function property_construction_caption(property)
+    if type(property.construction_type) ~= 'string'
+            or type(property.construction_level) ~= 'number' then
+        return ''
+    end
+    return {
+        'un.property-construction-' .. property.construction_type,
+        format_integer(property.construction_level),
+    }
+end
+
 local function set_frame_state(frame, page, property_revision)
     local tags = frame.tags
     tags.page = page
@@ -704,12 +715,17 @@ local function render_property_table(player, frame, content)
     local list = scroll.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
-        column_count = read_only and 6 or 8,
+        column_count = read_only and 7 or 9,
         style = 'bordered_table',
     }
     add_property_sort_header(
         list, frame, 'name', {'un.property-column-name'}
     )
+    list.add{
+        type = 'label',
+        caption = {'un.property-column-construction'},
+        tooltip = {'un.property-construction-tooltip'},
+    }
     add_property_sort_header(
         list, frame, 'owner', {'un.property-column-owner'}
     )
@@ -735,6 +751,10 @@ local function render_property_table(player, frame, content)
             type = 'label',
             caption = properties.surface_display_name(property),
             tooltip = properties.feature_description(property),
+        }
+        list.add{
+            type = 'label',
+            caption = property_construction_caption(property),
         }
         local owner = properties.owner_name(property)
         list.add{
