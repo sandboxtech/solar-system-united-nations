@@ -5,13 +5,19 @@ local state = require('scripts.state')
 
 local M = {}
 
-local TRIGGER_TOKEN = '@trigger'
 local RULE_SPECS = {
     ['initial-tech'] = {
         key = 'initial_technologies',
         defaults = 'faction_initial_technologies',
         prototype = 'technology',
-        trigger_token = true,
+        initial_technology = true,
+    },
+    ['initial-tech-recursive'] = {
+        key = 'initial_technologies_recursive',
+        defaults = 'faction_initial_technologies_recursive',
+        prototype = 'technology',
+        initial_technology = true,
+        recursive = true,
     },
     ['initial-recipe'] = {
         key = 'initial_recipes',
@@ -31,10 +37,35 @@ local RULE_SPECS = {
 }
 local RULE_ORDER = {
     'initial-tech',
-    'initial-recipe',
-    'disabled-tech',
-    'disabled-recipe',
+    'initial-tech-recursive',
 }
+for _, planet_name in ipairs(config.public_planets) do
+    local direct_category = 'initial-tech-' .. planet_name
+    RULE_SPECS[direct_category] = {
+        key = 'initial_technologies_' .. planet_name,
+        defaults = 'faction_initial_technologies_by_planet',
+        defaults_planet = planet_name,
+        prototype = 'technology',
+        initial_technology = true,
+        planet = planet_name,
+    }
+    RULE_ORDER[#RULE_ORDER + 1] = direct_category
+
+    local recursive_category = 'initial-tech-recursive-' .. planet_name
+    RULE_SPECS[recursive_category] = {
+        key = 'initial_technologies_recursive_' .. planet_name,
+        defaults = 'faction_initial_technologies_recursive_by_planet',
+        defaults_planet = planet_name,
+        prototype = 'technology',
+        initial_technology = true,
+        recursive = true,
+        planet = planet_name,
+    }
+    RULE_ORDER[#RULE_ORDER + 1] = recursive_category
+end
+RULE_ORDER[#RULE_ORDER + 1] = 'initial-recipe'
+RULE_ORDER[#RULE_ORDER + 1] = 'disabled-tech'
+RULE_ORDER[#RULE_ORDER + 1] = 'disabled-recipe'
 
 local function set_from_list(list)
     local result = {}
@@ -44,11 +75,19 @@ local function set_from_list(list)
     return result
 end
 
+local function configured_list(spec)
+    local configured = config[spec.defaults]
+    if spec.defaults_planet then
+        return configured and configured[spec.defaults_planet] or {}
+    end
+    return configured
+end
+
 local function default_rules()
     local result = {}
     for _, category in ipairs(RULE_ORDER) do
         local spec = RULE_SPECS[category]
-        result[spec.key] = set_from_list(config[spec.defaults])
+        result[spec.key] = set_from_list(configured_list(spec))
     end
     return result
 end
@@ -61,9 +100,9 @@ local function ensure_rules()
     for _, category in ipairs(RULE_ORDER) do
         local key = RULE_SPECS[category].key
         if type(storage.faction_rules[key]) ~= 'table' then
-            storage.faction_rules[key] = set_from_list(
-                config[RULE_SPECS[category].defaults]
-            )
+            storage.faction_rules[key] = set_from_list(configured_list(
+                RULE_SPECS[category]
+            ))
         end
     end
     return storage.faction_rules
@@ -78,19 +117,26 @@ local function sorted_names(set)
     return result
 end
 
-local function initial_technology_roots(force, rules)
-    local roots = {}
-    if rules.initial_technologies[TRIGGER_TOKEN] then
-        for name, technology in pairs(force.technologies) do
-            if technology.prototype.research_trigger then
-                roots[name] = true
-            end
-        end
+local function merge_set(target, source)
+    for name, enabled in pairs(source or {}) do
+        if enabled then target[name] = true end
     end
-    for _, name in ipairs(sorted_names(rules.initial_technologies)) do
-        if name ~= TRIGGER_TOKEN then roots[name] = true end
+end
+
+local function initial_technology_sets(force, rules)
+    local direct = {}
+    local recursive = {}
+    merge_set(direct, rules.initial_technologies)
+    merge_set(recursive, rules.initial_technologies_recursive)
+    local planet_name = factions.planet_of_force(force)
+    if planet_name then
+        merge_set(direct, rules['initial_technologies_' .. planet_name])
+        merge_set(
+            recursive,
+            rules['initial_technologies_recursive_' .. planet_name]
+        )
     end
-    return roots
+    return direct, recursive
 end
 
 local function recursive_technology_names(force, roots)
@@ -115,19 +161,27 @@ local function recursive_technology_names(force, roots)
     return result
 end
 
-local function grant_roots(force, rules, roots)
-    for _, name in ipairs(recursive_technology_names(force, roots)) do
-        local technology = force.technologies[name]
-        if technology and technology.valid
-                and not rules.disabled_technologies[name] then
-            technology.enabled = true
-            if not technology.researched then technology.researched = true end
-        end
+local function grant_technology(force, rules, name)
+    local technology = force.technologies[name]
+    if technology and technology.valid
+            and not rules.disabled_technologies[name] then
+        technology.enabled = true
+        if not technology.researched then technology.researched = true end
+    end
+end
+
+local function grant_initial_sets(force, rules, direct, recursive)
+    for _, name in ipairs(sorted_names(direct)) do
+        grant_technology(force, rules, name)
+    end
+    for _, name in ipairs(recursive_technology_names(force, recursive)) do
+        grant_technology(force, rules, name)
     end
 end
 
 local function grant_all_initial(force, rules)
-    grant_roots(force, rules, initial_technology_roots(force, rules))
+    local direct, recursive = initial_technology_sets(force, rules)
+    grant_initial_sets(force, rules, direct, recursive)
 end
 
 function M.apply(force)
@@ -165,21 +219,15 @@ local function grant_all_initial_to_all()
     end
 end
 
-local function grant_initial_rule_to_all(name)
+local function grant_initial_rule(name, spec)
     local rules = ensure_rules()
     for _, entry in ipairs(factions.all()) do
-        local roots = {}
-        if name == TRIGGER_TOKEN then
-            for technology_name, technology in pairs(entry.force.technologies) do
-                if technology.prototype.research_trigger then
-                    roots[technology_name] = true
-                end
-            end
-        else
-            roots[name] = true
+        if not spec.planet or entry.planet_name == spec.planet then
+            local direct = spec.recursive and {} or {[name] = true}
+            local recursive = spec.recursive and {[name] = true} or {}
+            grant_initial_sets(entry.force, rules, direct, recursive)
+            M.apply(entry.force)
         end
-        grant_roots(entry.force, rules, roots)
-        M.apply(entry.force)
     end
 end
 
@@ -236,7 +284,6 @@ local function copy_set(source)
 end
 
 local function valid_rule_name(spec, name)
-    if spec.trigger_token and name == TRIGGER_TOKEN then return true end
     return prototypes[spec.prototype][name] ~= nil
 end
 
@@ -281,10 +328,12 @@ local function rules_command(command)
                 command_reply(command, {'un.force-rules-usage'})
                 return
             end
-            storage.faction_rules[spec.key] = set_from_list(config[spec.defaults])
+            storage.faction_rules[spec.key] = set_from_list(
+                configured_list(spec)
+            )
         end
         rebuild_after_change(previous)
-        if category == '' or category == 'initial-tech' then
+        if category == '' or RULE_SPECS[category].initial_technology then
             grant_all_initial_to_all()
         end
         command_reply(command, {'un.force-rules-reset'})
@@ -305,8 +354,8 @@ local function rules_command(command)
     local previous = copy_set(rules.disabled_technologies)
     rules[spec.key][name] = action == 'add' or nil
     rebuild_after_change(previous)
-    if action == 'add' and category == 'initial-tech' then
-        grant_initial_rule_to_all(name)
+    if action == 'add' and spec.initial_technology then
+        grant_initial_rule(name, spec)
     end
     command_reply(command, {'un.force-rules-updated', category, name})
 end

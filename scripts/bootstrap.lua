@@ -19,6 +19,7 @@ local function run(repair)
         surfaces.ensure_hospice(name)
     end
     disasters.ensure()
+    surfaces.sync_all_hospice_environments()
     technology_decay.ensure()
     properties.ensure()
     permissions.ensure()

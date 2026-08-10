@@ -243,6 +243,7 @@ function M.ensure_hospice(planet_name)
         'un.hospice-name-planet',
         {'space-location-name.' .. planet_name},
     }
+    M.sync_property_environment(surface, nil, planet_name)
     local force = factions.of_planet(planet_name)
     if force and force.valid then force.set_spawn_position({0, 0}, surface) end
     return surface
@@ -271,6 +272,19 @@ function M.sync_property_environment(surface, min_brightness, planet_name)
     surface.solar_power_multiplier = config.property_solar_multiplier
     surface.min_brightness = min_brightness or config.property_min_brightness
     return true
+end
+
+function M.sync_hospice_environment(planet_name)
+    planet_name = public_planets[planet_name] and planet_name or 'nauvis'
+    local surface = game.surfaces[M.hospice_surface_name(planet_name)]
+    if not (surface and surface.valid) then return false end
+    return M.sync_property_environment(surface, nil, planet_name)
+end
+
+function M.sync_all_hospice_environments()
+    for _, planet_name in ipairs(config.public_planets) do
+        M.sync_hospice_environment(planet_name)
+    end
 end
 
 function M.sync_all_property_environments()

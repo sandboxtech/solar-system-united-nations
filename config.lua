@@ -7,12 +7,71 @@ M.ticks_per_hour = 60 * M.ticks_per_minute
 M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
 M.faction_initial_technologies = {
-    '@trigger',
+    -- Generic trigger technologies.
+    'steam-power',
+    'electronics',
+    'automation-science-pack',
+    'steel-axe',
+    'oil-processing',
+    -- 'uranium-processing',
+    'space-platform',
+    'space-science-pack',
+}
+M.faction_initial_technologies_by_planet = {
+    -- Nauvis is the default location and has no planet-discovery-nauvis
+    -- technology prototype.
+    nauvis = {},
+    vulcanus = {
+        'planet-discovery-vulcanus',
+        'calcite-processing',
+        'tungsten-carbide',
+        'big-mining-drill',
+        'foundry',
+        'tungsten-steel',
+        'metallurgic-science-pack',
+    },
+    gleba = {
+        'planet-discovery-gleba',
+        'agriculture',
+        'heating-tower',
+        'yumako',
+        'biochamber',
+        'jellynut',
+        'bioflux',
+        'artificial-soil',
+        'bacteria-cultivation',
+        'bioflux-processing',
+        'agricultural-science-pack',
+        'biter-egg-handling',
+    },
+    fulgora = {
+        'planet-discovery-fulgora',
+        'recycling',
+        'holmium-processing',
+        'electromagnetic-plant',
+        'electromagnetic-science-pack',
+    },
+    aquilo = {
+        'planet-discovery-aquilo',
+        'heating-tower',
+        'lithium-processing',
+        'cryogenic-plant',
+        'cryogenic-science-pack',
+    },
+}
+M.faction_initial_technologies_recursive = {
     'electric-energy-distribution-2',
     'electric-engine',
     'solar-energy',
 }
-M.faction_initial_recipes = {}
+M.faction_initial_technologies_recursive_by_planet = {
+    nauvis = {},
+    vulcanus = {},
+    gleba = {},
+    fulgora = {},
+    aquilo = {},
+}
+M.faction_initial_recipes = {'lightning-rod'}
 M.faction_disabled_technologies = {}
 M.faction_disabled_recipes = {'logistic-robot'}
 M.faction_chat_colors = {
@@ -83,7 +142,7 @@ M.property_limit_per_planet = 100
 M.tech_leak_interval_hours = 1
 M.tech_leak_coefficient_max_percent = 0.25
 M.tech_leak_max_affected = 5
-M.tech_leak_unlock_technology = 'space-platform-thruster'
+M.tech_leak_unlock_technology = M.faction_diplomacy_technology
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute
