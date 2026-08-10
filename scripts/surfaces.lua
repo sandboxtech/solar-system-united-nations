@@ -310,7 +310,7 @@ function M.create_property_surface(property_id, spec)
 end
 
 local function safe_position(surface, center)
-    surface.request_to_generate_chunks(center, 1)
+    surface.request_to_generate_chunks(center, 3)
     surface.force_generate_chunk_requests()
     return surface.find_non_colliding_position('character', center, 64, 1)
 end
@@ -351,7 +351,7 @@ function M.to_hospice(player, planet_name)
     return M.teleport(player, M.ensure_hospice(planet_name))
 end
 
-function M.to_planet_origin(player, planet_name)
+function M.to_planet_origin(player, planet_name, preferred_center)
     local source = player.physical_surface
     if not M.can_start_public_travel(source) then
         return false, 'travel-restricted'
@@ -362,6 +362,9 @@ function M.to_planet_origin(player, planet_name)
     end
     local surface = game.surfaces[planet_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
+    if preferred_center then
+        return M.teleport_near(player, surface, preferred_center, false)
+    end
     local radius = config.public_planet_arrival_radius
     surface.request_to_generate_chunks({0, 0}, math.ceil(radius / 32) + 1)
     surface.force_generate_chunk_requests()

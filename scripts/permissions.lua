@@ -1,6 +1,4 @@
-local config = require('config')
 local events = require('scripts.events')
-local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 
 local M = {}
@@ -64,8 +62,8 @@ events.on(defines.events.on_player_joined_game, function(event)
     M.refresh_player(game.get_player(event.player_index), false)
 end)
 
-scheduler.every(config.permission_refresh_ticks, function()
-    M.refresh_connected(true)
+events.on(defines.events.on_player_changed_surface, function(event)
+    M.refresh_player(game.get_player(event.player_index), true)
 end)
 
 return M

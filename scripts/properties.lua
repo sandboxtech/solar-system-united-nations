@@ -792,6 +792,8 @@ function M.enter(player, property_id)
     if not allowed then return false, availability_error end
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
+    local source = player.physical_surface
+    local source_position = player.physical_position
     ensure_linked_chests(property)
     local ok, err
     if player.admin and settings.get('admin_property_access') then
@@ -804,6 +806,14 @@ function M.enter(player, property_id)
         account.last_property_id = property.id
         account.last_property_by_planet = account.last_property_by_planet or {}
         account.last_property_by_planet[property.sample_planet] = property.id
+        if source and source.valid and source.name == property.sample_planet then
+            account.last_public_position_by_planet
+                = account.last_public_position_by_planet or {}
+            account.last_public_position_by_planet[property.sample_planet] = {
+                x = source_position.x,
+                y = source_position.y,
+            }
+        end
     end
     return ok, err
 end
@@ -836,7 +846,9 @@ function M.home_travel(player)
         if property then return M.enter(player, property.id) end
         return surfaces.to_hospice(player, planet_name)
     end
-    return surfaces.to_planet_origin(player, planet_name)
+    local account = economy.ensure_account(player.index)
+    local positions = account.last_public_position_by_planet or {}
+    return surfaces.to_planet_origin(player, planet_name, positions[planet_name])
 end
 
 local function evacuate_property(property, surface)

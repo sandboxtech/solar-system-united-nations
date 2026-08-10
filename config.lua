@@ -166,7 +166,6 @@ M.faction_switch_min_online_hours = 1
 M.crime_min_online_hours = 1
 M.ship_build_min_online_hours = 1
 M.deconstruction_min_online_hours = 1
-M.permission_refresh_ticks = M.ticks_per_minute
 M.ship_width_per_level = 2
 M.ship_base_width = 16
 M.ship_height = 512
