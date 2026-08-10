@@ -5,6 +5,7 @@ local stamina = require('scripts.stamina')
 local state = require('scripts.state')
 
 local M = {}
+local OBSERVER_PLANET = 'aquilo'
 
 local planet_set = {}
 for _, planet_name in ipairs(config.public_planets) do
@@ -87,6 +88,7 @@ local function ensure_diplomacy_state()
             storage.faction_diplomacy_friendly[planet_name] = true
         end
     end
+    storage.faction_diplomacy_friendly[OBSERVER_PLANET] = true
     for first = 1, #config.public_planets do
         for second = first + 1, #config.public_planets do
             local key = pair_key(
@@ -96,7 +98,19 @@ local function ensure_diplomacy_state()
             if storage.faction_pair_relations[key] == nil then
                 storage.faction_pair_relations[key] = true
             end
+            if config.public_planets[first] == OBSERVER_PLANET
+                    or config.public_planets[second] == OBSERVER_PLANET then
+                storage.faction_pair_relations[key] = true
+            end
         end
+    end
+end
+
+local function reveal_all_surfaces_to_observer()
+    local force = M.of_planet(OBSERVER_PLANET)
+    if not (force and force.valid) then return end
+    for _, surface in pairs(game.surfaces) do
+        if surface.valid then force.set_surface_hidden(surface, false) end
     end
 end
 
@@ -118,10 +132,12 @@ local function configure_relations()
             apply_relation(a, b, storage.faction_pair_relations[key])
         end
     end
+    reveal_all_surfaces_to_observer()
 end
 
 function M.update_diplomacy_after_reset(planet_name)
     if not planet_set[planet_name] then return false end
+    if planet_name == OBSERVER_PLANET then return false end
     state.ensure()
     ensure_diplomacy_state()
     local source = M.of_planet(planet_name)
@@ -140,7 +156,7 @@ function M.update_diplomacy_after_reset(planet_name)
     local friendly = not was_friendly
     storage.faction_diplomacy_friendly[planet_name] = friendly
     for _, other_name in ipairs(config.public_planets) do
-        if other_name ~= planet_name then
+        if other_name ~= planet_name and other_name ~= OBSERVER_PLANET then
             local other = M.of_planet(other_name)
             if other and other.valid then
                 local key = pair_key(planet_name, other_name)
@@ -306,6 +322,14 @@ end)
 events.on(defines.events.on_player_respawned, function(event)
     local player = game.get_player(event.player_index)
     if player then finish_switch(player) end
+end)
+
+events.on(defines.events.on_surface_created, function(event)
+    local force = M.of_planet(OBSERVER_PLANET)
+    local surface = force and game.surfaces[event.surface_index]
+    if force and force.valid and surface and surface.valid then
+        force.set_surface_hidden(surface, false)
+    end
 end)
 
 return M

@@ -243,6 +243,30 @@ M.property_build_experience_per_point = 10000
 M.property_build_base_lifetime_hours = 30
 M.property_build_stamina_cost = 50000
 M.property_build_price_per_experience = 10
+M.property_build_experience_base = 1000
+M.property_build_experience_per_level = 100
+M.property_build_types = {
+    {
+        pack = 'automation-science-pack',
+        key = 'shelter',
+        base_width = 32,
+        height = 32,
+        base_decay_hours = 6,
+        decay_hours_per_level = 0.1,
+        base_lifetime_hours = 12,
+        lifetime_hours_per_level = 1,
+    },
+    {
+        pack = 'logistic-science-pack',
+        key = 'cottage',
+        base_width = 32,
+        height = 32,
+        base_decay_hours = 12,
+        decay_hours_per_level = 0.2,
+        base_lifetime_hours = 24,
+        lifetime_hours_per_level = 1,
+    },
+}
 M.property_build_pack_by_planet = {
     nauvis = 'automation-science-pack',
     vulcanus = 'automation-science-pack',

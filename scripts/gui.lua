@@ -49,6 +49,7 @@ local HELP_OPEN_BUILD_NAME = 'un_help_open_build'
 local HELP_OPEN_PROPERTY_NAME = 'un_help_open_property'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
+local PROPERTY_PLANET_TABS_NAME = 'un_property_planet_tabs'
 local PROPERTY_HEADER_NAME = 'un_property_header'
 local PROPERTY_HOSPICE_BUTTON_NAME = 'un_property_hospice_button'
 local PROPERTY_SALVAGE_BUTTON_NAME = 'un_property_salvage_button'
@@ -69,8 +70,9 @@ local PROPERTY_SCROLL_NAME = 'un_property_scroll'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
 local PROPERTY_BUILD_NAME_NAME = 'un_property_build_name'
-local PROPERTY_BUILD_LIFETIME_NAME = 'un_property_build_lifetime'
-local PROPERTY_BUILD_SIZE_NAME = 'un_property_build_size'
+local PROPERTY_BUILD_TYPE_NAME = 'un_property_build_type'
+local PROPERTY_BUILD_ATTRIBUTES_NAME = 'un_property_build_attributes'
+local PROPERTY_BUILD_PRICE_NAME = 'un_property_build_price'
 local PROPERTY_BUILD_COST_NAME = 'un_property_build_cost'
 local PROPERTY_BUILD_AVAILABLE_NAME = 'un_property_build_available'
 local PROPERTY_BUILD_STAMINA_COST_NAME = 'un_property_build_stamina_cost'
@@ -114,12 +116,6 @@ local ADMIN_NUMBER_SETTINGS = {
     {'property_limit_per_planet', 'un.admin-setting-property-limit'},
     {'property_build_price_multiplier', 'un.admin-setting-property-build-price'},
     {'property_salvage_percent', 'un.admin-setting-property-salvage'},
-    {'property_lifetime_1_hours', 'un.admin-setting-property-lifetime-1'},
-    {'property_lifetime_2_hours', 'un.admin-setting-property-lifetime-2'},
-    {'property_lifetime_3_hours', 'un.admin-setting-property-lifetime-3'},
-    {'property_decay_1_hours', 'un.admin-setting-property-decay-1'},
-    {'property_decay_2_hours', 'un.admin-setting-property-decay-2'},
-    {'property_decay_3_hours', 'un.admin-setting-property-decay-3'},
     {'tech_leak_interval_hours', 'un.admin-setting-tech-leak-interval'},
     {'tech_leak_max_percent', 'un.admin-setting-tech-leak-strength'},
     {'tech_leak_max_affected', 'un.admin-setting-tech-leak-limit'},
@@ -399,6 +395,13 @@ local function planet_label(name)
     return {'', '[planet=' .. name .. '] ', {'space-location-name.' .. name}}
 end
 
+local function is_public_planet(name)
+    for _, planet_name in ipairs(config.public_planets) do
+        if name == planet_name then return true end
+    end
+    return false
+end
+
 local function render_planet_traits(container, item)
     local signature = tostring(item.round or 0)
         .. ':' .. table.concat(item.traits, '|')
@@ -621,7 +624,10 @@ local function render_property_table(player, frame, content)
     if old_scroll and old_scroll.valid then old_scroll.destroy() end
     local old = content[PROPERTY_TABLE_NAME]
     if old and old.valid then old.destroy() end
-    local selected = factions.of_player(player) or 'nauvis'
+    local own_planet = factions.of_player(player) or 'nauvis'
+    local selected = frame.tags.property_planet
+    if not is_public_planet(selected) then selected = own_planet end
+    local read_only = selected ~= own_planet
     local tags = frame.tags
     tags.property_planet = selected
     frame.tags = tags
@@ -636,52 +642,65 @@ local function render_property_table(player, frame, content)
     header.style.vertical_align = 'center'
     header.add{
         type = 'label',
-        caption = {'un.property-current-faction', planet_label(selected)},
+        caption = read_only and {
+            'un.property-foreign-faction', planet_label(selected),
+        } or {'un.property-current-faction', planet_label(selected)},
     }
     add_info_sprite(header, {'un.property-page-tooltip'})
-    local crime_actions = content.add{
-        type = 'table',
-        name = CRIME_ACTIONS_NAME,
-        column_count = 3,
+    local tabs = content.add{
+        type = 'flow',
+        name = PROPERTY_PLANET_TABS_NAME,
+        direction = 'horizontal',
     }
-    if properties.owned_count(player.index, selected) > 0 then
+    for _, planet_name in ipairs(config.public_planets) do
+        tabs.add{
+            type = 'button',
+            caption = planet_label(planet_name),
+            enabled = selected ~= planet_name,
+            tags = {action = 'property-select-planet', planet = planet_name},
+        }
+    end
+    local crime_actions = content.add{
+        type = 'flow',
+        name = CRIME_ACTIONS_NAME,
+        direction = 'horizontal',
+    }
+    crime_actions.add{
+        type = 'button',
+        name = PROPERTY_HOSPICE_BUTTON_NAME,
+        caption = {'un.travel-hospice'},
+        tags = {action = 'property-travel-hospice'},
+    }
+    if not read_only then
         crime_actions.add{
             type = 'button',
-            name = PROPERTY_HOSPICE_BUTTON_NAME,
-            caption = {'un.travel-hospice'},
-            tags = {action = 'property-travel-hospice'},
+            name = PROPERTY_SALVAGE_BUTTON_NAME,
+            caption = {'un.property-salvage'},
+            tags = {action = 'property-salvage', property_id = 0},
         }
+        crime_actions.add{
+            type = 'button',
+            name = CRIME_BUTTON_NAME,
+            caption = {
+                'un.crime-button',
+                config.crime_coin_cost,
+                config.crime_stamina_cost,
+            },
+        }
+        crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
     else
-        crime_actions.add{type = 'label', caption = ''}
+        crime_actions.add{type = 'label', caption = {'un.property-read-only'}}
     end
-    crime_actions.add{
-        type = 'button',
-        name = PROPERTY_SALVAGE_BUTTON_NAME,
-        caption = {'un.property-salvage'},
-        tags = {action = 'property-salvage', property_id = 0},
-    }
-    crime_actions.add{
-        type = 'button',
-        name = CRIME_BUTTON_NAME,
-        caption = {
-            'un.crime-button',
-            config.crime_coin_cost,
-            config.crime_stamina_cost,
-        },
-    }
-    crime_actions.add{type = 'label', caption = ''}
-    crime_actions.add{type = 'label', caption = ''}
-    crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
     update_property_hospice_action(player, content)
-    update_property_salvage_action(player, content)
-    if properties.owned_count(player.index) > 0 then
+    if not read_only then update_property_salvage_action(player, content) end
+    if not read_only and properties.owned_count(player.index) > 0 then
         render_property_access_section(player, content)
     end
     local scroll = add_list_scroll(content, PROPERTY_SCROLL_NAME)
     local list = scroll.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
-        column_count = 8,
+        column_count = read_only and 6 or 8,
         style = 'bordered_table',
     }
     add_property_sort_header(
@@ -702,8 +721,10 @@ local function render_property_table(player, frame, content)
     add_property_sort_header(
         list, frame, 'period', {'un.property-column-price-period'}
     )
-    list.add{type = 'label', caption = {'un.property-buy'}}
-    list.add{type = 'label', caption = {'un.property-enter'}}
+    if not read_only then
+        list.add{type = 'label', caption = {'un.property-buy'}}
+        list.add{type = 'label', caption = {'un.property-enter'}}
+    end
 
     for _, property in ipairs(property_list) do
         list.add{
@@ -742,29 +763,31 @@ local function render_property_table(player, frame, content)
             },
             tooltip = {'un.property-price-period-tooltip'},
         }
-        local can_buy, buy_error = properties.buy_availability(player, property)
-        list.add{
-            type = 'button',
-            name = property_buy_name(property.id),
-            caption = {'un.property-buy'},
-            tooltip = can_buy and {'un.property-buy'}
-                or disabled_tooltip('buy', buy_error),
-            enabled = can_buy,
-            tags = {
-                action = 'property-buy',
-                property_id = property.id,
-            },
-        }
-        local can_enter, enter_error = properties.enter_availability(player, property)
-        list.add{
-            type = 'button',
-            name = property_enter_name(property.id),
-            caption = {'un.property-enter'},
-            tooltip = can_enter and {'un.property-enter'}
-                or disabled_tooltip('enter', enter_error),
-            enabled = can_enter,
-            tags = {action = 'property-enter', property_id = property.id},
-        }
+        if not read_only then
+            local can_buy, buy_error = properties.buy_availability(player, property)
+            list.add{
+                type = 'button',
+                name = property_buy_name(property.id),
+                caption = {'un.property-buy'},
+                tooltip = can_buy and {'un.property-buy'}
+                    or disabled_tooltip('buy', buy_error),
+                enabled = can_buy,
+                tags = {
+                    action = 'property-buy',
+                    property_id = property.id,
+                },
+            }
+            local can_enter, enter_error = properties.enter_availability(player, property)
+            list.add{
+                type = 'button',
+                name = property_enter_name(property.id),
+                caption = {'un.property-enter'},
+                tooltip = can_enter and {'un.property-enter'}
+                    or disabled_tooltip('enter', enter_error),
+                enabled = can_enter,
+                tags = {action = 'property-enter', property_id = property.id},
+            }
+        end
     end
     set_frame_state(frame, 'property', storage.property_revision or 0)
     local tags = frame.tags
@@ -772,7 +795,7 @@ local function render_property_table(player, frame, content)
     tags.property_sort_descending = sort_descending
     tags.property_sort_bucket = math.floor(game.tick / config.ticks_per_minute)
     frame.tags = tags
-    update_crime_action(player, content)
+    if not read_only then update_crime_action(player, content) end
 end
 
 local function property_build_planet(player)
@@ -783,23 +806,31 @@ local function update_property_build_page(player, content)
     local form = content[PROPERTY_BUILD_FORM_NAME]
     if not (form and form.valid) then return end
     local planet_name = property_build_planet(player)
-    local lifetime = form[PROPERTY_BUILD_LIFETIME_NAME]
-    local size = form[PROPERTY_BUILD_SIZE_NAME]
+    local build_type = form[PROPERTY_BUILD_TYPE_NAME]
+    local attributes = form[PROPERTY_BUILD_ATTRIBUTES_NAME]
+    local price_label = form[PROPERTY_BUILD_PRICE_NAME]
     local cost_label = form[PROPERTY_BUILD_COST_NAME]
     local available_label = form[PROPERTY_BUILD_AVAILABLE_NAME]
     local stamina_cost_label = form[PROPERTY_BUILD_STAMINA_COST_NAME]
     local stamina_available_label = form[PROPERTY_BUILD_STAMINA_AVAILABLE_NAME]
     local button = form[PROPERTY_BUILD_BUTTON_NAME]
-    if not (planet_name and lifetime and size and cost_label
+    if not (planet_name and build_type and attributes and price_label and cost_label
             and available_label and stamina_cost_label and stamina_available_label
             and button) then return end
     local can_build, err, requirement = properties.build_availability(
         player,
         planet_name,
-        lifetime.selected_index,
-        size.selected_index
+        build_type.selected_index
     )
     if not requirement then return end
+    attributes.caption = {
+        'un.property-build-generated-attributes',
+        requirement.size.width,
+        requirement.size.height,
+        requirement.lifetime.decay_hours,
+        requirement.lifetime.hours,
+    }
+    price_label.caption = {'un.coin-amount', format_integer(requirement.initial_price)}
     local pack_name = {'item-name.' .. requirement.pack}
     cost_label.caption = {
         'un.property-build-experience',
@@ -852,46 +883,26 @@ local function render_property_build_page(player, frame, content)
             config.property_name_max_characters,
         },
     }
-    local lifetime_tooltip = {
-        'un.property-build-lifetime-tooltip',
-        settings.get('property_price_factor'),
-    }
     form.add{
         type = 'label',
-        caption = {'un.property-build-lifetime'},
-        tooltip = lifetime_tooltip,
+        caption = {'un.property-build-type'},
     }
-    local lifetime_items = {}
-    for _, option in ipairs(properties.build_lifetime_options()) do
-        lifetime_items[#lifetime_items + 1] = {
-            'un.property-build-lifetime-option',
-            option.hours,
-            option.decay_hours,
-            option.cost_multiplier,
+    local build_type_items = {}
+    for _, option in ipairs(config.property_build_types) do
+        build_type_items[#build_type_items + 1] = {
+            'un.property-build-type-' .. option.key,
         }
     end
     form.add{
         type = 'drop-down',
-        name = PROPERTY_BUILD_LIFETIME_NAME,
-        items = lifetime_items,
-        selected_index = 1,
-        tooltip = lifetime_tooltip,
-    }
-    form.add{type = 'label', caption = {'un.property-build-size'}}
-    local size_items = {}
-    for _, option in ipairs(config.property_size_options) do
-        size_items[#size_items + 1] = {
-            'un.property-build-size-option',
-            option.width,
-            option.height,
-        }
-    end
-    form.add{
-        type = 'drop-down',
-        name = PROPERTY_BUILD_SIZE_NAME,
-        items = size_items,
+        name = PROPERTY_BUILD_TYPE_NAME,
+        items = build_type_items,
         selected_index = 1,
     }
+    form.add{type = 'label', caption = {'un.property-build-attributes'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_ATTRIBUTES_NAME}
+    form.add{type = 'label', caption = {'un.property-build-initial-price'}}
+    form.add{type = 'label', name = PROPERTY_BUILD_PRICE_NAME}
     form.add{type = 'label', caption = {'un.property-build-total'}}
     form.add{type = 'label', name = PROPERTY_BUILD_COST_NAME}
     form.add{type = 'label', caption = {'un.property-build-owned'}}
@@ -1318,11 +1329,16 @@ local function render_factions_page(player, frame, content)
         },
     }
     add_info_sprite(summary, {
-        'un.faction-page-tooltip',
-        config.suicide_stamina_cost,
-        config.normal_respawn_seconds,
-        config.faction_friendly_to_hostile_chance * 100,
-        config.faction_hostile_to_friendly_chance * 100,
+        '',
+        {
+            'un.faction-page-tooltip',
+            config.suicide_stamina_cost,
+            config.normal_respawn_seconds,
+            config.faction_friendly_to_hostile_chance * 100,
+            config.faction_hostile_to_friendly_chance * 100,
+        },
+        '\n\n',
+        {'un.faction-aquilo-neutral'},
     })
     local list = content.add{
         type = 'table',
@@ -1643,10 +1659,10 @@ local function render_help_page(player, frame, content, mode)
         local property = add_help_card(details, {'un.help-card-property'})
         add_help_line(property, {
             'un.help-brief-property',
-            config.property_build_experience_per_point,
-            config.property_build_base_lifetime_hours,
+            config.property_build_experience_base,
+            config.property_build_experience_per_level,
             config.property_build_stamina_cost,
-            config.stamina_max,
+            config.property_max_size,
         })
         add_help_gap(details)
         local travel = add_help_card(details, {'un.help-card-travel'})
@@ -1670,18 +1686,12 @@ local function render_help_page(player, frame, content, mode)
         local property = add_help_card(details, {'un.help-detail-property-heading'})
         add_help_line(property, {
             'un.help-detail-property-build',
-            config.property_build_experience_per_point,
-            config.property_build_base_lifetime_hours,
-            settings.get('property_lifetime_1_hours'),
-            settings.get('property_lifetime_2_hours'),
-            settings.get('property_lifetime_3_hours'),
-            settings.get('property_decay_1_hours'),
-            settings.get('property_decay_2_hours'),
-            settings.get('property_decay_3_hours'),
-            settings.get('property_build_price_multiplier'),
-            config.property_price_cap,
-            settings.get('property_limit_per_planet'),
+            config.property_build_experience_base,
+            config.property_build_experience_per_level,
             config.property_build_stamina_cost,
+            settings.get('property_build_price_multiplier'),
+            settings.get('property_limit_per_planet'),
+            config.property_max_size,
         })
         add_help_line(property, {'un.help-detail-property-basic'})
         add_help_gap(details)
@@ -2244,7 +2254,10 @@ local function update_frame(player)
         end
     elseif page == 'property' then
         update_property_hospice_action(player, content)
-        update_property_salvage_action(player, content)
+        local selected_planet = is_public_planet(frame.tags.property_planet)
+            and frame.tags.property_planet or factions.of_player(player)
+        local read_only = selected_planet ~= factions.of_player(player)
+        if not read_only then update_property_salvage_action(player, content) end
         local sort_field = property_sort_state(frame)
         local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
         local price_sort_changed = (sort_field == 'price'
@@ -2262,12 +2275,12 @@ local function update_frame(player)
             )
             if property_table and property_table.valid then
                 for _, property in ipairs(properties.list(
-                    factions.of_player(player)
+                    selected_planet
                 )) do
                     update_property_row(player, property_table, property)
                 end
             end
-            update_crime_action(player, content)
+            if not read_only then update_crime_action(player, content) end
         end
     elseif page == 'factions' then
         if list_refresh_due(frame, 'factions') then
@@ -2680,6 +2693,13 @@ events.on(defines.events.on_gui_click, function(event)
             frame.tags = frame_tags
             render_property_table(player, frame, content)
             update_frame(player)
+        elseif tags.action == 'property-select-planet' then
+            if not is_public_planet(tags.planet) then return end
+            local frame_tags = frame.tags
+            frame_tags.property_planet = tags.planet
+            frame.tags = frame_tags
+            render_property_table(player, frame, content)
+            update_frame(player)
         elseif tags.action and tags.action:match('^admin%-') then
             if not player.admin then
                 player.print({'un.admin-only'})
@@ -2713,8 +2733,7 @@ events.on(defines.events.on_gui_click, function(event)
             local form = content[PROPERTY_BUILD_FORM_NAME]
             if not (form and form.valid) then return end
             local planet_name = property_build_planet(player)
-            local lifetime_index = form[PROPERTY_BUILD_LIFETIME_NAME].selected_index
-            local size_index = form[PROPERTY_BUILD_SIZE_NAME].selected_index
+            local build_type_index = form[PROPERTY_BUILD_TYPE_NAME].selected_index
             local name_field = form[PROPERTY_BUILD_NAME_NAME]
             local custom_name, name_err = properties.normalize_build_name(
                 name_field and name_field.valid and name_field.text or ''
@@ -2726,8 +2745,7 @@ events.on(defines.events.on_gui_click, function(event)
             local can_build, err, requirement = properties.build_availability(
                 player,
                 planet_name,
-                lifetime_index,
-                size_index
+                build_type_index
             )
             if not can_build then
                 player.print(property_error(err))
@@ -2742,17 +2760,17 @@ events.on(defines.events.on_gui_click, function(event)
             element.tags = {
                 action = 'property-build-confirm',
                 planet_name = planet_name,
-                lifetime_index = lifetime_index,
-                size_index = size_index,
+                build_type_index = build_type_index,
+                total_level = requirement.total_level,
                 custom_name = custom_name or '',
             }
         elseif tags.action == 'property-build-confirm' then
             local property, err = properties.build(
                 player,
                 tags.planet_name,
-                tags.lifetime_index,
-                tags.size_index,
-                tags.custom_name
+                tags.build_type_index,
+                tags.custom_name,
+                tags.total_level
             )
             player.print(property and {'un.property-built', property.id}
                 or property_error(err))
@@ -2854,8 +2872,7 @@ events.on(defines.events.on_gui_selection_state_changed, function(event)
     local player = game.get_player(event.player_index)
     local frame = player and player.gui.screen[FRAME_NAME]
     local content = frame and frame.valid and frame[CONTENT_NAME]
-    if element.name ~= PROPERTY_BUILD_LIFETIME_NAME
-            and element.name ~= PROPERTY_BUILD_SIZE_NAME then
+    if element.name ~= PROPERTY_BUILD_TYPE_NAME then
         return
     end
     local form = content and content.valid and content[PROPERTY_BUILD_FORM_NAME]

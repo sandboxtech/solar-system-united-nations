@@ -288,7 +288,7 @@ local function sync_surface_visibility(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
     for _, entry in ipairs(factions.all()) do
-        entry.force.set_surface_hidden(surface, true)
+        entry.force.set_surface_hidden(surface, entry.planet_name ~= 'aquilo')
     end
     return true
 end
@@ -481,30 +481,43 @@ function M.build_lifetime_options()
     return result
 end
 
-function M.build_requirements(planet_name, lifetime_index, size_index)
-    local lifetime = M.build_lifetime_options()[tonumber(lifetime_index)]
-    local size = config.property_size_options[tonumber(size_index)]
-    local pack = config.property_build_pack_by_planet[planet_name]
-    if not (build_planets[planet_name] and lifetime and size and pack) then
+function M.build_requirements(player, planet_name, build_type_index)
+    local build_type = config.property_build_types[tonumber(build_type_index)]
+    if not (player and player.valid and build_planets[planet_name]
+            and build_type) then
         return nil
     end
+    local level = experience.total_level(player.index)
+    local width = math.floor((build_type.base_width + level) / 2) * 2
+    width = math.min(config.property_max_size, width)
+    local experience_cost = config.property_build_experience_base
+        + config.property_build_experience_per_level * level
+    local initial_price = math.min(
+        config.property_price_cap,
+        math.ceil(experience_cost
+            * settings.get('property_build_price_multiplier'))
+    )
     return {
         planet_name = planet_name,
-        pack = pack,
-        lifetime = lifetime,
-        size = size,
-        experience_cost = math.ceil(config.property_build_experience_per_point
-            * lifetime.cost_multiplier * size.cost),
+        build_type_index = tonumber(build_type_index),
+        build_type = build_type,
+        pack = build_type.pack,
+        total_level = level,
+        lifetime = {
+            hours = build_type.base_lifetime_hours
+                + build_type.lifetime_hours_per_level * level,
+            decay_hours = build_type.base_decay_hours
+                + build_type.decay_hours_per_level * level,
+        },
+        size = {width = width, height = build_type.height},
+        experience_cost = experience_cost,
+        initial_price = initial_price,
         stamina_cost = config.property_build_stamina_cost,
     }
 end
 
-function M.build_availability(player, planet_name, lifetime_index, size_index)
-    local requirement = M.build_requirements(
-        planet_name,
-        lifetime_index,
-        size_index
-    )
+function M.build_availability(player, planet_name, build_type_index)
+    local requirement = M.build_requirements(player, planet_name, build_type_index)
     if not requirement then return false, 'invalid-build-option' end
     if factions.of_player(player) ~= planet_name then
         return false, 'wrong-faction', requirement
@@ -525,16 +538,19 @@ function M.build_availability(player, planet_name, lifetime_index, size_index)
     return true, nil, requirement
 end
 
-function M.build(player, planet_name, lifetime_index, size_index, custom_name)
+function M.build(player, planet_name, build_type_index, custom_name, expected_level)
     local normalized_name, name_err = M.normalize_build_name(custom_name)
     if name_err then return nil, name_err end
     local available, err, requirement = M.build_availability(
         player,
         planet_name,
-        lifetime_index,
-        size_index
+        build_type_index
     )
     if not available then return nil, err, requirement end
+    if expected_level ~= nil
+            and requirement.total_level ~= tonumber(expected_level) then
+        return nil, 'invalid-build-option', requirement
+    end
     if not experience.spend(
         player.index,
         requirement.pack,
@@ -552,21 +568,13 @@ function M.build(player, planet_name, lifetime_index, size_index, custom_name)
     local ok, property, create_err = pcall(create, {
         owner_index = player.index,
         sample_planet = planet_name,
-        price = math.min(
-            config.property_price_cap,
-            math.ceil(requirement.experience_cost
-                * settings.get('property_build_price_multiplier'))
-        ),
+        price = requirement.initial_price,
         lifetime_hours = requirement.lifetime.hours,
         decay_hours = requirement.lifetime.decay_hours,
         width = requirement.size.width,
         height = requirement.size.height,
         custom_name = normalized_name,
-        construction_value = math.min(
-            config.property_price_cap,
-            math.ceil(requirement.experience_cost
-                * settings.get('property_build_price_multiplier'))
-        ),
+        construction_value = requirement.initial_price,
     })
     if not ok or not property then
         experience.record(player.index, {{
@@ -647,9 +655,7 @@ end
 function M.hospice_travel_availability(player)
     if not (player and player.valid) then return false, 'invalid-player' end
     local planet_name = factions.of_player(player)
-    if not planet_name or M.owned_count(player.index, planet_name) == 0 then
-        return false, 'not-owner'
-    end
+    if not planet_name then return false, 'wrong-faction' end
     if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
     if not surfaces.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
