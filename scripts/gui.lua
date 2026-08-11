@@ -1753,12 +1753,6 @@ local function render_help_page(player, frame, content, mode)
             quick_label.style.font = 'default-bold'
             quick.add{
                 type = 'button',
-                name = HELP_OPEN_OVERVIEW_NAME,
-                caption = {'un.page-overview'},
-                tooltip = {'un.help-quick-overview-tooltip'},
-            }
-            quick.add{
-                type = 'button',
                 name = HELP_OPEN_BUILD_NAME,
                 caption = {'un.page-property-build'},
                 tooltip = {'un.help-quick-build-tooltip'},
@@ -1768,6 +1762,12 @@ local function render_help_page(player, frame, content, mode)
                 name = HELP_OPEN_PROPERTY_NAME,
                 caption = {'un.page-property'},
                 tooltip = {'un.help-quick-property-tooltip'},
+            }
+            quick.add{
+                type = 'button',
+                name = HELP_OPEN_OVERVIEW_NAME,
+                caption = {'un.page-overview'},
+                tooltip = {'un.help-quick-overview-tooltip'},
             }
         end
         add_help_gap(details)
@@ -1780,18 +1780,29 @@ local function render_help_page(player, frame, content, mode)
         local forces = add_help_card(details, {'un.help-card-factions'})
         add_help_line(forces, {'un.help-story-factions'})
     elseif mode == 'brief' then
+        local travel = add_help_card(details, {'un.help-card-travel'})
+        add_help_line(travel, {'un.help-brief-travel'})
+        add_help_gap(details)
         local income = add_help_card(details, {'un.help-card-income'})
         add_help_line(income, {'un.help-brief-start'})
         add_help_gap(details)
         local property = add_help_card(details, {'un.help-card-property'})
         add_help_line(property, {'un.help-brief-property'})
         add_help_gap(details)
-        local travel = add_help_card(details, {'un.help-card-travel'})
-        add_help_line(travel, {'un.help-brief-travel'})
-        add_help_gap(details)
         local project = add_help_card(details, {'un.help-card-project'})
         add_help_line(project, {'un.help-brief-project'})
     elseif mode == 'advanced' then
+        local travel = add_help_card(details, {'un.help-detail-ship-heading'})
+        add_help_line(travel, {
+            'un.help-detail-travel',
+            config.fast_respawn_stamina_cost,
+            config.fast_respawn_seconds,
+            config.normal_respawn_seconds,
+        })
+        add_help_line(travel, {'un.help-foreign-survival'})
+        add_help_line(travel, {'un.help-detail-resets'})
+        add_help_gap(details)
+
         local beginner = add_help_card(details, {'un.help-section-beginner'})
         add_help_line(beginner, {'un.help-detail-linked-chest'})
         add_help_line(beginner, {
@@ -1801,30 +1812,11 @@ local function render_help_page(player, frame, content, mode)
         add_help_gap(details)
 
         local property = add_help_card(details, {'un.help-detail-property-heading'})
-        add_help_line(property, {
-            'un.help-detail-property-build',
-            config.property_build_experience_base,
-            config.property_build_experience_per_level,
-            config.property_build_stamina_cost,
-            settings.get('property_build_price_multiplier'),
-            settings.get('property_limit_per_planet'),
-            config.property_max_size,
-        })
+        add_help_line(property, {'un.help-detail-property-build'})
         add_help_line(property, {'un.help-detail-property-basic'})
         add_help_gap(details)
 
-        local travel = add_help_card(details, {'un.help-detail-ship-heading'})
-        add_help_line(travel, {
-            'un.help-detail-travel',
-            config.fast_respawn_stamina_cost,
-            config.fast_respawn_seconds,
-            config.normal_respawn_seconds,
-        })
-        add_help_line(travel, {'un.help-foreign-survival'})
-        add_help_gap(details)
-
         local world = add_help_card(details, {'un.help-detail-world-heading'})
-        add_help_line(world, {'un.help-detail-resets'})
         add_help_line(world, {
             'un.help-detail-tech-leak',
             settings.get('tech_leak_interval_hours'),
@@ -1844,6 +1836,15 @@ local function render_help_page(player, frame, content, mode)
 
         local formulas = add_help_card(details, {
             'un.help-detail-formulas-heading',
+        })
+        add_help_line(formulas, {
+            'un.help-detail-property-build-formula',
+            config.property_build_experience_base,
+            config.property_build_experience_per_level,
+            config.property_build_stamina_cost,
+            settings.get('property_build_price_multiplier'),
+            settings.get('property_limit_per_planet'),
+            config.property_price_cap,
         })
         add_help_line(formulas, {
             'un.help-detail-property-price',
