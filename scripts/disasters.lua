@@ -379,6 +379,21 @@ local function evacuate(surface)
     end
 end
 
+local function kill_foreign_players(surface)
+    for _, player in pairs(game.players) do
+        if factions.of_player(player) ~= surface.name then
+            local found = false
+            for _, character in pairs(player.get_associated_characters()) do
+                if character.valid and character.surface == surface then
+                    found = true
+                    break
+                end
+            end
+            if found then evacuate_player(player, surface) end
+        end
+    end
+end
+
 local function choose(list)
     return list[math.random(1, #list)]
 end
@@ -900,6 +915,15 @@ local function check_resets()
         local record, surface = ensure_record(name)
         if record.state == 'open' and record.next_tick then
             local left = record.next_tick - game.tick
+            for _, minutes in ipairs(config.public_planet_foreign_purge_minutes) do
+                local threshold = minutes * config.ticks_per_minute
+                local key = 'foreign-purge-' .. minutes
+                if left <= threshold and left > 0 and not record.warned[key]
+                        and surface and surface.valid then
+                    record.warned[key] = true
+                    kill_foreign_players(surface)
+                end
+            end
             for _, minutes in ipairs(config.public_planet_warning_minutes) do
                 local threshold = minutes * config.ticks_per_minute
                 if left <= threshold and left > 0 and not record.warned[minutes] then
