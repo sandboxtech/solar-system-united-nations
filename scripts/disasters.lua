@@ -631,8 +631,6 @@ local function begin_reset(name, surface, record)
     record.acceleration_votes = {}
     record.surface_index = surface.index
     record.clear_started_tick = game.tick
-    game.print({'un.planet-reset-started', planet_label(name)})
-
     evacuate(surface)
     linked_inventory.clear_surface_dropoffs(name)
     local ok, err = pcall(function()
