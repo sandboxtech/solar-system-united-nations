@@ -627,6 +627,7 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
             {'space-location-name.' .. planet_name}},
         requirement.experience_cost,
         requirement.stamina_cost,
+        factions.display_name(planet_name),
     })
     return property, nil, requirement
 end
@@ -857,6 +858,7 @@ function M.buy(player, property_id, quoted_price)
             transaction_name,
             payout,
             tax,
+            factions.display_name(property.sample_planet),
         })
     else
         game.print({
@@ -865,6 +867,7 @@ function M.buy(player, property_id, quoted_price)
             price,
             transaction_name,
             price,
+            factions.display_name(property.sample_planet),
         })
     end
     return true, price
@@ -1124,6 +1127,7 @@ function M.salvage(player, property_id, quoted_value)
         player.name,
         property_name,
         value,
+        factions.display_name(factions.of_player(player)),
     })
     return true, value
 end

@@ -21,21 +21,20 @@ end
 
 function M.display_name(planet_name)
     if not planet_set[planet_name] then return {'un.faction-unknown'} end
-    return {
-        '',
-        '[planet=' .. planet_name .. '] ',
-        {'un.faction-name-' .. planet_name},
-    }
-end
-
-function M.chat_display_name(planet_name)
     local color = config.faction_chat_colors[planet_name] or '1,1,1'
     return {
         '',
         '[color=' .. color .. ']',
-        M.display_name(planet_name),
+        '[img=planet/' .. planet_name .. '] ',
+        {'un.faction-name-' .. planet_name},
         '[/color]',
     }
+end
+
+-- Kept as a semantic alias for chat formatting. Faction identity has one
+-- visual form everywhere: planet icon, faction colour, and country name.
+function M.chat_display_name(planet_name)
+    return M.display_name(planet_name)
 end
 
 function M.planet_of_force(force)

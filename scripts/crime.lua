@@ -1,5 +1,6 @@
 local config = require('config')
 local economy = require('scripts.economy')
+local factions = require('scripts.factions')
 local properties = require('scripts.properties')
 local settings = require('scripts.settings')
 local stamina = require('scripts.stamina')
@@ -93,6 +94,7 @@ function M.attempt(player)
         player.name,
         chance_text(chance),
         properties.surface_display_name(property),
+        factions.display_name(factions.of_player(player)),
     })
     return true, success, property, chance
 end

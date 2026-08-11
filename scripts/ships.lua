@@ -235,6 +235,7 @@ function M.create(player, planet_name)
             '[planet=' .. planet_name .. '] ',
             {'space-location-name.' .. planet_name},
         },
+        factions.display_name(factions.of_player(player)),
     })
     return platform
 end
