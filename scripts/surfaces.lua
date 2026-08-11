@@ -370,6 +370,17 @@ function M.ensure_hospice(planet_name)
     return surface
 end
 
+-- Travel and respawn only need an existing destination.  Re-running
+-- ensure_hospice for every click used to rewrite map-gen settings, force
+-- chunk generation, and resynchronise every surface property on the main
+-- simulation thread.  Creation and repair remain owned by bootstrap.
+function M.hospice_surface(planet_name)
+    planet_name = public_planets[planet_name] and planet_name or 'nauvis'
+    local surface = game.surfaces[M.hospice_surface_name(planet_name)]
+    if surface and surface.valid then return surface end
+    return M.ensure_hospice(planet_name)
+end
+
 function M.sync_property_environment(
         surface, min_brightness, planet_name, use_planet_solar)
     if not (surface and surface.valid) then return false end
@@ -486,8 +497,16 @@ function M.create_property_surface(property_id, spec)
 end
 
 local function safe_position(surface, center)
-    surface.request_to_generate_chunks(center, 3)
-    surface.force_generate_chunk_requests()
+    local center_x = center.x or center[1]
+    local center_y = center.y or center[2]
+    local chunk = {
+        x = math.floor(center_x / 32),
+        y = math.floor(center_y / 32),
+    }
+    if not surface.is_chunk_generated(chunk) then
+        surface.request_to_generate_chunks(center, 3)
+        surface.force_generate_chunk_requests()
+    end
     return surface.find_non_colliding_position('character', center, 64, 1)
 end
 
@@ -524,7 +543,7 @@ end
 
 function M.to_hospice(player, planet_name)
     planet_name = planet_name or M.context_planet(player.physical_surface) or 'nauvis'
-    return M.teleport(player, M.ensure_hospice(planet_name))
+    return M.teleport(player, M.hospice_surface(planet_name))
 end
 
 local function recorded_center(surface, planet_name, record)
@@ -565,23 +584,36 @@ function M.to_planet_origin(player, planet_name, return_record)
         if position then return player.teleport(position, surface) end
     end
     local radius = config.public_planet_arrival_radius
-    surface.request_to_generate_chunks({0, 0}, math.ceil(radius / 32) + 1)
-    surface.force_generate_chunk_requests()
     for _ = 1, 32 do
         local center = {
             x = weighted_arrival_axis(radius),
             y = weighted_arrival_axis(radius),
         }
-        local position = surface.find_non_colliding_position(
-            'character',
-            center,
-            8,
-            1
-        )
-        if position and math.abs(position.x) < radius
-                and math.abs(position.y) < radius then
-            return player.teleport(position, surface)
+        local chunk = {
+            x = math.floor(center.x / 32),
+            y = math.floor(center.y / 32),
+        }
+        if surface.is_chunk_generated(chunk) then
+            local position = surface.find_non_colliding_position(
+                'character',
+                center,
+                8,
+                1
+            )
+            if position and math.abs(position.x) < radius
+                    and math.abs(position.y) < radius then
+                return player.teleport(position, surface)
+            end
         end
+    end
+    local fallback_center = {
+        x = weighted_arrival_axis(radius),
+        y = weighted_arrival_axis(radius),
+    }
+    local fallback_position = safe_position(surface, fallback_center)
+    if fallback_position and math.abs(fallback_position.x) < radius
+            and math.abs(fallback_position.y) < radius then
+        return player.teleport(fallback_position, surface)
     end
     return M.teleport_near(player, surface, {0, 0}, false)
 end
@@ -597,7 +629,7 @@ local function respawn_destination(player)
     else
         planet_name = factions.of_player(player) or 'nauvis'
     end
-    return M.ensure_hospice(planet_name), {0, 0}
+    return M.hospice_surface(planet_name), {0, 0}
 end
 
 events.on(defines.events.on_player_created, function(event)

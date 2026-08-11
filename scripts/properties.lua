@@ -940,7 +940,6 @@ function M.enter(player, property_id)
     if not (surface and surface.valid) then return false, 'surface-missing' end
     local source = player.physical_surface
     local source_position = player.physical_position
-    ensure_linked_chests(property)
     local ok, err
     if player.admin and settings.get('admin_property_access') then
         ok, err = surfaces.teleport_near(player, surface, {0, 0}, false)
@@ -1012,7 +1011,7 @@ function M.travel_to_owned_property(player)
 end
 
 local function evacuate_property(property, surface)
-    local hospice = surfaces.ensure_hospice(property.sample_planet)
+    local hospice = surfaces.hospice_surface(property.sample_planet)
     for _, player in pairs(game.players) do
         if player.controller_type == defines.controllers.remote
                 and player.surface == surface then

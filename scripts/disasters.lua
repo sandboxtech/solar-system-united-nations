@@ -293,7 +293,7 @@ local function evacuate_player(player, target_surface)
     local target_planet = target_surface.name
     local player_planet = factions.of_player(player) or 'nauvis'
     local foreign = player_planet ~= target_planet
-    local hospice = surfaces.ensure_hospice(
+    local hospice = surfaces.hospice_surface(
         foreign and player_planet or target_planet
     )
     if player.connected and player.controller_type == defines.controllers.remote
