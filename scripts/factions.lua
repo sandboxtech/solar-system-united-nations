@@ -25,7 +25,7 @@ function M.display_name(planet_name)
     return {
         '',
         '[color=' .. color .. ']',
-        '[img=planet/' .. planet_name .. '] ',
+        '[img=space-location/' .. planet_name .. '] ',
         {'un.faction-name-' .. planet_name},
         '[/color]',
     }
