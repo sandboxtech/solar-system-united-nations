@@ -231,7 +231,7 @@ end
 
 -- Removing the LuaPlayer must also remove inventories which can outlive an
 -- individual chest entity. Keep this separate from normal drop-off removal:
--- a planet reset must not empty the same linked inventory inside a property.
+-- a planetary shift must not empty the same linked inventory inside a property.
 function M.purge_player(player_index)
     state.ensure()
     M.clear_player_dropoff(player_index)
