@@ -922,7 +922,7 @@ end
 local function render_property_build_page(player, frame, content)
     local intro = content.add{
         type = 'label',
-        caption = {'un.property-build-intro', config.property_build_stamina_cost},
+        caption = {'un.property-build-intro'},
     }
     intro.style.single_line = false
     intro.style.maximal_width = 680
@@ -1152,11 +1152,12 @@ end
 local function render_experience_section(content)
     local heading = content.add{type = 'flow', direction = 'horizontal'}
     heading.style.vertical_align = 'center'
-    heading.add{type = 'label', caption = {'un.experience-title'}}
+    heading.add{
+        type = 'label',
+        caption = {'un.experience-title'},
+        tooltip = {'un.experience-tooltip'},
+    }
     add_info_sprite(heading, {'un.experience-tooltip'})
-    local help = content.add{type = 'label', caption = {'un.experience-help'}}
-    help.style.single_line = false
-    help.style.maximal_width = PERSONAL_ACTION_WIDTH
     local grid = content.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
