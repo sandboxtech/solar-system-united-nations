@@ -20,11 +20,12 @@ local technology_decay = require('scripts.technology_decay')
 local M = {}
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 14
+local HUD_LAYOUT_VERSION = 15
 local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_RESET_COUNTDOWN_NAME = 'un_hud_reset_countdown'
 local HUD_MENU_NAME = 'un_hud_menu'
-local HUD_LAST_PROPERTY_NAME = 'un_hud_last_property'
+local HUD_HOME_SHUTTLE_NAME = 'un_hud_home_shuttle'
+local HUD_PROPERTY_CYCLE_NAME = 'un_hud_property_cycle'
 local FRAME_NAME = 'un_main_frame'
 local FRAME_WIDTH_FRACTION = 0.60
 local FRAME_MIN_WIDTH = 900
@@ -163,15 +164,33 @@ local function table_in_scroll(content, scroll_name, table_name)
     return content[table_name]
 end
 
-local function update_home_button(player, hud)
+local function travel_button_error(err)
+    if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
+    if err == 'planet-closed' then return {'un.travel-planet-closed'} end
+    if err == 'no-owned-property' then return {'un.hud-property-none-tooltip'} end
+    return {'un.travel-restricted'}
+end
+
+local function update_travel_buttons(player, hud)
     hud = hud or player.gui.top[HUD_FLOW_NAME]
-    local button = hud and hud.valid and hud[HUD_LAST_PROPERTY_NAME]
-    if not (button and button.valid) then return end
-    local planet_name = factions.of_player(player)
-    if planet_name and player.physical_surface.name == planet_name then
-        button.tooltip = {'un.hud-home-to-home-tooltip'}
-    else
-        button.tooltip = {'un.hud-home-to-planet-tooltip'}
+    if not (hud and hud.valid) then return end
+    local shuttle = hud[HUD_HOME_SHUTTLE_NAME]
+    if shuttle and shuttle.valid then
+        local available, err, context = properties.home_shuttle_availability(player)
+        shuttle.enabled = available
+        shuttle.tooltip = available and (context == 'planet'
+            and {'un.hud-shuttle-to-hospice-tooltip'}
+            or {'un.hud-shuttle-to-planet-tooltip'})
+            or travel_button_error(err)
+    end
+    local property = hud[HUD_PROPERTY_CYCLE_NAME]
+    if property and property.valid then
+        local available, err, count
+            = properties.owned_property_travel_availability(player)
+        property.enabled = available
+        property.tooltip = available
+            and {'un.hud-property-cycle-tooltip', count}
+            or travel_button_error(err)
     end
 end
 
@@ -266,11 +285,12 @@ function M.ensure_button(player)
             and hud[HUD_TITLE_NAME]
             and hud[HUD_RESET_COUNTDOWN_NAME]
             and hud[HUD_MENU_NAME]
-            and hud[HUD_LAST_PROPERTY_NAME]
+            and hud[HUD_HOME_SHUTTLE_NAME]
+            and hud[HUD_PROPERTY_CYCLE_NAME]
         if complete then
             update_hud_title(player, hud)
             update_hud_reset_countdown(player, hud)
-            update_home_button(player, hud)
+            update_travel_buttons(player, hud)
             return hud
         end
         hud.destroy()
@@ -309,7 +329,10 @@ function M.ensure_button(player)
     countdown.style.right_margin = 6
     local buttons = {
         {HUD_MENU_NAME, {'un.hud-action-button'}, {'un.hud-menu-tooltip'}},
-        {HUD_LAST_PROPERTY_NAME, {'un.hud-travel-button'}, {'un.hud-home-tooltip'}},
+        {HUD_HOME_SHUTTLE_NAME, {'un.hud-travel-button'},
+            {'un.hud-shuttle-tooltip'}},
+        {HUD_PROPERTY_CYCLE_NAME, {'un.hud-property-button'},
+            {'un.hud-property-none-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
@@ -323,7 +346,7 @@ function M.ensure_button(player)
     end
     update_hud_title(player, hud)
     update_hud_reset_countdown(player, hud)
-    update_home_button(player, hud)
+    update_travel_buttons(player, hud)
     return hud
 end
 
@@ -366,6 +389,9 @@ local function disabled_tooltip(action, err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
+    if err == 'no-owned-property' then
+        return {'un.hud-property-none-tooltip'}
+    end
     if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
     if action == 'enter' and err == 'not-owner' then
         return {'un.property-enter-disabled-private'}
@@ -2061,6 +2087,9 @@ local function property_error(err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
+    if err == 'no-owned-property' then
+        return {'un.hud-property-none-tooltip'}
+    end
     if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
     if err == 'ship-invalid-planet' then return {'un.ship-invalid-planet'} end
     if err == 'ship-already-have' then return {'un.ship-already-have'} end
@@ -2581,13 +2610,24 @@ events.on(
 )
 events.on(defines.events.on_player_changed_surface, function(event)
     local player = game.get_player(event.player_index)
-    if player then update_home_button(player) end
+    if player then
+        update_travel_buttons(player)
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid and frame.tags.page == 'property' then
+            update_frame(player)
+        end
+    end
 end)
 events.on(defines.events.on_player_changed_force, function(event)
     local player = game.get_player(event.player_index)
     if player then
         update_hud_title(player)
         update_hud_reset_countdown(player)
+        update_travel_buttons(player)
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid and frame.tags.page == 'property' then
+            update_frame(player)
+        end
     end
 end)
 
@@ -2611,9 +2651,14 @@ events.on(defines.events.on_gui_click, function(event)
     if not player then return end
     if element.name == HUD_MENU_NAME then
         open_frame(player, 'help')
-    elseif element.name == HUD_LAST_PROPERTY_NAME then
-        local ok, err = properties.home_travel(player)
+    elseif element.name == HUD_HOME_SHUTTLE_NAME then
+        local ok, err = properties.home_shuttle(player)
         if not ok then player.print(property_error(err)) end
+        update_travel_buttons(player)
+    elseif element.name == HUD_PROPERTY_CYCLE_NAME then
+        local ok, err = properties.travel_to_owned_property(player)
+        if not ok then player.print(property_error(err)) end
+        update_travel_buttons(player)
     elseif element.name == CLOSE_NAME then
         close_frame(player)
     elseif element.name == NAV_HELP_NAME then
@@ -2945,6 +2990,7 @@ events.on(defines.events.on_gui_click, function(event)
                 or property_error(err))
             render_page(player, 'property-build')
             update_frame(player)
+            update_travel_buttons(player)
         elseif tags.action == 'property-salvage' then
             local property = properties.get(tags.property_id)
             local can_salvage, err, value
@@ -3012,6 +3058,9 @@ events.on(defines.events.on_gui_click, function(event)
             end
             render_property_table(player, frame, content)
             update_frame(player)
+            for _, connected in pairs(game.connected_players) do
+                update_travel_buttons(connected)
+            end
         elseif tags.action == 'property-confirm-salvage' then
             local ok, err = properties.salvage(
                 player,
@@ -3023,6 +3072,7 @@ events.on(defines.events.on_gui_click, function(event)
             end
             render_property_table(player, frame, content)
             update_frame(player)
+            update_travel_buttons(player)
         elseif tags.action == 'property-enter' then
             local ok, err = properties.enter(player, tags.property_id)
             if ok then close_frame(player)
@@ -3159,6 +3209,7 @@ end)
 scheduler.every(config.ticks_per_minute, function()
     for _, player in pairs(game.connected_players) do
         update_hud_reset_countdown(player)
+        update_travel_buttons(player)
     end
 end)
 

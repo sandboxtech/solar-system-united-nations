@@ -684,14 +684,71 @@ function M.owned_count(player_index, planet_name)
     return count
 end
 
-function M.hospice_travel_availability(player)
-    if not (player and player.valid) then return false, 'invalid-player' end
+local function property_on_surface(surface)
+    if not (surface and surface.valid) then return nil end
+    local prefix = config.property_surface_prefix
+    if surface.name:sub(1, #prefix) ~= prefix then return nil end
+    local property = M.get(tonumber(surface.name:sub(#prefix + 1)))
+    if property and property.surface_index == surface.index then return property end
+    return nil
+end
+
+local function home_travel_context(player)
+    if not (player and player.valid) then return nil, nil, 'invalid-player' end
+    if player.vehicle and player.vehicle.valid then return nil, nil, 'in-vehicle' end
     local planet_name = factions.of_player(player)
-    if not planet_name then return false, 'wrong-faction' end
-    if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
-    if not surfaces.can_start_public_travel(player.physical_surface) then
-        return false, 'travel-restricted'
+    if not planet_name then return nil, nil, 'wrong-faction' end
+    local surface = player.physical_surface
+    if not (surface and surface.valid) then
+        return nil, nil, 'travel-restricted'
     end
+    if surface.name == planet_name then return 'planet', planet_name end
+    if surfaces.hospice_planet(surface) == planet_name then
+        return 'hospice', planet_name
+    end
+    local property = property_on_surface(surface)
+    if property and property.sample_planet == planet_name then
+        return 'property', planet_name, nil, property
+    end
+    return nil, planet_name, 'travel-restricted'
+end
+
+local function owned_homes(player_index, planet_name)
+    local result = {}
+    for _, property in ipairs(M.list(planet_name)) do
+        if property.owner_index == player_index then
+            result[#result + 1] = property
+        end
+    end
+    table.sort(result, function(a, b)
+        local a_number = tonumber(a.owner_property_number) or math.huge
+        local b_number = tonumber(b.owner_property_number) or math.huge
+        if a_number ~= b_number then return a_number < b_number end
+        return a.id < b.id
+    end)
+    return result
+end
+
+function M.home_shuttle_availability(player)
+    local context, planet_name, err = home_travel_context(player)
+    if not context then return false, err, context, planet_name end
+    if context ~= 'planet' and not surfaces.is_public_planet_open(planet_name) then
+        return false, 'planet-closed', context, planet_name
+    end
+    return true, nil, context, planet_name
+end
+
+function M.owned_property_travel_availability(player)
+    local context, planet_name, err = home_travel_context(player)
+    if not context then return false, err, 0 end
+    local homes = owned_homes(player.index, planet_name)
+    if #homes == 0 then return false, 'no-owned-property', 0 end
+    return true, nil, #homes
+end
+
+function M.hospice_travel_availability(player)
+    local context, planet_name, err = home_travel_context(player)
+    if not context then return false, err end
     return true, nil, planet_name
 end
 
@@ -801,14 +858,13 @@ end
 function M.enter_availability(player, property)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
-    if player.admin and settings.get('admin_property_access') then return true end
+    local context, planet_name, travel_err = home_travel_context(player)
+    if not context then return false, travel_err end
     if factions.of_player(player) ~= property.sample_planet then
         return false, 'wrong-faction'
     end
-    if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
-    if not surfaces.can_start_public_travel(player.physical_surface) then
-        return false, 'travel-restricted'
-    end
+    if planet_name ~= property.sample_planet then return false, 'wrong-faction' end
+    if player.admin and settings.get('admin_property_access') then return true end
     if property.owner_index == player.index then return true end
     if M.all_open(property.owner_index) then return true end
     if social.are_mutual(player.index, property.owner_index) then return true end
@@ -907,10 +963,6 @@ function M.enter(player, property_id)
     return ok, err
 end
 
-function M.enter_last_owned(player)
-    return M.home_travel(player)
-end
-
 local function owned_home(player_index, planet_name)
     local account = economy.ensure_account(player_index)
     account.last_property_by_planet = account.last_property_by_planet or {}
@@ -926,18 +978,35 @@ local function owned_home(player_index, planet_name)
     return nil
 end
 
-function M.home_travel(player)
-    local source = player.physical_surface
-    local planet_name = factions.of_player(player)
-    if not planet_name then return false, 'travel-restricted' end
-    if source.name == planet_name then
-        local property = owned_home(player.index, planet_name)
-        if property then return M.enter(player, property.id) end
+function M.home_shuttle(player)
+    local available, err, context, planet_name
+        = M.home_shuttle_availability(player)
+    if not available then return false, err end
+    if context == 'planet' then
         return travel_to_hospice_recording(player, planet_name)
     end
     local account = economy.ensure_account(player.index)
     local positions = account.last_public_position_by_planet or {}
     return surfaces.to_planet_origin(player, planet_name, positions[planet_name])
+end
+
+function M.travel_to_owned_property(player)
+    local available, err = M.owned_property_travel_availability(player)
+    if not available then return false, err end
+    local context, planet_name, _, current = home_travel_context(player)
+    if not context then return false, 'travel-restricted' end
+    local homes = owned_homes(player.index, planet_name)
+    local target
+    if current and current.owner_index == player.index then
+        for index, property in ipairs(homes) do
+            if property.id == current.id then
+                target = homes[index % #homes + 1]
+                break
+            end
+        end
+    end
+    target = target or owned_home(player.index, planet_name) or homes[1]
+    return M.enter(player, target.id)
 end
 
 local function evacuate_property(property, surface)
