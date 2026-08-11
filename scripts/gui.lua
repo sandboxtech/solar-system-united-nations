@@ -663,13 +663,18 @@ local function render_property_table(player, frame, content)
         direction = 'horizontal',
     }
     header.style.vertical_align = 'center'
-    header.add{
+    local faction_label = header.add{
         type = 'label',
-        caption = read_only and {
-            'un.property-foreign-faction', planet_label(selected),
-        } or {'un.property-current-faction', planet_label(selected)},
+        caption = {'un.property-my-faction', factions.display_name(own_planet)},
+        tooltip = {'un.property-my-faction-tooltip'},
     }
-    add_info_sprite(header, {'un.property-page-tooltip'})
+    faction_label.style.font = 'default-semibold'
+    add_info_sprite(header, {
+        '',
+        {'un.property-page-tooltip'},
+        '\n\n',
+        {'un.property-faction-survival-tooltip'},
+    })
     local tabs = content.add{
         type = 'flow',
         name = PROPERTY_PLANET_TABS_NAME,
@@ -1777,23 +1782,13 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(income, {'un.help-brief-start'})
         add_help_gap(details)
         local property = add_help_card(details, {'un.help-card-property'})
-        add_help_line(property, {
-            'un.help-brief-property',
-            config.property_build_experience_base,
-            config.property_build_experience_per_level,
-            config.property_build_stamina_cost,
-            config.property_max_size,
-        })
+        add_help_line(property, {'un.help-brief-property'})
         add_help_gap(details)
         local travel = add_help_card(details, {'un.help-card-travel'})
         add_help_line(travel, {'un.help-brief-travel'})
         add_help_gap(details)
         local project = add_help_card(details, {'un.help-card-project'})
         add_help_line(project, {'un.help-brief-project'})
-        add_help_line(project, {
-            'un.help-brief-deconstruction',
-            settings.get('deconstruction_min_online_hours'),
-        })
     elseif mode == 'advanced' then
         local beginner = add_help_card(details, {'un.help-section-beginner'})
         add_help_line(beginner, {'un.help-detail-linked-chest'})
@@ -1823,6 +1818,7 @@ local function render_help_page(player, frame, content, mode)
             config.fast_respawn_seconds,
             config.normal_respawn_seconds,
         })
+        add_help_line(travel, {'un.help-foreign-survival'})
         add_help_gap(details)
 
         local world = add_help_card(details, {'un.help-detail-world-heading'})

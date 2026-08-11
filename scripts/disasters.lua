@@ -290,7 +290,12 @@ local function ensure_record(name)
 end
 
 local function evacuate_player(player, target_surface)
-    local hospice = surfaces.ensure_hospice(target_surface.name)
+    local target_planet = target_surface.name
+    local player_planet = factions.of_player(player) or 'nauvis'
+    local foreign = player_planet ~= target_planet
+    local hospice = surfaces.ensure_hospice(
+        foreign and player_planet or target_planet
+    )
     if player.connected and player.controller_type == defines.controllers.remote
             and player.surface == target_surface then
         pcall(function() player.exit_remote_view() end)
@@ -307,6 +312,33 @@ local function evacuate_player(player, target_surface)
                 }
             end)
         end
+    end
+    if foreign then
+        local characters = {}
+        for _, character in pairs(player.get_associated_characters()) do
+            if character.valid and character.surface == target_surface then
+                characters[#characters + 1] = character
+            end
+        end
+        if #characters > 0 then
+            storage.respawn_hospice_planets[player.index] = player_planet
+            if player.connected then
+                player.print({
+                    'un.planet-reset-foreign-death',
+                    planet_label(target_planet),
+                    factions.display_name(player_planet),
+                })
+            end
+            local character = player.character
+            if not (character and character.valid
+                    and character.surface == target_surface) then
+                character = characters[1]
+            end
+            if character and character.valid then
+                character.die(game.forces.neutral)
+            end
+        end
+        return
     end
     if player.physical_surface == target_surface then
         local moved = false
@@ -940,8 +972,11 @@ events.on(defines.events.on_player_changed_surface, function(event)
     if not player then return end
     local surface = player.physical_surface
     if surface and not M.is_open(surface.name) then
+        local foreign = factions.of_player(player) ~= surface.name
         evacuate_player(player, surface)
-        player.print({'un.planet-reset-closed', planet_label(surface.name)})
+        if not foreign then
+            player.print({'un.planet-reset-closed', planet_label(surface.name)})
+        end
     end
 end)
 

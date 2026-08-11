@@ -5,7 +5,7 @@
   "author": "虚无群友",
   "contact": "Q群293280221",
   "homepage": "https://github.com/sandboxtech/solar-system-united-nations",
-  "description": "五个阵营在周期性灾变中开发公共星球。生产科技瓶，获取金币与经验；建造限时房产和飞船，在重置前撤出工厂与物资。\n\n快速入门：\n· 新账户获得金币、满体力和基础资源；低保与体力离线也会积累。\n· 在本阵营的公共星球上亲手放置木箱，建立个人关联箱。关联箱不能手动打开，需要使用机械臂。\n· 把科技瓶送入关联箱：每瓶自动兑换 1 金币，并累计对应的科技瓶经验。\n· 使用自动化科技包经验建造房产。面积越大、寿命越长，成本越高。\n· 星球重置会清除公共星球上的建筑和物资，但保留科技。联合国难民营和未到期的房产不受本轮重置影响。\n· 阵营之间可能友好，也可能敌对。你可以合作、交易、外交，也要留意入侵与破坏。\n\n支持简体中文和英文。QQ 群：293280221\nGitHub：https://github.com/sandboxtech/solar-system-united-nations\n\nUnited Nations of Sol is a Space Age multiplayer scenario about five factions, periodically reset public planets, science-pack progression, temporary property, ships, trade, diplomacy, and conflict.",
+  "description": "五个阵营开发会周期重置的公共星球。生产科技瓶、积累个人经验、建造限时房产，在灾变之间发展自己的产业。\n\n快速入门：\n· 在本阵营的公共星球上亲手放置木箱，建立个人关联箱。\n· 用机械臂把科技瓶送入关联箱，转换为对应的个人经验。\n· 打开“建造”页，用经验建造第一套房产。\n· 在公共星球重置前，把重要机器和物资转移到安全据点。\n· 本国难民营提供避灾保障；前往外星需要自行承担风险。\n\n支持简体中文和英文。QQ 群：293280221\nGitHub：https://github.com/sandboxtech/solar-system-united-nations\n\nUnited Nations of Sol is a Space Age multiplayer scenario about five factions, periodically reset public planets, science-pack progression, temporary property, ships, trade, diplomacy, and conflict.",
   "dependencies": [
     "base >= 2.0.0",
     "elevated-rails >= 2.0.0",

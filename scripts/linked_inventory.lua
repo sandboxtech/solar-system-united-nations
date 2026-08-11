@@ -1,5 +1,4 @@
 local config = require('config')
-local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
 local factions = require('scripts.factions')
@@ -166,7 +165,7 @@ local function on_player_mined(event)
     end
 end
 
-local function appraise_and_remove(inventory)
+local function remove_science_packs(inventory)
     local entries = inventory.get_contents()
     table.sort(entries, function(a, b)
         if a.name ~= b.name then return a.name < b.name end
@@ -175,10 +174,8 @@ local function appraise_and_remove(inventory)
 
     local removed_entries = {}
     local total_items = 0
-    local total_credit = 0
     for _, item in ipairs(entries) do
-        local base = config.science_pack_credit[item.name]
-        if base then
+        if config.science_pack_experience[item.name] then
             local removed = inventory.remove{
                 name = item.name,
                 count = item.count,
@@ -191,20 +188,10 @@ local function appraise_and_remove(inventory)
                     count = removed,
                 }
                 total_items = total_items + removed
-                total_credit = total_credit + removed * base
             end
         end
     end
-    return removed_entries, total_items, total_credit
-end
-
-local function refund(inventory, entries)
-    for _, item in ipairs(entries) do
-        local inserted = inventory.insert(item)
-        if inserted ~= item.count then
-            log('[un] failed to refund linked inventory item: ' .. item.name)
-        end
-    end
+    return removed_entries, total_items
 end
 
 function M.get_inventory(player)
@@ -285,33 +272,16 @@ function M.clear_surface_dropoffs(surface_name)
     end
 end
 
-local function convert_inventory(player, inventory, reason)
-    if not (inventory and inventory.valid) then return 0, 0 end
-    local removed, total_items, total_credit = appraise_and_remove(inventory)
-    if total_credit <= 0 then return 0, 0 end
-
-    local ok = economy.change(player.index, total_credit, reason)
-    if not ok then
-        refund(inventory, removed)
-        return 0, 0
-    end
-
-    local account = economy.ensure_account(player.index)
-    account.last_science_sale = {
-        tick = game.tick,
-        items = total_items,
-        credit = total_credit,
-    }
+local function convert_inventory(player, inventory)
+    if not (inventory and inventory.valid) then return 0 end
+    local removed, total_items = remove_science_packs(inventory)
+    if total_items <= 0 then return 0 end
     experience.record(player.index, removed)
-    return total_items, total_credit
+    return total_items
 end
 
 function M.convert_player(player)
-    return convert_inventory(
-        player,
-        M.get_inventory(player),
-        'science-sale'
-    )
+    return convert_inventory(player, M.get_inventory(player))
 end
 
 events.on(defines.events.on_built_entity, on_player_built)
