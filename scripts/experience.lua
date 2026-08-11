@@ -4,6 +4,10 @@ local state = require('scripts.state')
 
 local M = {}
 
+local function bump_player_data_revision()
+    storage.player_data_revision = (storage.player_data_revision or 0) + 1
+end
+
 local function merge_experience(target, source)
     if type(source) ~= 'table' or source == target then return target end
     for name, amount in pairs(source) do
@@ -55,9 +59,12 @@ end
 
 function M.record(player_index, entries)
     local data = account_data(player_index)
+    local changed = false
     for _, entry in ipairs(entries) do
         data[entry.name] = (data[entry.name] or 0) + entry.count
+        if entry.count ~= 0 then changed = true end
     end
+    if changed then bump_player_data_revision() end
 end
 
 function M.get(player_index)
@@ -76,6 +83,7 @@ function M.spend(player_index, name, amount)
     local available = data[name] or 0
     if available < amount then return false end
     data[name] = available - amount
+    if amount ~= 0 then bump_player_data_revision() end
     return true
 end
 

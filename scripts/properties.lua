@@ -287,7 +287,9 @@ local function ensure_linked_chests(property)
         chest.link_id = link_id
         chest.operable = false
         chest.destructible = false
-        chest.minable = false
+        -- LuaEntity::minable became read-only in Factorio 2.1. The mutable
+        -- script flag is available in both 2.0 and 2.1.
+        chest.minable_flag = false
     end
     return true
 end

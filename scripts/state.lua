@@ -9,6 +9,15 @@ function M.ensure()
     if storage.next_property_id == nil then storage.next_property_id = 1 end
     if storage.deleting_properties == nil then storage.deleting_properties = {} end
     if storage.property_revision == nil then storage.property_revision = 0 end
+    if storage.ship_revision == nil then storage.ship_revision = 0 end
+    if storage.planet_revision == nil then storage.planet_revision = 0 end
+    if storage.faction_revision == nil then storage.faction_revision = 0 end
+    if storage.player_roster_revision == nil then
+        storage.player_roster_revision = 0
+    end
+    if storage.player_data_revision == nil then
+        storage.player_data_revision = 0
+    end
     if storage.property_name_translation_requests == nil then
         storage.property_name_translation_requests = {}
     end

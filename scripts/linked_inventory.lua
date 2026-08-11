@@ -286,6 +286,7 @@ end
 
 events.on(defines.events.on_built_entity, on_player_built)
 events.on(defines.events.on_player_mined_entity, on_player_mined)
+events.on(defines.events.on_robot_mined_entity, on_player_mined)
 events.on(defines.events.on_entity_died, function(event)
     forget_chest(event.entity)
 end)
