@@ -245,7 +245,7 @@ M.property_build_experience_base = 2000
 M.property_build_experience_per_level = 200
 local function property_build_type(spec)
     spec.base_width = spec.base_width or 32
-    spec.width_per_level = spec.width_per_level or 1
+    spec.width_per_level = spec.width_per_level or 2
     spec.height = spec.height or 32
     spec.height_per_level = spec.height_per_level or 0
     spec.max_width = spec.max_width or 256
