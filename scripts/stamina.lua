@@ -57,4 +57,11 @@ function M.refund(player_index, amount)
     return true
 end
 
+function M.fill(player_index)
+    local account = advance(player_index)
+    account.stamina = config.stamina_max
+    account.stamina_tick = game.tick
+    return account.stamina
+end
+
 return M

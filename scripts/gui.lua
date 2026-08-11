@@ -1558,6 +1558,15 @@ local function render_admin_page(player, frame, content)
     summary.add{type = 'label', caption = {'un.admin-summary-ledger'}}
     summary.add{type = 'label', caption = count_pairs(storage.ledger.records)}
 
+    local actions = scroll.add{type = 'flow', direction = 'horizontal'}
+    actions.style.top_margin = 8
+    actions.add{
+        type = 'button',
+        caption = {'un.admin-fill-stamina'},
+        tooltip = {'un.admin-fill-stamina-tooltip', config.stamina_max},
+        tags = {action = 'admin-fill-stamina'},
+    }
+
     scroll.add{type = 'line'}
     scroll.add{type = 'label', caption = {'un.admin-settings-title'}, style = 'heading_2_label'}
     local setting_table = scroll.add{
@@ -2875,6 +2884,11 @@ events.on(defines.events.on_gui_click, function(event)
                 end
                 player.print(ok and {'un.admin-setting-saved'}
                     or {'un.admin-invalid-value'})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-fill-stamina' then
+                stamina.fill(player.index)
+                player.print({'un.admin-stamina-filled', config.stamina_max})
                 render_page(player, 'admin')
                 update_frame(player)
             end
