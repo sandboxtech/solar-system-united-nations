@@ -252,7 +252,7 @@ local function property_build_type(spec)
     spec.max_width = spec.max_width or 256
     spec.max_height = spec.max_height or 256
     spec.initial_price_multiplier = spec.initial_price_multiplier or 1
-    spec.base_decay_hours = spec.base_decay_hours or 20
+    spec.base_decay_hours = spec.base_decay_hours or 10
     spec.decay_hours_per_level = spec.decay_hours_per_level or 1
     spec.base_lifetime_hours = spec.base_lifetime_hours or 100
     spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
@@ -262,7 +262,7 @@ M.property_build_types = {
     property_build_type{
         pack = 'automation-science-pack',
         key = 'shelter',
-        base_decay_hours = 5,
+        base_decay_hours = 2,
         decay_hours_per_level = 0.1,
         base_lifetime_hours = 10,
         lifetime_hours_per_level = 1,
@@ -271,7 +271,7 @@ M.property_build_types = {
         pack = 'logistic-science-pack',
         key = 'cottage',
         initial_price_multiplier = 2,
-        base_decay_hours = 10,
+        base_decay_hours = 6,
         decay_hours_per_level = 0.2,
         base_lifetime_hours = 30,
         lifetime_hours_per_level = 3,
@@ -281,8 +281,11 @@ M.property_build_types = {
         key = 'secure-cottage',
         initial_price_multiplier = 10,
         base_decay_hours = 100,
-        decay_hours_per_level = 1,
+        decay_hours_per_level = 10,
         crime_chance_multiplier = 0.1,
+        fixed_layout = {
+            fill_tile = 'tutorial-grid',
+        },
     },
     property_build_type{
         pack = 'chemical-science-pack',

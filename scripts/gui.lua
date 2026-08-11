@@ -961,8 +961,6 @@ local function render_property_build_page(player, frame, content)
     for _, option in ipairs(config.property_build_types) do
         build_type_items[#build_type_items + 1] = {
             'un.property-build-type-' .. option.key,
-            option.base_decay_hours,
-            option.decay_hours_per_level,
             (option.crime_chance_multiplier or 1) * 100,
         }
     end
@@ -1780,12 +1778,7 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(background, {'un.help-story-background'})
         add_help_gap(details)
         local forces = add_help_card(details, {'un.help-card-factions'})
-        add_help_line(forces, {
-            'un.help-story-factions',
-            config.suicide_stamina_cost,
-            settings.get('faction_friendly_to_hostile_percent'),
-            settings.get('faction_hostile_to_friendly_percent'),
-        })
+        add_help_line(forces, {'un.help-story-factions'})
     elseif mode == 'brief' then
         local income = add_help_card(details, {'un.help-card-income'})
         add_help_line(income, {'un.help-brief-start'})

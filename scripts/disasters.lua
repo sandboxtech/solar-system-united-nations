@@ -746,7 +746,8 @@ local function finish_reset(name, surface, record)
         game.print({
             'un.faction-diplomacy-changed',
             factions.display_name(name),
-            friendly and {'un.faction-friendly'} or {'un.faction-hostile'},
+            friendly and {'un.faction-borders-opened'}
+                or {'un.faction-borders-closed'},
         })
     end
 end

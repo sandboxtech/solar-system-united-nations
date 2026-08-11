@@ -70,20 +70,56 @@ local function in_core(x, y, core_half)
         and y >= -core_half and y < core_half
 end
 
-local function copy_sample_tiles(
+local function clone_sample_tile_area(
+        source, center, destination, left, top, right, bottom)
+    if left >= right or top >= bottom then return end
+    source.clone_area{
+        source_area = {
+            {center.x + left, center.y + top},
+            {center.x + right, center.y + bottom},
+        },
+        destination_area = {{left, top}, {right, bottom}},
+        destination_surface = destination,
+        clone_tiles = true,
+        clone_entities = false,
+        clone_decoratives = false,
+        clear_destination_entities = false,
+        clear_destination_decoratives = true,
+        expand_map = false,
+    }
+end
+
+local function apply_sample_tiles(
         source, center, destination, half_width, half_height, core_half)
+    -- Let the engine copy the four natural-terrain strips. The central area
+    -- is never copied because it is always replaced with tutorial grid.
+    clone_sample_tile_area(
+        source, center, destination,
+        -half_width, -half_height, half_width, -core_half
+    )
+    clone_sample_tile_area(
+        source, center, destination,
+        -half_width, core_half, half_width, half_height
+    )
+    clone_sample_tile_area(
+        source, center, destination,
+        -half_width, -core_half, -core_half, core_half
+    )
+    clone_sample_tile_area(
+        source, center, destination,
+        core_half, -core_half, half_width, core_half
+    )
+
     local tiles = {}
-    for y = -half_height, half_height - 1 do
-        for x = -half_width, half_width - 1 do
+    for y = -core_half, core_half - 1 do
+        for x = -core_half, core_half - 1 do
             tiles[#tiles + 1] = {
-                name = in_core(x, y, core_half) and TUTORIAL_GRID_NAME
-                    or source.get_tile(center.x + x, center.y + y).name,
+                name = TUTORIAL_GRID_NAME,
                 position = {x, y},
             }
         end
     end
-    -- Let Factorio correct neighbouring tile transitions so copied biomes keep
-    -- their native smooth borders instead of exposing raw stair-step edges.
+    -- Correct the natural/grid boundary after all four cloned strips exist.
     destination.set_tiles(tiles, true, false, true, false)
 end
 
@@ -144,7 +180,7 @@ local function apply_natural_sample(surface, property_id, half_width, half_heigh
     source.request_to_generate_chunks(center, radius)
     source.force_generate_chunk_requests()
     local core_half = core_half_size(half_width, half_height)
-    copy_sample_tiles(
+    apply_sample_tiles(
         source, center, surface, half_width, half_height, core_half
     )
     copy_sample_entities(
