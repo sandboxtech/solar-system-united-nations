@@ -118,6 +118,10 @@ local ADMIN_NUMBER_SETTINGS = {
     {'planet_reset_min_hours', 'un.admin-setting-planet-reset-min'},
     {'planet_reset_max_hours', 'un.admin-setting-planet-reset-max'},
     {'planet_reset_exponent', 'un.admin-setting-planet-reset-exponent'},
+    {'faction_friendly_to_hostile_percent',
+        'un.admin-setting-faction-friendly-to-hostile'},
+    {'faction_hostile_to_friendly_percent',
+        'un.admin-setting-faction-hostile-to-friendly'},
     {'property_tax_percent', 'un.admin-setting-property-tax'},
     {'property_price_factor', 'un.admin-setting-property-factor'},
     {'technology_price_multiplier', 'un.admin-setting-technology-price'},
@@ -957,6 +961,9 @@ local function render_property_build_page(player, frame, content)
     for _, option in ipairs(config.property_build_types) do
         build_type_items[#build_type_items + 1] = {
             'un.property-build-type-' .. option.key,
+            option.base_decay_hours,
+            option.decay_hours_per_level,
+            (option.crime_chance_multiplier or 1) * 100,
         }
     end
     form.add{
@@ -1450,8 +1457,8 @@ local function render_factions_page(player, frame, content)
             'un.faction-page-tooltip',
             config.suicide_stamina_cost,
             config.normal_respawn_seconds,
-            config.faction_friendly_to_hostile_chance * 100,
-            config.faction_hostile_to_friendly_chance * 100,
+            settings.get('faction_friendly_to_hostile_percent'),
+            settings.get('faction_hostile_to_friendly_percent'),
         },
         '\n\n',
         {'un.faction-aquilo-neutral'},
@@ -1598,6 +1605,8 @@ local function render_admin_page(player, frame, content)
                 or key == 'planet_reset_min_hours'
                 or key == 'planet_reset_max_hours'
                 or key == 'planet_reset_exponent'
+                or key == 'faction_friendly_to_hostile_percent'
+                or key == 'faction_hostile_to_friendly_percent'
                 or key == 'property_tax_percent'
                 or key == 'property_price_factor'
                 or key == 'technology_price_multiplier'
@@ -1774,8 +1783,8 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(forces, {
             'un.help-story-factions',
             config.suicide_stamina_cost,
-            config.faction_friendly_to_hostile_chance * 100,
-            config.faction_hostile_to_friendly_chance * 100,
+            settings.get('faction_friendly_to_hostile_percent'),
+            settings.get('faction_hostile_to_friendly_percent'),
         })
     elseif mode == 'brief' then
         local income = add_help_card(details, {'un.help-card-income'})

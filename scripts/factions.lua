@@ -155,8 +155,8 @@ function M.update_diplomacy_after_reset(planet_name)
 
     local was_friendly = storage.faction_diplomacy_friendly[planet_name]
     local transition_chance = was_friendly
-        and config.faction_friendly_to_hostile_chance
-        or config.faction_hostile_to_friendly_chance
+        and settings.get('faction_friendly_to_hostile_percent') / 100
+        or settings.get('faction_hostile_to_friendly_percent') / 100
     if math.random() >= transition_chance then return false end
 
     local friendly = not was_friendly

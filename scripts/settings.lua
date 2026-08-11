@@ -44,6 +44,16 @@ local DEFINITIONS = {
         min = 0.01,
         max = 100,
     },
+    faction_friendly_to_hostile_percent = {
+        default = config.faction_friendly_to_hostile_chance * 100,
+        min = 0,
+        max = 100,
+    },
+    faction_hostile_to_friendly_percent = {
+        default = config.faction_hostile_to_friendly_chance * 100,
+        min = 0,
+        max = 100,
+    },
     property_tax_percent = {default = config.property_default_tax * 100, min = 0, max = 100},
     property_price_factor = {
         default = config.property_price_factor,

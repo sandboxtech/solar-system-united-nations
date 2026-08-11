@@ -252,40 +252,42 @@ local function property_build_type(spec)
     spec.max_width = spec.max_width or 256
     spec.max_height = spec.max_height or 256
     spec.initial_price_multiplier = spec.initial_price_multiplier or 1
-    spec.base_decay_hours = spec.base_decay_hours or 18
-    spec.decay_hours_per_level = spec.decay_hours_per_level or 0.6
-    spec.base_lifetime_hours = spec.base_lifetime_hours or 108
-    spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 9
+    spec.base_decay_hours = spec.base_decay_hours or 20
+    spec.decay_hours_per_level = spec.decay_hours_per_level or 1
+    spec.base_lifetime_hours = spec.base_lifetime_hours or 100
+    spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
     return spec
 end
 M.property_build_types = {
     property_build_type{
         pack = 'automation-science-pack',
         key = 'shelter',
-        base_decay_hours = 3,
+        base_decay_hours = 5,
         decay_hours_per_level = 0.1,
-        base_lifetime_hours = 12,
+        base_lifetime_hours = 10,
         lifetime_hours_per_level = 1,
     },
     property_build_type{
         pack = 'logistic-science-pack',
         key = 'cottage',
         initial_price_multiplier = 2,
-        base_decay_hours = 12,
+        base_decay_hours = 10,
         decay_hours_per_level = 0.2,
-        base_lifetime_hours = 48,
+        base_lifetime_hours = 30,
         lifetime_hours_per_level = 3,
     },
     property_build_type{
         pack = 'military-science-pack',
         key = 'secure-cottage',
-        initial_price_multiplier = 3,
+        initial_price_multiplier = 10,
+        base_decay_hours = 100,
+        decay_hours_per_level = 1,
         crime_chance_multiplier = 0.1,
     },
     property_build_type{
         pack = 'chemical-science-pack',
         key = 'shore-cottage',
-        initial_price_multiplier = 4,
+        initial_price_multiplier = 3,
         terrain_planet = 'nauvis',
         top_tile = 'water',
         top_tile_rows = 2,
@@ -300,7 +302,7 @@ M.property_build_types = {
         height_per_level = 1,
         max_height = 320,
         exact_dimensions = true,
-        initial_price_multiplier = 5,
+        initial_price_multiplier = 4,
         fixed_layout = {
             fill_tile = 'out-of-map',
             railway_tile = 'tutorial-grid',
@@ -318,7 +320,7 @@ M.property_build_types = {
         max_width = 1024,
         max_height = 1024,
         exact_dimensions = true,
-        initial_price_multiplier = 6,
+        initial_price_multiplier = 5,
         fixed_layout = {
             fill_tile = 'out-of-map',
             chunk_grid_tile = 'tutorial-grid',
@@ -373,7 +375,7 @@ M.property_build_types = {
         key = 'cryogenic-cottage',
         initial_price_multiplier = 12,
         base_decay_hours = 192,
-        decay_hours_per_level = 3.2,
+        decay_hours_per_level = 2,
         base_lifetime_hours = 288,
         lifetime_hours_per_level = 24,
         terrain_planet = 'aquilo',
