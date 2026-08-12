@@ -1912,6 +1912,18 @@ local function render_admin_page(player, frame, content)
     switches.add{
         type = 'switch',
         left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-science-conversion-notifications'},
+        switch_state = settings.get('science_conversion_notifications')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'science_conversion_notifications',
+        },
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
         right_label_caption = {'un.admin-setting-property-access'},
         switch_state = settings.get('admin_property_access') and 'right' or 'left',
         allow_none_state = false,

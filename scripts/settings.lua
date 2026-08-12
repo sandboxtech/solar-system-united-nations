@@ -154,6 +154,10 @@ local DEFINITIONS = {
     property_expansion_enabled = {default = true, boolean = true},
     property_salvage_enabled = {default = true, boolean = true},
     crime_enabled = {default = true, boolean = true},
+    science_conversion_notifications = {
+        default = config.science_conversion_notifications,
+        boolean = true,
+    },
     admin_property_access = {default = false, boolean = true},
     surface_hidden_from_foreign_factions = {
         default = config.surface_hidden_from_foreign_factions,

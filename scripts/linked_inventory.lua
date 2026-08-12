@@ -394,6 +394,22 @@ function M.convert_player(player)
     return convert_inventory(player, M.get_inventory(player))
 end
 
+local function notify_online_conversion(player, converted)
+    if converted <= 0
+            or not player.connected
+            or not settings.get('science_conversion_notifications') then
+        return
+    end
+    player.create_local_flying_text{
+        text = {'un.science-converted-notification', converted},
+        position = player.position,
+        surface = player.surface,
+        color = {r = 0.55, g = 1, b = 0.55},
+        time_to_live = 180,
+        speed = 0.5,
+    }
+end
+
 events.on(defines.events.on_built_entity, on_player_built)
 events.on(defines.events.on_player_mined_entity, on_mined)
 events.on(defines.events.on_robot_mined_entity, on_mined)
@@ -403,7 +419,8 @@ end)
 
 scheduler.every(config.science_conversion_ticks, function(event)
     for _, player in pairs(game.connected_players) do
-        M.convert_player(player)
+        local converted = M.convert_player(player)
+        notify_online_conversion(player, converted)
     end
 
     -- Offline linked inventories are checked less often and spread over the
