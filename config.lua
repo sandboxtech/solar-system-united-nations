@@ -152,6 +152,8 @@ M.starter_resources = {
     {name = 'copper-plate', count = 200},
     {name = 'stone', count = 100},
     {name = 'wood', count = 100},
+    {name = 'automation-science-pack', count = 2000},
+    {name = 'military-science-pack', count = 2000},
 }
 M.starter_kit_stamina_cost = 10000
 M.starter_kit_armor = 'modular-armor'
