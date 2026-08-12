@@ -2395,7 +2395,8 @@ end
 local function property_error(err)
     if err == 'insufficient-credit' then return {'un.property-error-credit'} end
     if err == 'price-increased' then return {'un.property-error-price-changed'} end
-    if err == 'not-owner' or err == 'already-owner' then
+    if err == 'not-owner' then return {'un.property-manage-not-owner'} end
+    if err == 'already-owner' then
         return {'un.property-error-ownership'}
     end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
