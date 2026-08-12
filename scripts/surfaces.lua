@@ -512,11 +512,14 @@ function M.sync_property_environment(
     ))
     surface.always_day = false
     surface.freeze_daytime = false
-    local planet_solar = (defaults['solar-power']
-        or prototypes.surface_property['solar-power'].default_value) / 100
+    -- `solar-power` is already a percentage multiplier. The independent
+    -- LuaSurface multiplier is compounded with it, so copying the planet's
+    -- percentage into both places would square the result (Vulcanus 400%
+    -- became 1600%). Refugee camps use the planetary value unchanged;
+    -- properties apply only their additional configured factor.
     surface.solar_power_multiplier = use_planet_solar
-        and planet_solar
-        or planet_solar * config.property_solar_multiplier
+        and 1
+        or config.property_solar_multiplier
     surface.min_brightness = min_brightness or config.property_min_brightness
     local planet_surface = game.surfaces[planet_name or 'nauvis']
     if planet_surface and planet_surface.valid then
