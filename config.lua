@@ -187,6 +187,8 @@ M.tech_leak_chance_multiplier_by_planet = {
 
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute
+M.science_offline_conversion_ticks = 10 * M.ticks_per_minute
+M.science_offline_conversion_max_hours = 12
 M.logistic_network_roboport_limit = 16
 M.logistic_network_logistic_robot_limit = 512
 M.science_pack_experience = {

@@ -9,6 +9,36 @@ local surfaces = require('scripts.surfaces')
 
 local M = {}
 
+local function conversion_bucket_count()
+    return math.max(1, math.floor(
+        config.science_offline_conversion_ticks
+            / config.science_conversion_ticks
+    ))
+end
+
+local function conversion_buckets()
+    local count = conversion_bucket_count()
+    local buckets = storage.dropoff_conversion_buckets
+    if type(buckets) ~= 'table' or #buckets ~= count then
+        buckets = {}
+        for index = 1, count do buckets[index] = {} end
+        storage.dropoff_conversion_buckets = buckets
+    end
+    return buckets
+end
+
+local function conversion_bucket(player_index)
+    return player_index % conversion_bucket_count() + 1
+end
+
+local function index_for_conversion(player_index)
+    conversion_buckets()[conversion_bucket(player_index)][player_index] = true
+end
+
+local function unindex_for_conversion(player_index)
+    conversion_buckets()[conversion_bucket(player_index)][player_index] = nil
+end
+
 local function same_position(record, surface_name, position)
     return record
         and record.surface == surface_name
@@ -84,7 +114,14 @@ function M.ensure()
     end
     table.sort(indexes)
     for _, player_index in ipairs(indexes) do
-        compact_records(player_index)
+        local list = compact_records(player_index)
+        if #list == 0 then storage.dropoffs[player_index] = nil end
+    end
+    local buckets = {}
+    for index = 1, conversion_bucket_count() do buckets[index] = {} end
+    storage.dropoff_conversion_buckets = buckets
+    for player_index, list in pairs(storage.dropoffs) do
+        if #list > 0 then index_for_conversion(player_index) end
     end
 end
 
@@ -188,6 +225,7 @@ local function on_player_built(event)
         x = position.x,
         y = position.y,
     }
+    index_for_conversion(player.index)
     player.print({'un.dropoff-created-count', #list, limit})
 end
 
@@ -200,6 +238,7 @@ local function forget_chest(entity)
     for index = #list, 1, -1 do
         if same_position(list[index], entity.surface.name, entity.position) then
             table.remove(list, index)
+            if #list == 0 then unindex_for_conversion(entity.link_id) end
             return true
         end
     end
@@ -293,6 +332,7 @@ function M.clear_player_dropoff(player_index)
         if chest then chest.destroy() end
     end
     storage.dropoffs[player_index] = nil
+    unindex_for_conversion(player_index)
 end
 
 function M.purge_player(player_index)
@@ -323,6 +363,7 @@ function M.release_player_dropoff(player)
         end
     end
     storage.dropoffs[player.index] = nil
+    unindex_for_conversion(player.index)
 end
 
 function M.clear_surface_dropoffs(surface_name)
@@ -337,6 +378,7 @@ function M.clear_surface_dropoffs(surface_name)
                 table.remove(list, index)
             end
         end
+        if #list == 0 then unindex_for_conversion(player_index) end
     end
 end
 
@@ -359,9 +401,39 @@ events.on(defines.events.on_entity_died, function(event)
     forget_chest(event.entity)
 end)
 
-scheduler.every(config.science_conversion_ticks, function()
+scheduler.every(config.science_conversion_ticks, function(event)
     for _, player in pairs(game.connected_players) do
         M.convert_player(player)
+    end
+
+    -- Offline linked inventories are checked less often and spread over the
+    -- regular conversion passes. This avoids a ten-minute spike and never
+    -- scans every offline player or every chest entity.
+    local slots = conversion_bucket_count()
+    local slot = math.floor(event.tick / config.science_conversion_ticks)
+        % slots + 1
+    local maximum_offline_ticks = config.science_offline_conversion_max_hours
+        * config.ticks_per_hour
+    local indexes = {}
+    for player_index in pairs(conversion_buckets()[slot]) do
+        indexes[#indexes + 1] = player_index
+    end
+    table.sort(indexes)
+    for _, player_index in ipairs(indexes) do
+        local player = game.get_player(player_index)
+        local account = storage.players[player_index]
+        local last_seen_tick = account and tonumber(account.last_seen_tick)
+            or player and tonumber(player.last_online)
+        if player and player.valid and not player.connected
+                and last_seen_tick
+                and game.tick - last_seen_tick >= 0
+                and game.tick - last_seen_tick <= maximum_offline_ticks then
+            M.convert_player(player)
+        elseif not player or not player.valid
+                or not storage.dropoffs[player_index]
+                or #storage.dropoffs[player_index] == 0 then
+            unindex_for_conversion(player_index)
+        end
     end
 end)
 

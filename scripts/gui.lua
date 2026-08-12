@@ -2174,6 +2174,9 @@ local function render_help_page(player, frame, content, mode)
             {
                 'un.help-detail-science',
                 config.science_conversion_ticks / config.ticks_per_minute,
+                config.science_offline_conversion_ticks
+                    / config.ticks_per_minute,
+                config.science_offline_conversion_max_hours,
             },
             '\n\n',
             {
