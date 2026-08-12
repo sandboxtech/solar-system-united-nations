@@ -119,6 +119,10 @@ local ADMIN_NUMBER_SETTINGS = {
     {'planet_reset_min_hours', 'un.admin-setting-planet-reset-min'},
     {'planet_reset_max_hours', 'un.admin-setting-planet-reset-max'},
     {'planet_reset_exponent', 'un.admin-setting-planet-reset-exponent'},
+    {'planet_foreign_warning_early_minutes',
+        'un.admin-setting-foreign-warning-early'},
+    {'planet_foreign_warning_final_minutes',
+        'un.admin-setting-foreign-warning-final'},
     {'faction_friendly_to_hostile_percent',
         'un.admin-setting-faction-friendly-to-hostile'},
     {'faction_hostile_to_friendly_percent',
@@ -1844,13 +1848,36 @@ local function render_help_page(player, frame, content, mode)
         local background = add_help_card(details, {'un.help-card-story'})
         add_help_line(background, {'un.help-story-background'})
         add_help_gap(details)
-        local forces = add_help_card(details, {'un.help-card-factions'})
+        local forces = add_help_card(
+            details,
+            {'un.help-card-factions'},
+            {'un.help-story-factions-detail'}
+        )
         add_help_line(forces, {'un.help-story-factions'})
         add_help_gap(details)
-        local diplomacy = add_help_card(details, {'un.help-card-diplomacy'})
+        local foreign = add_help_card(
+            details,
+            {'un.help-card-foreign-expedition'},
+            {
+                'un.help-story-foreign-detail',
+                settings.get('planet_foreign_warning_early_minutes'),
+                settings.get('planet_foreign_warning_final_minutes'),
+            }
+        )
+        add_help_line(foreign, {'un.help-story-foreign'})
+        add_help_gap(details)
+        local diplomacy = add_help_card(
+            details,
+            {'un.help-card-diplomacy'},
+            {'un.help-story-diplomacy-detail'}
+        )
         add_help_line(diplomacy, {'un.help-story-diplomacy'})
         add_help_gap(details)
-        local switching = add_help_card(details, {'un.help-card-faction-switch'})
+        local switching = add_help_card(
+            details,
+            {'un.help-card-faction-switch'},
+            {'un.help-story-faction-switch-detail'}
+        )
         add_help_line(switching, {'un.help-story-faction-switch'})
     elseif mode == 'brief' then
         local travel = add_help_card(details, {'un.help-card-travel'})
@@ -1885,7 +1912,11 @@ local function render_help_page(player, frame, content, mode)
             '\n\n',
             {'un.help-foreign-survival'},
             '\n\n',
-            {'un.help-detail-resets'},
+            {
+                'un.help-detail-resets',
+                settings.get('planet_foreign_warning_early_minutes'),
+                settings.get('planet_foreign_warning_final_minutes'),
+            },
         }
         local travel = add_help_card(
             details,

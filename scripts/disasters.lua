@@ -912,24 +912,35 @@ end
 local function check_resets()
     if not settings.get('planet_resets_enabled') then return end
     local reset_in_progress = active_reset_name() ~= nil
+    local warning_minutes = {}
+    local warning_seen = {}
+    for _, setting_name in ipairs({
+        'planet_foreign_warning_early_minutes',
+        'planet_foreign_warning_final_minutes',
+    }) do
+        local minutes = settings.get(setting_name)
+        if minutes > 0 and not warning_seen[minutes] then
+            warning_seen[minutes] = true
+            warning_minutes[#warning_minutes + 1] = minutes
+        end
+    end
+    table.sort(warning_minutes, function(a, b) return a > b end)
     for _, name in ipairs(config.public_planets) do
         local record, surface = ensure_record(name)
         if record.state == 'open' and record.next_tick then
             local left = record.next_tick - game.tick
-            for _, minutes in ipairs(config.public_planet_foreign_purge_minutes) do
+            for _, minutes in ipairs(warning_minutes) do
                 local threshold = minutes * config.ticks_per_minute
-                local key = 'foreign-purge-' .. minutes
+                local key = 'foreign-warning-' .. minutes
                 if left <= threshold and left > 0 and not record.warned[key]
                         and surface and surface.valid then
                     record.warned[key] = true
+                    game.print({
+                        'un.planet-reset-warning',
+                        planet_label(name),
+                        minutes,
+                    })
                     kill_foreign_players(surface)
-                end
-            end
-            for _, minutes in ipairs(config.public_planet_warning_minutes) do
-                local threshold = minutes * config.ticks_per_minute
-                if left <= threshold and left > 0 and not record.warned[minutes] then
-                    record.warned[minutes] = true
-                    game.print({'un.planet-reset-warning', planet_label(name), minutes})
                 end
             end
             if left <= 0 and not reset_in_progress

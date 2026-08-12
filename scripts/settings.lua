@@ -50,6 +50,18 @@ local DEFINITIONS = {
         min = 0.01,
         max = 100,
     },
+    planet_foreign_warning_early_minutes = {
+        default = config.public_planet_foreign_warning_early_minutes,
+        min = 0,
+        max = 100000,
+        integer = true,
+    },
+    planet_foreign_warning_final_minutes = {
+        default = config.public_planet_foreign_warning_final_minutes,
+        min = 0,
+        max = 100000,
+        integer = true,
+    },
     faction_friendly_to_hostile_percent = {
         default = config.faction_friendly_to_hostile_chance * 100,
         min = 0,
