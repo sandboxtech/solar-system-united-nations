@@ -73,6 +73,11 @@ local DEFINITIONS = {
         max = 100,
     },
     property_tax_percent = {default = config.property_default_tax * 100, min = 0, max = 100},
+    property_self_purchase_tax_multiplier = {
+        default = config.property_self_purchase_tax_multiplier,
+        min = 0,
+        max = 1,
+    },
     property_price_factor = {
         default = config.property_price_factor,
         min = 1,

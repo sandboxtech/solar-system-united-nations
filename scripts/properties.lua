@@ -102,6 +102,30 @@ end
 
 local create
 
+local function build_type_by_key(key)
+    if type(key) ~= 'string' then return nil end
+    for _, build_type in ipairs(config.property_build_types) do
+        if build_type.key == key then return build_type end
+    end
+    return nil
+end
+
+local function expansion_size(value, stage)
+    local factor = 1 + config.property_expansion_size_per_stage * stage
+    return math.floor(value * factor / 2) * 2
+end
+
+local function expansion_layout(build_type)
+    return {
+        fixed_layout = build_type.fixed_layout,
+        top_tile = build_type.top_tile,
+        top_tile_rows = build_type.top_tile_rows,
+        top_split_rows = build_type.top_split_rows,
+        top_left_tile = build_type.top_left_tile,
+        top_right_tile = build_type.top_right_tile,
+    }
+end
+
 local function next_planet_property_number(planet_name, excluded_property_id)
     local used = {}
     for _, candidate in pairs(storage.properties) do
@@ -348,12 +372,35 @@ create = function(spec)
         expires_tick = game.tick + lifetime_hours * config.ticks_per_hour
     end
 
+    local build_type = build_type_by_key(spec.construction_type)
+    local expansion_stages = build_type and build_type.expandable
+        and config.property_expansion_stages or 0
+    local max_width = width
+    local max_height = height
+    if expansion_stages > 0 then
+        max_width = math.min(
+            config.property_max_size,
+            expansion_size(width, expansion_stages)
+        )
+        max_height = math.min(
+            config.property_max_size,
+            expansion_size(height, expansion_stages)
+        )
+        if max_width <= width or max_height <= height then
+            expansion_stages = 0
+            max_width = width
+            max_height = height
+        end
+    end
+
     local id = next_available_property_id()
     local min_brightness = config.property_min_brightness
     local surface, half_width, half_height, terrain_planet, sample_position
         = surfaces.create_property_surface(id, {
         width = width,
         height = height,
+        surface_width = max_width,
+        surface_height = max_height,
         sample_planet = spec.sample_planet,
         terrain_planet = spec.terrain_planet,
         fixed_layout = spec.fixed_layout,
@@ -379,6 +426,12 @@ create = function(spec)
         tax = tax,
         width = width,
         height = height,
+        base_width = width,
+        base_height = height,
+        max_width = max_width,
+        max_height = max_height,
+        expansion_stage = 0,
+        expansion_stages = expansion_stages,
         solar = surface.solar_power_multiplier,
         min_brightness = min_brightness,
         sample_planet = spec.sample_planet,
@@ -665,15 +718,21 @@ function M.current_price(property, tick)
     return math.ceil(raw)
 end
 
-function M.transaction_tax_rate(property)
+function M.transaction_tax_rate(property, buyer_index)
     local level = property.owner_index
         and experience.total_level(property.owner_index) or 0
-    return property.tax / (level / 100 + 1)
+    local rate = property.tax / (level / 100 + 1)
+    if property.owner_index and property.owner_index == buyer_index then
+        rate = rate * settings.get('property_self_purchase_tax_multiplier')
+    end
+    return rate
 end
 
-function M.transaction_tax(property, price)
+function M.transaction_tax(property, price, buyer_index)
     if not property.owner_index then return price end
-    local payout = math.floor(price * (1 - M.transaction_tax_rate(property)))
+    local payout = math.floor(
+        price * (1 - M.transaction_tax_rate(property, buyer_index))
+    )
     return price - payout
 end
 
@@ -714,6 +773,11 @@ local function property_on_surface(surface)
     local property = M.get(tonumber(surface.name:sub(#prefix + 1)))
     if property and property.surface_index == surface.index then return property end
     return nil
+end
+
+
+function M.property_at_player(player)
+    return player and property_on_surface(player.physical_surface) or nil
 end
 
 local function home_travel_context(player)
@@ -871,7 +935,7 @@ function M.buy_availability(player, property)
     end
     local price = M.current_price(property)
     local required = property.owner_index == player.index
-        and M.transaction_tax(property, price) or price
+        and M.transaction_tax(property, price, player.index) or price
     if economy.get_balance(player.index) < required then
         return false, 'insufficient-credit'
     end
@@ -902,11 +966,13 @@ function M.buy(player, property_id, quoted_price)
         return false, 'wrong-faction'
     end
     local price = M.current_price(property)
+    local self_purchase = property.owner_index == player.index
     local seller_name = M.owner_name(property)
     local transaction_name = M.display_name(property)
     if quoted_price and price > quoted_price then return false, 'price-increased', price end
     local payout = property.owner_index
-        and math.floor(price * (1 - M.transaction_tax_rate(property))) or 0
+        and math.floor(price * (1
+            - M.transaction_tax_rate(property, player.index))) or 0
     local tax = price - payout
     local ok, err = economy.taxed_transfer(
         player.index,
@@ -928,7 +994,16 @@ function M.buy(player, property_id, quoted_price)
         log('[un] property relink failed for property ' .. property.id)
     end
     bump_revision()
-    if seller_name then
+    if self_purchase then
+        game.print({
+            'un.property-mark-up-broadcast',
+            player.name,
+            transaction_name,
+            price,
+            tax,
+            factions.display_name(property.sample_planet),
+        })
+    elseif seller_name then
         game.print({
             'un.property-purchase-player-broadcast',
             player.name,
@@ -1312,6 +1387,215 @@ function M.salvage(player, property_id, quoted_value)
         factions.display_name(factions.of_player(player)),
     })
     return true, value
+end
+
+local function owned_player_property_availability(player, property)
+    if not property then return false, 'missing' end
+    if not valid_surface(property) then return false, 'surface-missing' end
+    if property.owner_index ~= player.index then return false, 'not-owner' end
+    if not (player.physical_surface
+            and player.physical_surface.index == property.surface_index) then
+        return false, 'not-inside'
+    end
+    if property.permanent then return false, 'permanent' end
+    if not property.construction_type or not property.construction_level then
+        return false, 'not-player-built'
+    end
+    return true
+end
+
+function M.renew_requirements(property)
+    if not property or property.permanent then return nil end
+    local level = tonumber(property.construction_level)
+    local pack = build_type_by_key(property.construction_type)
+    if not level or not pack then return nil end
+    local base_cost = config.property_build_experience_base
+        + config.property_build_experience_per_level * level
+    local lifetime_ticks = tonumber(property.lifetime_hours)
+        and property.lifetime_hours * config.ticks_per_hour or nil
+    if not lifetime_ticks or lifetime_ticks <= 0 then return nil end
+    local remaining_ticks = math.max(0, property.expires_tick - game.tick)
+    local missing_ticks = math.max(0, lifetime_ticks - remaining_ticks)
+    if missing_ticks <= 0 then return nil, 'lifetime-full' end
+    local base_width = tonumber(property.base_width) or property.width
+    local base_height = tonumber(property.base_height) or property.height
+    local area_factor = property.width * property.height
+        / (base_width * base_height)
+    local experience_cost = math.max(1, math.ceil(
+        base_cost * config.property_renew_experience_multiplier
+            * missing_ticks / lifetime_ticks * area_factor
+    ))
+    return {
+        pack = pack.pack,
+        experience_cost = experience_cost,
+        stamina_cost = config.property_renew_stamina_cost,
+        lifetime_ticks = lifetime_ticks,
+        missing_ticks = missing_ticks,
+        area_factor = area_factor,
+    }
+end
+
+function M.renew_availability(player, property)
+    local available, err = owned_player_property_availability(player, property)
+    if not available then return false, err end
+    local requirement, requirement_err = M.renew_requirements(property)
+    if not requirement then
+        return false, requirement_err or 'not-player-built'
+    end
+    if experience.amount(player.index, requirement.pack)
+            < requirement.experience_cost then
+        return false, 'insufficient-experience', requirement
+    end
+    if stamina.get(player.index) < requirement.stamina_cost then
+        return false, 'insufficient-stamina', requirement
+    end
+    return true, nil, requirement
+end
+
+function M.renew(player, property_id)
+    local property = M.get(property_id)
+    local available, err, requirement = M.renew_availability(player, property)
+    if not available then return false, err, requirement end
+    if not experience.spend(
+        player.index,
+        requirement.pack,
+        requirement.experience_cost
+    ) then
+        return false, 'insufficient-experience', requirement
+    end
+    if not stamina.spend(player.index, requirement.stamina_cost) then
+        experience.record(player.index, {{
+            name = requirement.pack,
+            count = requirement.experience_cost,
+        }})
+        return false, 'insufficient-stamina', requirement
+    end
+    property.expires_tick = game.tick + requirement.lifetime_ticks
+    property.renewal_count = (property.renewal_count or 0) + 1
+    bump_revision()
+    game.print({
+        'un.property-renewed-broadcast',
+        player.name,
+        M.display_name(property),
+        requirement.experience_cost,
+        requirement.stamina_cost,
+        factions.display_name(property.sample_planet),
+    })
+    return true, nil, requirement
+end
+
+function M.expansion_requirements(property)
+    if not property or property.permanent then return nil end
+    local build_type = build_type_by_key(property.construction_type)
+    local stage = tonumber(property.expansion_stage) or 0
+    local stages = tonumber(property.expansion_stages) or 0
+    local level = tonumber(property.construction_level)
+    if not build_type or not build_type.expandable or not level
+            or stages <= 0 or stage >= stages then
+        return nil
+    end
+    local next_stage = stage + 1
+    local width = math.min(
+        property.max_width,
+        expansion_size(property.base_width or property.width, next_stage)
+    )
+    local height = math.min(
+        property.max_height,
+        expansion_size(property.base_height or property.height, next_stage)
+    )
+    if width <= property.width or height <= property.height then return nil end
+    local lifetime_ticks = tonumber(property.lifetime_hours)
+        and property.lifetime_hours * config.ticks_per_hour or nil
+    if not lifetime_ticks or lifetime_ticks <= 0 then return nil end
+    local experience_cost = math.ceil(
+        (config.property_build_experience_base
+            + config.property_build_experience_per_level * level)
+        * config.property_expansion_experience_multiplier
+        * ((width * height - property.width * property.height)
+            / ((property.base_width or property.width)
+                * (property.base_height or property.height)))
+        * math.max(0, property.expires_tick - game.tick) / lifetime_ticks
+    )
+    experience_cost = math.max(1, experience_cost)
+    return {
+        pack = build_type.pack,
+        experience_cost = experience_cost,
+        stamina_cost = config.property_expansion_stamina_cost,
+        stage = next_stage,
+        width = width,
+        height = height,
+        layout = expansion_layout(build_type),
+    }
+end
+
+function M.expansion_availability(player, property)
+    local available, err = owned_player_property_availability(player, property)
+    if not available then return false, err end
+    local requirement = M.expansion_requirements(property)
+    if not requirement then return false, 'not-expandable' end
+    if experience.amount(player.index, requirement.pack)
+            < requirement.experience_cost then
+        return false, 'insufficient-experience', requirement
+    end
+    if stamina.get(player.index) < requirement.stamina_cost then
+        return false, 'insufficient-stamina', requirement
+    end
+    return true, nil, requirement
+end
+
+function M.expand(player, property_id)
+    local property = M.get(property_id)
+    local available, err, requirement = M.expansion_availability(player, property)
+    if not available then return false, err, requirement end
+    if not experience.spend(
+        player.index,
+        requirement.pack,
+        requirement.experience_cost
+    ) then
+        return false, 'insufficient-experience', requirement
+    end
+    if not stamina.spend(player.index, requirement.stamina_cost) then
+        experience.record(player.index, {{
+            name = requirement.pack,
+            count = requirement.experience_cost,
+        }})
+        return false, 'insufficient-stamina', requirement
+    end
+    local expanded, expand_err = surfaces.expand_property_surface(
+        property,
+        requirement.width,
+        requirement.height,
+        requirement.layout
+    )
+    if not expanded then
+        experience.record(player.index, {{
+            name = requirement.pack,
+            count = requirement.experience_cost,
+        }})
+        stamina.refund(player.index, requirement.stamina_cost)
+        return false, expand_err, requirement
+    end
+    property.base_width = property.base_width or property.width
+    property.base_height = property.base_height or property.height
+    property.width = requirement.width
+    property.height = requirement.height
+    property.expansion_stage = requirement.stage
+    ensure_property_name_rendering(
+        property,
+        property.rendered_name or property_rendering_fallback(property)
+    )
+    bump_revision()
+    game.print({
+        'un.property-expanded-broadcast',
+        player.name,
+        M.display_name(property),
+        requirement.width,
+        requirement.height,
+        requirement.experience_cost,
+        requirement.stamina_cost,
+        factions.display_name(property.sample_planet),
+    })
+    return true, nil, requirement
 end
 
 local function expire_property(property)

@@ -56,6 +56,8 @@ local PROPERTY_PLANET_TABS_NAME = 'un_property_planet_tabs'
 local PROPERTY_HEADER_NAME = 'un_property_header'
 local PROPERTY_HOSPICE_BUTTON_NAME = 'un_property_hospice_button'
 local PROPERTY_SALVAGE_BUTTON_NAME = 'un_property_salvage_button'
+local PROPERTY_RENEW_BUTTON_NAME = 'un_property_renew_button'
+local PROPERTY_EXPAND_BUTTON_NAME = 'un_property_expand_button'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local STAMINA_NAME = 'un_stamina'
@@ -129,6 +131,8 @@ local ADMIN_NUMBER_SETTINGS = {
     {'faction_hostile_to_friendly_percent',
         'un.admin-setting-faction-hostile-to-friendly'},
     {'property_tax_percent', 'un.admin-setting-property-tax'},
+    {'property_self_purchase_tax_multiplier',
+        'un.admin-setting-property-self-purchase-tax'},
     {'property_price_factor', 'un.admin-setting-property-factor'},
     {'technology_price_multiplier', 'un.admin-setting-technology-price'},
     {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
@@ -387,6 +391,10 @@ local function disabled_tooltip(action, err)
         return {'un.property-error-unavailable'}
     end
     if err == 'insufficient-credit' then return {'un.property-error-credit'} end
+    if err == 'insufficient-experience' then
+        return {'un.property-build-insufficient-experience'}
+    end
+    if err == 'insufficient-stamina' then return {'un.stamina-insufficient'} end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
@@ -408,6 +416,23 @@ local function disabled_tooltip(action, err)
     end
     if action == 'salvage' and err == 'not-inside' then
         return {'un.property-salvage-not-inside'}
+    end
+    if (action == 'renew' or action == 'expand') and err == 'not-owner' then
+        return {'un.property-manage-not-owner'}
+    end
+    if (action == 'renew' or action == 'expand') and err == 'not-inside' then
+        return {'un.property-manage-not-inside'}
+    end
+    if action == 'renew' and (err == 'permanent'
+            or err == 'not-player-built') then
+        return {'un.property-renew-unavailable'}
+    end
+    if action == 'renew' and err == 'lifetime-full' then
+        return {'un.property-renew-full'}
+    end
+    if action == 'expand' and (err == 'permanent'
+            or err == 'not-player-built' or err == 'not-expandable') then
+        return {'un.property-expand-unavailable'}
     end
     return {'un.property-error-unavailable'}
 end
@@ -568,7 +593,10 @@ local function property_buy_tooltip(player, property, can_buy, buy_error)
     local owner = properties.owner_name(property)
     local ownership
     if property.owner_index == player.index then
-        ownership = {'un.property-buy-own-tooltip'}
+        ownership = {
+            'un.property-buy-own-tooltip',
+            settings.get('property_self_purchase_tax_multiplier'),
+        }
     elseif owner then
         ownership = {'un.property-buy-owner-tooltip', owner}
     else
@@ -699,6 +727,57 @@ local function update_property_salvage_action(player, content)
     end
 end
 
+local function update_property_renew_action(player, content)
+    local actions = content[CRIME_ACTIONS_NAME]
+    local button = actions and actions.valid
+        and actions[PROPERTY_RENEW_BUTTON_NAME]
+    if not (button and button.valid) then return end
+    local property = properties.property_at_player(player)
+    local available, err, requirement
+        = properties.renew_availability(player, property)
+    button.enabled = available
+    button.caption = {'un.property-renew'}
+    button.tags = {
+        action = 'property-renew',
+        property_id = property and property.id or 0,
+    }
+    button.tooltip = requirement and {
+        'un.property-renew-tooltip',
+        '[img=item/' .. requirement.pack .. ']',
+        {'item-name.' .. requirement.pack},
+        format_integer(requirement.experience_cost),
+        format_integer(requirement.stamina_cost),
+        property and property.lifetime_hours or 0,
+    } or disabled_tooltip('renew', err)
+end
+
+local function update_property_expand_action(player, content)
+    local actions = content[CRIME_ACTIONS_NAME]
+    local button = actions and actions.valid
+        and actions[PROPERTY_EXPAND_BUTTON_NAME]
+    if not (button and button.valid) then return end
+    local property = properties.property_at_player(player)
+    local available, err, requirement
+        = properties.expansion_availability(player, property)
+    button.enabled = available
+    button.caption = {'un.property-expand'}
+    button.tags = {
+        action = 'property-expand',
+        property_id = property and property.id or 0,
+    }
+    button.tooltip = requirement and {
+        'un.property-expand-tooltip',
+        requirement.width,
+        requirement.height,
+        '[img=item/' .. requirement.pack .. ']',
+        {'item-name.' .. requirement.pack},
+        format_integer(requirement.experience_cost),
+        format_integer(requirement.stamina_cost),
+        requirement.stage,
+        property and property.expansion_stages or 0,
+    } or disabled_tooltip('expand', err)
+end
+
 local function update_property_hospice_action(player, content)
     local actions = content[CRIME_ACTIONS_NAME]
     local button = actions and actions.valid
@@ -782,6 +861,18 @@ local function render_property_table(player, frame, content)
     if not read_only then
         crime_actions.add{
             type = 'button',
+            name = PROPERTY_RENEW_BUTTON_NAME,
+            caption = {'un.property-renew'},
+            tags = {action = 'property-renew', property_id = 0},
+        }
+        crime_actions.add{
+            type = 'button',
+            name = PROPERTY_EXPAND_BUTTON_NAME,
+            caption = {'un.property-expand'},
+            tags = {action = 'property-expand', property_id = 0},
+        }
+        crime_actions.add{
+            type = 'button',
             name = PROPERTY_SALVAGE_BUTTON_NAME,
             caption = {'un.property-salvage'},
             tags = {action = 'property-salvage', property_id = 0},
@@ -800,7 +891,11 @@ local function render_property_table(player, frame, content)
         crime_actions.add{type = 'label', caption = {'un.property-read-only'}}
     end
     update_property_hospice_action(player, content)
-    if not read_only then update_property_salvage_action(player, content) end
+    if not read_only then
+        update_property_renew_action(player, content)
+        update_property_expand_action(player, content)
+        update_property_salvage_action(player, content)
+    end
     if not read_only and properties.owned_count(player.index) > 0 then
         render_property_access_section(player, content)
     end
@@ -866,7 +961,8 @@ local function render_property_table(player, frame, content)
             list.add{
                 type = 'button',
                 name = property_buy_name(property.id),
-                caption = {'un.property-buy'},
+                caption = property.owner_index == player.index
+                    and {'un.property-mark-up'} or {'un.property-buy'},
                 tooltip = property_buy_tooltip(
                     player, property, can_buy, buy_error
                 ),
@@ -1716,6 +1812,7 @@ local function render_admin_page(player, frame, content)
                 or key == 'faction_friendly_to_hostile_percent'
                 or key == 'faction_hostile_to_friendly_percent'
                 or key == 'property_tax_percent'
+                or key == 'property_self_purchase_tax_multiplier'
                 or key == 'property_price_factor'
                 or key == 'technology_price_multiplier'
                 or key == 'spoil_time_modifier'
@@ -2070,6 +2167,7 @@ local function render_help_page(player, frame, content, mode)
                 'un.help-detail-property-trade',
                 settings.get('property_tax_percent'),
                 settings.get('property_salvage_percent'),
+                settings.get('property_self_purchase_tax_multiplier'),
             },
         }
         local formulas = add_help_card(
@@ -2330,6 +2428,11 @@ local function property_error(err)
     if err == 'salvage-value-changed' then
         return {'un.property-salvage-value-changed'}
     end
+    if err == 'not-expandable' then
+        return {'un.property-expand-unavailable'}
+    end
+    if err == 'lifetime-full' then return {'un.property-renew-full'} end
+    if err == 'not-inside' then return {'un.property-manage-not-inside'} end
     if err == 'not-player-built' or err == 'permanent' then
         return {'un.property-salvage-unavailable'}
     end
@@ -2379,7 +2482,8 @@ local function update_property_row(player, property_table, property)
             player, property, can_buy, buy_error
         )
         if buy.tags.action ~= 'property-confirm-buy' then
-            buy.caption = {'un.property-buy'}
+            buy.caption = property.owner_index == player.index
+                and {'un.property-mark-up'} or {'un.property-buy'}
             buy.tags = {
                 action = 'property-buy',
                 property_id = property.id,
@@ -2621,7 +2725,11 @@ local function update_frame(player)
         local selected_planet = is_public_planet(frame.tags.property_planet)
             and frame.tags.property_planet or factions.of_player(player)
         local read_only = selected_planet ~= factions.of_player(player)
-        if not read_only then update_property_salvage_action(player, content) end
+        if not read_only then
+            update_property_renew_action(player, content)
+            update_property_expand_action(player, content)
+            update_property_salvage_action(player, content)
+        end
         local sort_field = property_sort_state(frame)
         local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
         local price_sort_changed = sort_field == 'price'
@@ -3239,6 +3347,50 @@ events.on(defines.events.on_gui_click, function(event)
                 property_id = property.id,
                 quoted_value = value,
             }
+        elseif tags.action == 'property-renew' then
+            local property = properties.get(tags.property_id)
+            local can_renew, err, requirement
+                = properties.renew_availability(player, property)
+            if not can_renew then
+                if not property_disappeared(err) then
+                    player.print(property_error(err))
+                end
+                render_property_table(player, frame, content)
+                update_frame(player)
+                return
+            end
+            element.caption = {
+                'un.property-renew-confirm',
+                format_integer(requirement.experience_cost),
+                format_integer(requirement.stamina_cost),
+            }
+            element.tags = {
+                action = 'property-confirm-renew',
+                property_id = property.id,
+            }
+        elseif tags.action == 'property-expand' then
+            local property = properties.get(tags.property_id)
+            local can_expand, err, requirement
+                = properties.expansion_availability(player, property)
+            if not can_expand then
+                if not property_disappeared(err) then
+                    player.print(property_error(err))
+                end
+                render_property_table(player, frame, content)
+                update_frame(player)
+                return
+            end
+            element.caption = {
+                'un.property-expand-confirm',
+                requirement.width,
+                requirement.height,
+                format_integer(requirement.experience_cost),
+                format_integer(requirement.stamina_cost),
+            }
+            element.tags = {
+                action = 'property-confirm-expand',
+                property_id = property.id,
+            }
         elseif tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
             if not property then
@@ -3246,7 +3398,21 @@ events.on(defines.events.on_gui_click, function(event)
                 return
             end
             local quote = properties.current_price(property)
-            element.caption = {'un.property-confirm-buy', format_integer(quote)}
+            if property.owner_index == player.index then
+                element.caption = {
+                    'un.property-confirm-mark-up',
+                    format_integer(properties.transaction_tax(
+                        property,
+                        quote,
+                        player.index
+                    )),
+                }
+            else
+                element.caption = {
+                    'un.property-confirm-buy',
+                    format_integer(quote),
+                }
+            end
             element.tags = {
                 action = 'property-confirm-buy',
                 property_id = property.id,
@@ -3296,6 +3462,20 @@ events.on(defines.events.on_gui_click, function(event)
             render_property_table(player, frame, content)
             update_frame(player)
             update_travel_buttons(player)
+        elseif tags.action == 'property-confirm-renew' then
+            local ok, err = properties.renew(player, tags.property_id)
+            if not ok and not property_disappeared(err) then
+                player.print(property_error(err))
+            end
+            render_property_table(player, frame, content)
+            update_frame(player)
+        elseif tags.action == 'property-confirm-expand' then
+            local ok, err = properties.expand(player, tags.property_id)
+            if not ok and not property_disappeared(err) then
+                player.print(property_error(err))
+            end
+            render_property_table(player, frame, content)
+            update_frame(player)
         elseif tags.action == 'property-enter' then
             local ok, err = properties.enter(player, tags.property_id)
             if ok then close_frame(player)

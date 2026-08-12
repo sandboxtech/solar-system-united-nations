@@ -137,6 +137,7 @@ M.player_cleanup_admins = false
 
 M.property_price_cap = 1000000000
 M.property_price_factor = 2
+M.property_self_purchase_tax_multiplier = 0.5
 
 M.initial_credit = 10000
 M.ubi_credit_per_second = 1
@@ -252,6 +253,12 @@ M.property_build_stamina_cost = 50000
 M.property_build_price_per_experience = 10
 M.property_build_experience_base = 2000
 M.property_build_experience_per_level = 200
+M.property_renew_experience_multiplier = 1
+M.property_renew_stamina_cost = 50000
+M.property_expansion_stages = 2
+M.property_expansion_size_per_stage = 0.25
+M.property_expansion_experience_multiplier = 1
+M.property_expansion_stamina_cost = 50000
 local function property_build_type(spec)
     spec.base_width = spec.base_width or 32
     spec.width_per_level = spec.width_per_level or 2
@@ -264,6 +271,9 @@ local function property_build_type(spec)
     spec.decay_hours_per_level = spec.decay_hours_per_level or 1
     spec.base_lifetime_hours = spec.base_lifetime_hours or 100
     spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
+    if spec.expandable == nil then
+        spec.expandable = not spec.top_tile and not spec.top_split_rows
+    end
     return spec
 end
 M.property_build_types = {
@@ -344,6 +354,7 @@ M.property_build_types = {
     property_build_type{
         pack = 'space-science-pack',
         key = 'sky-cottage',
+        expandable = false,
         base_width = 96,
         width_per_level = 3,
         height = 96,
