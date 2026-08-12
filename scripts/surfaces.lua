@@ -712,14 +712,30 @@ function M.is_public_planet_open(name)
     return not record or record.state == 'open'
 end
 
+function M.teleport_physical(player, position, surface)
+    if not (player and player.valid and surface and surface.valid) then
+        return false, 'surface-missing'
+    end
+    if player.connected
+            and player.controller_type == defines.controllers.remote then
+        local exited = pcall(function() player.exit_remote_view() end)
+        if not exited or player.controller_type == defines.controllers.remote then
+            return false, 'travel-restricted'
+        end
+    end
+    return player.teleport(position, surface)
+end
+
 function M.teleport_near(player, surface, center, allow_vehicle)
     if not (surface and surface.valid) then return false, 'surface-missing' end
-    if not allow_vehicle and player.vehicle and player.vehicle.valid then
+    if not allow_vehicle
+            and player.physical_vehicle
+            and player.physical_vehicle.valid then
         return false, 'in-vehicle'
     end
     local position = safe_position(surface, center)
     if not position then position = {0, 2} end
-    return player.teleport(position, surface)
+    return M.teleport_physical(player, position, surface)
 end
 
 function M.teleport(player, surface)
@@ -765,11 +781,13 @@ function M.to_planet_origin(player, planet_name, return_record)
     end
     local surface = game.surfaces[planet_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
-    if player.vehicle and player.vehicle.valid then return false, 'in-vehicle' end
+    if player.physical_vehicle and player.physical_vehicle.valid then
+        return false, 'in-vehicle'
+    end
     local preferred_center = recorded_center(surface, planet_name, return_record)
     if preferred_center then
         local position = safe_position(surface, preferred_center)
-        if position then return player.teleport(position, surface) end
+        if position then return M.teleport_physical(player, position, surface) end
     end
     local radius = config.public_planet_arrival_radius
     for _ = 1, 32 do
@@ -790,7 +808,7 @@ function M.to_planet_origin(player, planet_name, return_record)
             )
             if position and math.abs(position.x) < radius
                     and math.abs(position.y) < radius then
-                return player.teleport(position, surface)
+                return M.teleport_physical(player, position, surface)
             end
         end
     end
@@ -801,7 +819,7 @@ function M.to_planet_origin(player, planet_name, return_record)
     local fallback_position = safe_position(surface, fallback_center)
     if fallback_position and math.abs(fallback_position.x) < radius
             and math.abs(fallback_position.y) < radius then
-        return player.teleport(fallback_position, surface)
+        return M.teleport_physical(player, fallback_position, surface)
     end
     return M.teleport_near(player, surface, {0, 0}, false)
 end

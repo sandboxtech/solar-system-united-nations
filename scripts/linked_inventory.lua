@@ -402,8 +402,8 @@ local function notify_online_conversion(player, converted)
     end
     player.create_local_flying_text{
         text = {'un.science-converted-notification', converted},
-        position = player.position,
-        surface = player.surface,
+        position = player.physical_position,
+        surface = player.physical_surface,
         color = {r = 0.55, g = 1, b = 0.55},
         time_to_live = 180,
         speed = 0.5,

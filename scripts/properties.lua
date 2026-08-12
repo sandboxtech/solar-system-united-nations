@@ -755,7 +755,9 @@ end
 
 local function home_travel_context(player)
     if not (player and player.valid) then return nil, nil, 'invalid-player' end
-    if player.vehicle and player.vehicle.valid then return nil, nil, 'in-vehicle' end
+    if player.physical_vehicle and player.physical_vehicle.valid then
+        return nil, nil, 'in-vehicle'
+    end
     local planet_name = factions.of_player(player)
     if not planet_name then return nil, nil, 'wrong-faction' end
     local surface = player.physical_surface
@@ -1108,7 +1110,9 @@ local function evacuate_property(property, surface)
                     {0, 0},
                     true
                 )
-                if not moved then player.teleport({0, 2}, hospice) end
+                if not moved then
+                    surfaces.teleport_physical(player, {0, 2}, hospice)
+                end
             end)
         end
         for _, character in pairs(player.get_associated_characters()) do
