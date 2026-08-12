@@ -324,10 +324,7 @@ end
 local function sync_surface_visibility(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
-    for _, entry in ipairs(factions.all()) do
-        entry.force.set_surface_hidden(surface, entry.planet_name ~= 'aquilo')
-    end
-    return true
+    return factions.reveal_surface_to_factions(surface)
 end
 
 create = function(spec)

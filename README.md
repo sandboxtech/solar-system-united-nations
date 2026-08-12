@@ -61,7 +61,7 @@
 - Gleba：草星自由公社
 - Aquilo：冰星技术官僚学院
 
-阵营各自拥有科技、建筑、房产市场和太空平台。友好国家共享视野并停火，但不会因此获得对方建筑的控制权。敌对国家可能互相攻击。Aquilo 长期保持中立友好，其他国家的外交关系可能随星球跃迁变化。
+阵营各自拥有科技、建筑、房产市场和太空平台。五国都能在远程视图中看见全部普通地图；友好国家额外共享已探索区域并停火，但不会因此获得对方建筑的控制权。敌对国家可能互相攻击。太空平台是否可见仍由船主决定。Aquilo 长期保持中立友好，其他国家的外交关系可能随星球跃迁变化。
 
 玩家可以扮演建设者、商人和外交者，也可以成为入侵者或战士。场景不要求所有人采用同一种玩法。
 
@@ -97,4 +97,4 @@ United Nations of Sol is a mod-free Factorio: Space Age multiplayer scenario abo
 
 Start an ordinary factory on your faction's home planet, feed science packs into a personal linked chest with inserters, and spend the resulting experience on temporary property. A property's built-in linked chests share your personal linked inventory, allowing selected supplies to remain outside the shifting public world.
 
-Each faction has separate research, territory, property markets, and space platforms. Countries may cooperate and share vision or become hostile. Players are free to build, trade, negotiate, raid, or fight. Exact formulas and restrictions are explained in the in-game tooltips only when they matter.
+Each faction has separate research, territory, property markets, and space platforms. All factions can see every ordinary surface in remote view; friendly countries additionally share explored chart data and observe a ceasefire. Space-platform visibility remains under its owner's control. Players are free to build, trade, negotiate, raid, or fight. Exact formulas and restrictions are explained in the in-game tooltips only when they matter.
