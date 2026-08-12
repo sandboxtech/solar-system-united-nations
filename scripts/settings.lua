@@ -116,6 +116,11 @@ local DEFINITIONS = {
         min = 0.01,
         max = 100,
     },
+    property_expansion_cost_multiplier = {
+        default = config.property_expansion_experience_multiplier,
+        min = 0,
+        max = 100,
+    },
     rental_property_width = {
         default = config.rental_property_default_width,
         min = 8,
@@ -146,6 +151,9 @@ local DEFINITIONS = {
     },
     planet_resets_enabled = {default = true, boolean = true},
     tech_leak_enabled = {default = true, boolean = true},
+    property_expansion_enabled = {default = true, boolean = true},
+    property_salvage_enabled = {default = true, boolean = true},
+    crime_enabled = {default = true, boolean = true},
     admin_property_access = {default = false, boolean = true},
     surface_hidden_from_foreign_factions = {
         default = config.surface_hidden_from_foreign_factions,

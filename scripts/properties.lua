@@ -110,19 +110,18 @@ local function build_type_by_key(key)
     return nil
 end
 
-local function expansion_size(value, stage)
-    local factor = 1 + config.property_expansion_size_per_stage * stage
-    return math.floor(value * factor / 2) * 2
+local function build_type_index_by_key(key)
+    if type(key) ~= 'string' then return nil end
+    for index, build_type in ipairs(config.property_build_types) do
+        if build_type.key == key then return index end
+    end
+    return nil
 end
 
 local function expansion_layout(build_type)
     return {
         fixed_layout = build_type.fixed_layout,
-        top_tile = build_type.top_tile,
-        top_tile_rows = build_type.top_tile_rows,
-        top_split_rows = build_type.top_split_rows,
-        top_left_tile = build_type.top_left_tile,
-        top_right_tile = build_type.top_right_tile,
+        special_areas = build_type.special_areas,
     }
 end
 
@@ -370,24 +369,11 @@ create = function(spec)
     end
 
     local build_type = build_type_by_key(spec.construction_type)
-    local expansion_stages = build_type and build_type.expandable
-        and config.property_expansion_stages or 0
     local max_width = width
     local max_height = height
-    if expansion_stages > 0 then
-        max_width = math.min(
-            config.property_max_size,
-            expansion_size(width, expansion_stages)
-        )
-        max_height = math.min(
-            config.property_max_size,
-            expansion_size(height, expansion_stages)
-        )
-        if max_width <= width or max_height <= height then
-            expansion_stages = 0
-            max_width = width
-            max_height = height
-        end
+    if build_type and build_type.expandable then
+        max_width = math.min(config.property_max_size, build_type.max_width)
+        max_height = math.min(config.property_max_size, build_type.max_height)
     end
 
     local id = next_available_property_id()
@@ -401,11 +387,7 @@ create = function(spec)
         sample_planet = spec.sample_planet,
         terrain_planet = spec.terrain_planet,
         fixed_layout = spec.fixed_layout,
-        top_tile = spec.top_tile,
-        top_tile_rows = spec.top_tile_rows,
-        top_split_rows = spec.top_split_rows,
-        top_left_tile = spec.top_left_tile,
-        top_right_tile = spec.top_right_tile,
+        special_areas = spec.special_areas,
     })
     if not surface then return nil, 'surface-create-failed' end
     storage.next_property_id = id + 1
@@ -427,8 +409,6 @@ create = function(spec)
         base_height = height,
         max_width = max_width,
         max_height = max_height,
-        expansion_stage = 0,
-        expansion_stages = expansion_stages,
         solar = surface.solar_power_multiplier,
         min_brightness = min_brightness,
         sample_planet = spec.sample_planet,
@@ -664,11 +644,7 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         sample_planet = planet_name,
         terrain_planet = requirement.build_type.terrain_planet,
         fixed_layout = requirement.build_type.fixed_layout,
-        top_tile = requirement.build_type.top_tile,
-        top_tile_rows = requirement.build_type.top_tile_rows,
-        top_split_rows = requirement.build_type.top_split_rows,
-        top_left_tile = requirement.build_type.top_left_tile,
-        top_right_tile = requirement.build_type.top_right_tile,
+        special_areas = requirement.build_type.special_areas,
         price = requirement.initial_price,
         lifetime_hours = requirement.lifetime.hours,
         decay_hours = requirement.lifetime.decay_hours,
@@ -1343,6 +1319,9 @@ function M.salvage_requirements(property)
 end
 
 function M.salvage_availability(player, property)
+    if not settings.get('property_salvage_enabled') then
+        return false, 'feature-disabled'
+    end
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
     if not (player.physical_surface
@@ -1515,55 +1494,66 @@ function M.renew(
     return true, nil, requirement
 end
 
-function M.expansion_requirements(property)
+function M.expansion_requirements(player, property)
     if not property or property.permanent then return nil end
     local build_type = build_type_by_key(property.construction_type)
-    local stage = tonumber(property.expansion_stage) or 0
-    local stages = tonumber(property.expansion_stages) or 0
     local level = tonumber(property.construction_level)
-    if not build_type or not build_type.expandable or not level
-            or stages <= 0 or stage >= stages then
+    if not player or not build_type or not build_type.expandable or not level then
         return nil
     end
-    local next_stage = stage + 1
-    local width = math.min(
-        property.max_width,
-        expansion_size(property.base_width or property.width, next_stage)
+    local target_level = level + 1
+    if target_level > experience.total_level(player.index) then
+        return nil, 'construction-level-low'
+    end
+    local target = M.build_requirements(
+        player,
+        property.sample_planet,
+        build_type_index_by_key(property.construction_type),
+        target_level
     )
-    local height = math.min(
-        property.max_height,
-        expansion_size(property.base_height or property.height, next_stage)
-    )
-    if width <= property.width or height <= property.height then return nil end
-    local lifetime_ticks = tonumber(property.lifetime_hours)
-        and property.lifetime_hours * config.ticks_per_hour or nil
-    if not lifetime_ticks or lifetime_ticks <= 0 then return nil end
-    local experience_cost = math.ceil(
-        (config.property_build_experience_base
-            + config.property_build_experience_per_level * level)
-        * config.property_expansion_experience_multiplier
-        * ((width * height - property.width * property.height)
-            / ((property.base_width or property.width)
-                * (property.base_height or property.height)))
-        * math.max(0, property.expires_tick - game.tick) / lifetime_ticks
-    )
-    experience_cost = math.max(1, experience_cost)
+    if not target then return nil end
+    local current_build_cost = config.property_build_experience_base
+        + config.property_build_experience_per_level * level
+    local experience_cost = math.max(1, math.ceil(
+        (target.experience_cost - current_build_cost)
+            * settings.get('property_expansion_cost_multiplier')
+    ))
+    local old_lifetime_hours = tonumber(property.lifetime_hours)
+    local old_decay_ticks = tonumber(property.decay_ticks)
+    if not old_lifetime_hours or not old_decay_ticks or old_decay_ticks <= 0 then
+        return nil
+    end
     return {
         pack = build_type.pack,
         experience_cost = experience_cost,
         stamina_cost = config.property_expansion_stamina_cost,
-        stage = next_stage,
-        width = width,
-        height = height,
+        source_level = level,
+        target_level = target_level,
+        width = target.size.width,
+        height = target.size.height,
+        lifetime_hours = target.lifetime.hours,
+        lifetime_delta_ticks = math.max(
+            0,
+            target.lifetime.hours - old_lifetime_hours
+        ) * config.ticks_per_hour,
+        decay_ticks = target.lifetime.decay_hours * config.ticks_per_hour,
         layout = expansion_layout(build_type),
     }
 end
 
 function M.expansion_availability(player, property)
+    if not settings.get('property_expansion_enabled') then
+        return false, 'feature-disabled'
+    end
     local available, err = owned_player_property_availability(player, property)
     if not available then return false, err end
-    local requirement = M.expansion_requirements(property)
-    if not requirement then return false, 'not-expandable' end
+    local requirement, requirement_err = M.expansion_requirements(
+        player,
+        property
+    )
+    if not requirement then
+        return false, requirement_err or 'not-expandable'
+    end
     if experience.amount(player.index, requirement.pack)
             < requirement.experience_cost then
         return false, 'insufficient-experience', requirement
@@ -1574,13 +1564,14 @@ function M.expansion_availability(player, property)
     return true, nil, requirement
 end
 
-function M.expand(player, property_id, quoted_experience_cost, quoted_stage)
+function M.expand(player, property_id, quoted_experience_cost, quoted_target_level)
     local property = M.get(property_id)
     local available, err, requirement = M.expansion_availability(player, property)
     if not available then return false, err, requirement end
     if (quoted_experience_cost ~= nil
             and requirement.experience_cost ~= quoted_experience_cost)
-            or (quoted_stage ~= nil and requirement.stage ~= quoted_stage) then
+            or (quoted_target_level ~= nil
+                and requirement.target_level ~= quoted_target_level) then
         return false, 'management-cost-changed', requirement
     end
     if not experience.spend(
@@ -1597,12 +1588,16 @@ function M.expand(player, property_id, quoted_experience_cost, quoted_stage)
         }})
         return false, 'insufficient-stamina', requirement
     end
-    local expanded, expand_err = surfaces.expand_property_surface(
-        property,
-        requirement.width,
-        requirement.height,
-        requirement.layout
-    )
+    local expanded, expand_err = true, nil
+    if requirement.width ~= property.width
+            or requirement.height ~= property.height then
+        expanded, expand_err = surfaces.expand_property_surface(
+            property,
+            requirement.width,
+            requirement.height,
+            requirement.layout
+        )
+    end
     if not expanded then
         experience.record(player.index, {{
             name = requirement.pack,
@@ -1611,11 +1606,18 @@ function M.expand(player, property_id, quoted_experience_cost, quoted_stage)
         stamina.refund(player.index, requirement.stamina_cost)
         return false, expand_err, requirement
     end
-    property.base_width = property.base_width or property.width
-    property.base_height = property.base_height or property.height
+    local price_progress = (property.price_at_tick - game.tick)
+        / property.decay_ticks
     property.width = requirement.width
     property.height = requirement.height
-    property.expansion_stage = requirement.stage
+    property.base_width = requirement.width
+    property.base_height = requirement.height
+    property.construction_level = requirement.target_level
+    property.lifetime_hours = requirement.lifetime_hours
+    property.expires_tick = property.expires_tick
+        + requirement.lifetime_delta_ticks
+    property.decay_ticks = requirement.decay_ticks
+    property.price_at_tick = game.tick + price_progress * property.decay_ticks
     ensure_property_name_rendering(
         property,
         property.rendered_name or property_rendering_fallback(property)

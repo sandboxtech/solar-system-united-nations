@@ -141,6 +141,8 @@ local ADMIN_NUMBER_SETTINGS = {
     {'property_limit_per_planet', 'un.admin-setting-property-limit'},
     {'property_build_price_multiplier', 'un.admin-setting-property-build-price'},
     {'property_salvage_percent', 'un.admin-setting-property-salvage'},
+    {'property_expansion_cost_multiplier',
+        'un.admin-setting-property-expansion-cost'},
     {'rental_property_width', 'un.admin-setting-rental-width'},
     {'rental_property_height', 'un.admin-setting-rental-height'},
     {'tech_leak_interval_hours', 'un.admin-setting-tech-leak-interval'},
@@ -396,6 +398,7 @@ local function disabled_tooltip(action, err)
         return {'un.property-build-insufficient-experience'}
     end
     if err == 'insufficient-stamina' then return {'un.stamina-insufficient'} end
+    if err == 'feature-disabled' then return {'un.feature-disabled'} end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
@@ -430,6 +433,9 @@ local function disabled_tooltip(action, err)
     end
     if action == 'renew' and err == 'lifetime-full' then
         return {'un.property-renew-full'}
+    end
+    if action == 'expand' and err == 'construction-level-low' then
+        return {'un.property-expand-level-required'}
     end
     if action == 'expand' and (err == 'permanent'
             or err == 'not-player-built' or err == 'not-expandable') then
@@ -775,8 +781,8 @@ local function update_property_expand_action(player, content)
         {'item-name.' .. requirement.pack},
         format_integer(requirement.experience_cost),
         format_integer(requirement.stamina_cost),
-        requirement.stage,
-        property and property.expansion_stages or 0,
+        requirement.source_level,
+        requirement.target_level,
     } or disabled_tooltip('expand', err)
 end
 
@@ -863,16 +869,14 @@ local function render_property_table(player, frame, content)
         tags = {action = 'property-travel-hospice'},
     }
     if not read_only then
-        crime_actions.add{
-            type = 'button',
-            name = CRIME_BUTTON_NAME,
-            caption = {
-                'un.crime-button',
-                config.crime_coin_cost,
-                config.crime_stamina_cost,
-            },
-        }
-        crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
+        if settings.get('crime_enabled') then
+            crime_actions.add{
+                type = 'button',
+                name = CRIME_BUTTON_NAME,
+                caption = {'un.crime-button'},
+            }
+            crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
+        end
         local management_actions = content.add{
             type = 'flow',
             name = PROPERTY_MANAGEMENT_ACTIONS_NAME,
@@ -884,18 +888,22 @@ local function render_property_table(player, frame, content)
             caption = {'un.property-renew'},
             tags = {action = 'property-renew', property_id = 0},
         }
-        management_actions.add{
-            type = 'button',
-            name = PROPERTY_EXPAND_BUTTON_NAME,
-            caption = {'un.property-expand'},
-            tags = {action = 'property-expand', property_id = 0},
-        }
-        management_actions.add{
-            type = 'button',
-            name = PROPERTY_SALVAGE_BUTTON_NAME,
-            caption = {'un.property-salvage'},
-            tags = {action = 'property-salvage', property_id = 0},
-        }
+        if settings.get('property_expansion_enabled') then
+            management_actions.add{
+                type = 'button',
+                name = PROPERTY_EXPAND_BUTTON_NAME,
+                caption = {'un.property-expand'},
+                tags = {action = 'property-expand', property_id = 0},
+            }
+        end
+        if settings.get('property_salvage_enabled') then
+            management_actions.add{
+                type = 'button',
+                name = PROPERTY_SALVAGE_BUTTON_NAME,
+                caption = {'un.property-salvage'},
+                tags = {action = 'property-salvage', property_id = 0},
+            }
+        end
     else
         crime_actions.add{type = 'label', caption = {'un.property-read-only'}}
     end
@@ -1834,6 +1842,7 @@ local function render_admin_page(player, frame, content)
                 or key == 'tech_leak_max_percent'
                 or key == 'property_build_price_multiplier'
                 or key == 'property_salvage_percent'
+                or key == 'property_expansion_cost_multiplier'
                 or key:match('^property_lifetime_') ~= nil
                 or key:match('^property_decay_') ~= nil,
             allow_negative = false,
@@ -1864,6 +1873,41 @@ local function render_admin_page(player, frame, content)
         switch_state = settings.get('tech_leak_enabled') and 'right' or 'left',
         allow_none_state = false,
         tags = {action = 'admin-setting-switch', setting = 'tech_leak_enabled'},
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-property-expansion-enabled'},
+        switch_state = settings.get('property_expansion_enabled')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'property_expansion_enabled',
+        },
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-property-salvage-enabled'},
+        switch_state = settings.get('property_salvage_enabled')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'property_salvage_enabled',
+        },
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-crime-enabled'},
+        switch_state = settings.get('crime_enabled') and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'crime_enabled',
+        },
     }
     switches.add{
         type = 'switch',
@@ -2469,6 +2513,10 @@ local function property_error(err)
     end
     if err == 'salvage-value-changed' then
         return {'un.property-salvage-value-changed'}
+    end
+    if err == 'feature-disabled' then return {'un.feature-disabled'} end
+    if err == 'construction-level-low' then
+        return {'un.property-expand-level-required'}
     end
     if err == 'not-expandable' then
         return {'un.property-expand-unavailable'}
@@ -3432,6 +3480,7 @@ events.on(defines.events.on_gui_click, function(event)
             end
             element.caption = {
                 'un.property-expand-confirm',
+                requirement.target_level,
                 requirement.width,
                 requirement.height,
                 format_integer(requirement.experience_cost),
@@ -3441,7 +3490,7 @@ events.on(defines.events.on_gui_click, function(event)
                 action = 'property-confirm-expand',
                 property_id = property.id,
                 quoted_experience_cost = requirement.experience_cost,
-                quoted_stage = requirement.stage,
+                quoted_target_level = requirement.target_level,
             }
         elseif tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
@@ -3532,7 +3581,7 @@ events.on(defines.events.on_gui_click, function(event)
                 player,
                 tags.property_id,
                 tags.quoted_experience_cost,
-                tags.quoted_stage
+                tags.quoted_target_level
             )
             if not ok and not property_disappeared(err) then
                 player.print(property_error(err))
@@ -3611,6 +3660,18 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
                 or tags.setting == 'surface_hidden_from_home_faction') then
             factions.apply_all_surface_visibility()
             ships.ensure()
+        end
+        if ok and (tags.setting == 'property_expansion_enabled'
+                or tags.setting == 'property_salvage_enabled'
+                or tags.setting == 'crime_enabled') then
+            for _, connected in pairs(game.connected_players) do
+                local connected_frame = connected.gui.screen[FRAME_NAME]
+                if connected_frame and connected_frame.valid
+                        and connected_frame.tags.page == 'property' then
+                    render_page(connected, 'property')
+                    update_frame(connected)
+                end
+            end
         end
         player.print(ok and {'un.admin-setting-saved'}
             or {'un.admin-invalid-value'})

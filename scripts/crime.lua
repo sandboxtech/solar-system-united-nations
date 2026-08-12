@@ -37,6 +37,7 @@ end
 
 function M.availability(player)
     if not (player and player.valid) then return false, 'invalid-player' end
+    if not settings.get('crime_enabled') then return false, 'feature-disabled' end
     if not settings.online_requirement_met(player, 'crime_min_online_hours') then
         return false, 'crime-online-time'
     end

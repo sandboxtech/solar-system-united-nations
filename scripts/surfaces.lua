@@ -221,25 +221,50 @@ local function apply_natural_expansion(surface, property, half_width, half_heigh
         source, center, surface,
         old_half_width, -old_half_height, half_width, old_half_height
     )
+    local core_half = core_half_size(half_width, half_height)
     copy_sample_entities(
         source,
         center,
         surface,
         half_width,
         half_height,
-        0,
+        core_half,
         old_half_width,
         old_half_height
     )
+    local tiles = {}
+    for y = -core_half, core_half - 1 do
+        for x = -core_half, core_half - 1 do
+            tiles[#tiles + 1] = {
+                name = TUTORIAL_GRID_NAME,
+                position = {x, y},
+            }
+        end
+    end
+    local natural_entities = surface.find_entities_filtered{
+        area = {{-core_half, -core_half}, {core_half, core_half}},
+        type = {'tree', 'simple-entity', 'simple-entity-with-force'},
+    }
+    for _, entity in ipairs(natural_entities) do
+        if entity.valid and (entity.type == 'tree' or is_rock(entity)) then
+            entity.destroy()
+        end
+    end
+    surface.set_tiles(tiles, true, false, true, false)
     return true
 end
 
 local function apply_natural_sample(surface, property_id, half_width, half_height,
-        requested_planet)
+        requested_planet, sample_half_width, sample_half_height)
     local planet_name = sample_planet_name(property_id, requested_planet)
     local source = ensure_planet_surface(planet_name)
     if not source then return nil, nil end
-    local center = sample_center(source, property_id, half_width, half_height)
+    local center = sample_center(
+        source,
+        property_id,
+        sample_half_width or half_width,
+        sample_half_height or half_height
+    )
     local radius = math.max(
         1,
         math.ceil(math.max(half_width, half_height) / 32) + 1
@@ -258,23 +283,26 @@ end
 
 local function apply_property_special_tiles(surface, half_width, half_height, spec,
         exclude_half_width, exclude_half_height)
-    local rows = tonumber(spec.top_tile_rows) or 0
-    local split_rows = tonumber(spec.top_split_rows) or 0
-    if rows <= 0 and split_rows <= 0 then return end
+    if type(spec.special_areas) ~= 'table' then return end
     local tiles = {}
-    for y = -half_height, -half_height + math.max(rows, split_rows) - 1 do
-        for x = -half_width, half_width - 1 do
-            local excluded = exclude_half_width and exclude_half_height
-                and x >= -exclude_half_width and x < exclude_half_width
-                and y >= -exclude_half_height and y < exclude_half_height
-            local name
-            if not excluded and y < -half_height + split_rows then
-                name = x < 0 and spec.top_left_tile or spec.top_right_tile
-            elseif not excluded and y < -half_height + rows then
-                name = spec.top_tile
-            end
-            if name then
-                tiles[#tiles + 1] = {name = name, position = {x, y}}
+    for _, area in ipairs(spec.special_areas) do
+        local left = math.max(-half_width, tonumber(area.left) or 0)
+        local top = math.max(-half_height, tonumber(area.top) or 0)
+        local right = math.min(half_width, tonumber(area.right) or 0)
+        local bottom = math.min(half_height, tonumber(area.bottom) or 0)
+        if type(area.tile) == 'string' then
+            for y = top, bottom - 1 do
+                for x = left, right - 1 do
+                    local excluded = exclude_half_width and exclude_half_height
+                        and x >= -exclude_half_width and x < exclude_half_width
+                        and y >= -exclude_half_height and y < exclude_half_height
+                    if not excluded then
+                        tiles[#tiles + 1] = {
+                            name = area.tile,
+                            position = {x, y},
+                        }
+                    end
+                end
             end
         end
     end
@@ -575,7 +603,9 @@ function M.create_property_surface(property_id, spec)
             property_id,
             half_width,
             half_height,
-            requested_planet
+            requested_planet,
+            surface_half_width,
+            surface_half_height
         )
     end
     if not sample_planet then return nil, nil, nil, nil, nil end
@@ -601,7 +631,8 @@ function M.expand_property_surface(property, new_width, new_height, layout)
     local max_width = tonumber(property.max_width)
     local max_height = tonumber(property.max_height)
     if not old_width or not old_height or not max_width or not max_height
-            or new_width <= old_width or new_height <= old_height
+            or new_width < old_width or new_height < old_height
+            or (new_width == old_width and new_height == old_height)
             or new_width > max_width or new_height > max_height then
         return false, 'invalid-expansion'
     end

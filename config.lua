@@ -258,9 +258,7 @@ M.property_build_experience_per_level = 200
 M.property_renew_experience_multiplier = 1
 M.property_renew_stamina_base_cost = 1000
 M.property_renew_stamina_multiplier = 1
-M.property_expansion_stages = 2
-M.property_expansion_size_per_stage = 0.25
-M.property_expansion_experience_multiplier = 1
+M.property_expansion_experience_multiplier = 2
 M.property_expansion_stamina_cost = 50000
 local function property_build_type(spec)
     spec.base_width = spec.base_width or 32
@@ -274,9 +272,7 @@ local function property_build_type(spec)
     spec.decay_hours_per_level = spec.decay_hours_per_level or 1
     spec.base_lifetime_hours = spec.base_lifetime_hours or 100
     spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
-    if spec.expandable == nil then
-        spec.expandable = not spec.top_tile and not spec.top_split_rows
-    end
+    if spec.expandable == nil then spec.expandable = true end
     return spec
 end
 M.property_build_types = {
@@ -313,8 +309,9 @@ M.property_build_types = {
         key = 'shore-cottage',
         initial_price_multiplier = 3,
         terrain_planet = 'nauvis',
-        top_tile = 'water',
-        top_tile_rows = 2,
+        special_areas = {
+            {tile = 'water', left = -8, top = -10, right = 8, bottom = -8},
+        },
     },
     property_build_type{
         pack = 'production-science-pack',
@@ -375,25 +372,46 @@ M.property_build_types = {
         key = 'lava-cottage',
         initial_price_multiplier = 6,
         terrain_planet = 'vulcanus',
-        top_tile = 'lava',
-        top_tile_rows = 2,
+        special_areas = {
+            {tile = 'lava', left = -8, top = -10, right = 8, bottom = -8},
+        },
     },
     property_build_type{
         pack = 'electromagnetic-science-pack',
         key = 'oil-cottage',
         initial_price_multiplier = 7,
         terrain_planet = 'fulgora',
-        top_tile = 'oil-ocean-deep',
-        top_tile_rows = 2,
+        special_areas = {
+            {
+                tile = 'oil-ocean-deep',
+                left = -8,
+                top = -10,
+                right = 8,
+                bottom = -8,
+            },
+        },
     },
     property_build_type{
         pack = 'agricultural-science-pack',
         key = 'garden-cottage',
         initial_price_multiplier = 8,
         terrain_planet = 'gleba',
-        top_split_rows = 8,
-        top_left_tile = 'natural-yumako-soil',
-        top_right_tile = 'natural-jellynut-soil',
+        special_areas = {
+            {
+                tile = 'natural-yumako-soil',
+                left = -8,
+                top = -12,
+                right = 0,
+                bottom = -4,
+            },
+            {
+                tile = 'natural-jellynut-soil',
+                left = 0,
+                top = -12,
+                right = 8,
+                bottom = -4,
+            },
+        },
     },
     property_build_type{
         pack = 'cryogenic-science-pack',
