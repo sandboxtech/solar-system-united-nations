@@ -58,6 +58,7 @@ local PROPERTY_HOSPICE_BUTTON_NAME = 'un_property_hospice_button'
 local PROPERTY_SALVAGE_BUTTON_NAME = 'un_property_salvage_button'
 local PROPERTY_RENEW_BUTTON_NAME = 'un_property_renew_button'
 local PROPERTY_EXPAND_BUTTON_NAME = 'un_property_expand_button'
+local PROPERTY_MANAGEMENT_ACTIONS_NAME = 'un_property_management_actions'
 local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local STAMINA_NAME = 'un_stamina'
@@ -697,17 +698,18 @@ local function render_property_access_section(player, content)
 end
 
 local function update_property_salvage_action(player, content)
-    local actions = content[CRIME_ACTIONS_NAME]
+    local actions = content[PROPERTY_MANAGEMENT_ACTIONS_NAME]
     local button = actions and actions.valid
         and actions[PROPERTY_SALVAGE_BUTTON_NAME]
     if not (button and button.valid) then return end
-    local available, err, property, value
+    local available, err, property, requirement
         = properties.salvage_at_player_availability(player)
     button.enabled = available
     button.tooltip = available and {
         'un.property-salvage-tooltip',
         settings.get('property_salvage_percent'),
-        format_integer(value),
+        requirement and '[img=item/' .. requirement.pack .. ']' or '',
+        requirement and format_integer(requirement.experience_refund) or '0',
     } or {
         '',
         disabled_tooltip('salvage', err),
@@ -728,7 +730,7 @@ local function update_property_salvage_action(player, content)
 end
 
 local function update_property_renew_action(player, content)
-    local actions = content[CRIME_ACTIONS_NAME]
+    local actions = content[PROPERTY_MANAGEMENT_ACTIONS_NAME]
     local button = actions and actions.valid
         and actions[PROPERTY_RENEW_BUTTON_NAME]
     if not (button and button.valid) then return end
@@ -752,7 +754,7 @@ local function update_property_renew_action(player, content)
 end
 
 local function update_property_expand_action(player, content)
-    local actions = content[CRIME_ACTIONS_NAME]
+    local actions = content[PROPERTY_MANAGEMENT_ACTIONS_NAME]
     local button = actions and actions.valid
         and actions[PROPERTY_EXPAND_BUTTON_NAME]
     if not (button and button.valid) then return end
@@ -796,6 +798,8 @@ local function render_property_table(player, frame, content)
     if old_tabs and old_tabs.valid then old_tabs.destroy() end
     local old_crime = content[CRIME_ACTIONS_NAME]
     if old_crime and old_crime.valid then old_crime.destroy() end
+    local old_management = content[PROPERTY_MANAGEMENT_ACTIONS_NAME]
+    if old_management and old_management.valid then old_management.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
     if old_access and old_access.valid then old_access.destroy() end
     local old_scroll = content[PROPERTY_SCROLL_NAME]
@@ -861,24 +865,6 @@ local function render_property_table(player, frame, content)
     if not read_only then
         crime_actions.add{
             type = 'button',
-            name = PROPERTY_RENEW_BUTTON_NAME,
-            caption = {'un.property-renew'},
-            tags = {action = 'property-renew', property_id = 0},
-        }
-        crime_actions.add{
-            type = 'button',
-            name = PROPERTY_EXPAND_BUTTON_NAME,
-            caption = {'un.property-expand'},
-            tags = {action = 'property-expand', property_id = 0},
-        }
-        crime_actions.add{
-            type = 'button',
-            name = PROPERTY_SALVAGE_BUTTON_NAME,
-            caption = {'un.property-salvage'},
-            tags = {action = 'property-salvage', property_id = 0},
-        }
-        crime_actions.add{
-            type = 'button',
             name = CRIME_BUTTON_NAME,
             caption = {
                 'un.crime-button',
@@ -887,6 +873,29 @@ local function render_property_table(player, frame, content)
             },
         }
         crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
+        local management_actions = content.add{
+            type = 'flow',
+            name = PROPERTY_MANAGEMENT_ACTIONS_NAME,
+            direction = 'horizontal',
+        }
+        management_actions.add{
+            type = 'button',
+            name = PROPERTY_RENEW_BUTTON_NAME,
+            caption = {'un.property-renew'},
+            tags = {action = 'property-renew', property_id = 0},
+        }
+        management_actions.add{
+            type = 'button',
+            name = PROPERTY_EXPAND_BUTTON_NAME,
+            caption = {'un.property-expand'},
+            tags = {action = 'property-expand', property_id = 0},
+        }
+        management_actions.add{
+            type = 'button',
+            name = PROPERTY_SALVAGE_BUTTON_NAME,
+            caption = {'un.property-salvage'},
+            tags = {action = 'property-salvage', property_id = 0},
+        }
     else
         crime_actions.add{type = 'label', caption = {'un.property-read-only'}}
     end
@@ -3360,7 +3369,7 @@ events.on(defines.events.on_gui_click, function(event)
             update_travel_buttons(player)
         elseif tags.action == 'property-salvage' then
             local property = properties.get(tags.property_id)
-            local can_salvage, err, value
+            local can_salvage, err, requirement
                 = properties.salvage_availability(player, property)
             if not can_salvage then
                 if not property_disappeared(err) then
@@ -3372,16 +3381,19 @@ events.on(defines.events.on_gui_click, function(event)
             end
             element.caption = {
                 'un.property-salvage-confirm',
-                format_integer(value),
+                '[img=item/' .. requirement.pack .. ']',
+                format_integer(requirement.experience_refund),
             }
             element.tooltip = {
                 'un.property-salvage-confirm-tooltip',
-                format_integer(value),
+                '[img=item/' .. requirement.pack .. ']',
+                format_integer(requirement.experience_refund),
             }
             element.tags = {
                 action = 'property-confirm-salvage',
                 property_id = property.id,
-                quoted_value = value,
+                quoted_pack = requirement.pack,
+                quoted_experience_refund = requirement.experience_refund,
             }
         elseif tags.action == 'property-renew' then
             local property = properties.get(tags.property_id)
@@ -3404,6 +3416,7 @@ events.on(defines.events.on_gui_click, function(event)
                 action = 'property-confirm-renew',
                 property_id = property.id,
                 quoted_experience_cost = requirement.experience_cost,
+                quoted_stamina_cost = requirement.stamina_cost,
             }
         elseif tags.action == 'property-expand' then
             local property = properties.get(tags.property_id)
@@ -3493,7 +3506,8 @@ events.on(defines.events.on_gui_click, function(event)
             local ok, err = properties.salvage(
                 player,
                 tags.property_id,
-                tags.quoted_value
+                tags.quoted_pack,
+                tags.quoted_experience_refund
             )
             if not ok and not property_disappeared(err) then
                 player.print(property_error(err))
@@ -3505,7 +3519,8 @@ events.on(defines.events.on_gui_click, function(event)
             local ok, err = properties.renew(
                 player,
                 tags.property_id,
-                tags.quoted_experience_cost
+                tags.quoted_experience_cost,
+                tags.quoted_stamina_cost
             )
             if not ok and not property_disappeared(err) then
                 player.print(property_error(err))

@@ -1304,24 +1304,42 @@ function M.clear_player_translation_requests(player_index)
     end
 end
 
-function M.salvage_value(property)
+function M.salvage_requirements(property)
     if not property or property.permanent then return nil end
-    local construction_value = tonumber(property.construction_value)
-    local created_tick = tonumber(property.created_tick)
+    local level = tonumber(property.construction_level)
+    local build_type = build_type_by_key(property.construction_type)
     local expires_tick = tonumber(property.expires_tick)
-    if not construction_value or construction_value <= 0
-            or not created_tick or not expires_tick
-            or expires_tick <= created_tick then
+    local lifetime_ticks = tonumber(property.lifetime_hours)
+        and property.lifetime_hours * config.ticks_per_hour or nil
+    local width = tonumber(property.width)
+    local height = tonumber(property.height)
+    local base_width = tonumber(property.base_width) or width
+    local base_height = tonumber(property.base_height) or height
+    if not level or level < 0 or not build_type or not expires_tick
+            or not lifetime_ticks or lifetime_ticks <= 0
+            or not width or not height or not base_width or not base_height
+            or width <= 0 or height <= 0
+            or base_width <= 0 or base_height <= 0 then
         return nil
     end
     local remaining_ticks = math.max(0, expires_tick - game.tick)
     if remaining_ticks <= 0 then return nil end
-    local value = math.floor(
-        construction_value
+    local area_factor = width * height / (base_width * base_height)
+    local base_cost = config.property_build_experience_base
+        + config.property_build_experience_per_level * level
+    local refund = math.floor(
+        base_cost
             * settings.get('property_salvage_percent') / 100
-            * remaining_ticks / (expires_tick - created_tick)
+            * math.min(1, remaining_ticks / lifetime_ticks)
+            * area_factor
     )
-    return math.max(1, value)
+    return {
+        pack = build_type.pack,
+        experience_refund = math.max(0, refund),
+        remaining_ticks = remaining_ticks,
+        lifetime_ticks = lifetime_ticks,
+        area_factor = area_factor,
+    }
 end
 
 function M.salvage_availability(player, property)
@@ -1333,9 +1351,9 @@ function M.salvage_availability(player, property)
     end
     if property.owner_index ~= player.index then return false, 'not-owner' end
     if property.permanent then return false, 'permanent' end
-    local value = M.salvage_value(property)
-    if not value then return false, 'not-player-built' end
-    return true, nil, value
+    local requirement = M.salvage_requirements(property)
+    if not requirement then return false, 'not-player-built' end
+    return true, nil, requirement
 end
 
 function M.salvage_at_player_availability(player)
@@ -1345,45 +1363,43 @@ function M.salvage_at_player_availability(player)
     for _, property in pairs(storage.properties) do
         if property.status == 'active'
                 and property.surface_index == surface.index then
-            local available, err, value = M.salvage_availability(
+            local available, err, requirement = M.salvage_availability(
                 player,
                 property
             )
-            return available, err, property, value
+            return available, err, property, requirement
         end
     end
     return false, 'not-inside'
 end
 
-function M.salvage(player, property_id, quoted_value)
+function M.salvage(player, property_id, quoted_pack, quoted_experience_refund)
     local property = M.get(property_id)
-    local available, err, value = M.salvage_availability(player, property)
+    local available, err, requirement = M.salvage_availability(player, property)
     if not available then return false, err end
-    quoted_value = tonumber(quoted_value)
-    if quoted_value and value < quoted_value then
-        return false, 'salvage-value-changed', value
+    quoted_experience_refund = tonumber(quoted_experience_refund)
+    if (quoted_pack ~= nil and quoted_pack ~= requirement.pack)
+            or (quoted_experience_refund ~= nil
+                and quoted_experience_refund
+                    ~= requirement.experience_refund) then
+        return false, 'salvage-value-changed', requirement
     end
     local property_name = M.display_name(property)
     local ok, delete_err = delete_property_surface(property)
     if not ok then return false, delete_err end
-    local paid, credit_err = economy.change(
-        player.index,
-        value,
-        'property-salvage'
-    )
-    if not paid then
-        log('[un] property salvage payout failed for property '
-            .. property.id .. ': ' .. tostring(credit_err))
-        return false, credit_err
-    end
+    experience.record(player.index, {{
+        name = requirement.pack,
+        count = requirement.experience_refund,
+    }})
     game.print({
         'un.property-salvage-broadcast',
         player.name,
         property_name,
-        value,
+        '[img=item/' .. requirement.pack .. ']',
+        requirement.experience_refund,
         factions.display_name(factions.of_player(player)),
     })
-    return true, value
+    return true, requirement
 end
 
 local function owned_player_property_availability(player, property)
@@ -1422,10 +1438,15 @@ function M.renew_requirements(property)
         base_cost * config.property_renew_experience_multiplier
             * missing_ticks / lifetime_ticks * area_factor
     ))
+    local stamina_cost = config.property_renew_stamina_base_cost + math.ceil(
+        config.property_build_stamina_cost
+            * config.property_renew_stamina_multiplier
+            * missing_ticks / lifetime_ticks * area_factor
+    )
     return {
         pack = pack.pack,
         experience_cost = experience_cost,
-        stamina_cost = config.property_renew_stamina_cost,
+        stamina_cost = stamina_cost,
         lifetime_ticks = lifetime_ticks,
         missing_ticks = missing_ticks,
         area_factor = area_factor,
@@ -1449,12 +1470,21 @@ function M.renew_availability(player, property)
     return true, nil, requirement
 end
 
-function M.renew(player, property_id, quoted_experience_cost)
+function M.renew(
+    player,
+    property_id,
+    quoted_experience_cost,
+    quoted_stamina_cost
+)
     local property = M.get(property_id)
     local available, err, requirement = M.renew_availability(player, property)
     if not available then return false, err, requirement end
     if quoted_experience_cost ~= nil
             and requirement.experience_cost ~= quoted_experience_cost then
+        return false, 'management-cost-changed', requirement
+    end
+    if quoted_stamina_cost ~= nil
+            and requirement.stamina_cost ~= quoted_stamina_cost then
         return false, 'management-cost-changed', requirement
     end
     if not experience.spend(
