@@ -6,6 +6,10 @@ M.ticks_per_hour = 60 * M.ticks_per_minute
 
 M.space_age_mod_name = 'space-age'
 M.linked_chest_name = 'linked-chest'
+M.personal_linked_chest_limit = 1
+M.personal_linked_chest_home_planet_only = true
+M.personal_linked_chest_allow_hospice = true
+M.personal_linked_chest_allow_property = true
 M.faction_initial_technologies = {
     -- Generic trigger technologies.
     'steam-power',

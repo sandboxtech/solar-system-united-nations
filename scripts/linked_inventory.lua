@@ -3,7 +3,9 @@ local events = require('scripts.events')
 local experience = require('scripts.experience')
 local factions = require('scripts.factions')
 local scheduler = require('scripts.scheduler')
+local settings = require('scripts.settings')
 local state = require('scripts.state')
+local surfaces = require('scripts.surfaces')
 
 local M = {}
 
@@ -12,6 +14,21 @@ local function same_position(record, surface_name, position)
         and record.surface == surface_name
         and record.x == position.x
         and record.y == position.y
+end
+
+local function records(player_index)
+    state.ensure()
+    local value = storage.dropoffs[player_index]
+    if not value then
+        value = {}
+        storage.dropoffs[player_index] = value
+    elseif value.surface then
+        -- Normalize the former one-record shape when an existing save first
+        -- uses configurable multiple drop-offs.
+        value = {value}
+        storage.dropoffs[player_index] = value
+    end
+    return value
 end
 
 local function give_wooden_chest(player, surface, position, quality)
@@ -32,27 +49,31 @@ local function give_wooden_chest(player, surface, position, quality)
     return false
 end
 
-local function resolve_record(player_index)
-    state.ensure()
-    local record = storage.dropoffs[player_index]
-    if not record then return nil end
+local function resolve_record(player_index, record)
     local player = game.get_player(player_index)
-    local home_planet = player and factions.of_player(player)
-    if not home_planet or record.surface ~= home_planet then return nil end
-    local surface = game.surfaces[record.surface]
-    if not (surface and surface.valid) then return nil end
+    local surface = record and game.surfaces[record.surface]
+    if not (player and surface and surface.valid) then return nil end
     local chest = surface.find_entity(
         config.linked_chest_name,
         {record.x, record.y}
     )
     if not (chest and chest.valid
-            and player
             and chest.link_id == player_index
             and chest.force == player.force) then
         return nil
     end
     chest.operable = false
     return chest
+end
+
+local function compact_records(player_index)
+    local list = records(player_index)
+    for index = #list, 1, -1 do
+        if not resolve_record(player_index, list[index]) then
+            table.remove(list, index)
+        end
+    end
+    return list
 end
 
 function M.ensure()
@@ -63,16 +84,36 @@ function M.ensure()
     end
     table.sort(indexes)
     for _, player_index in ipairs(indexes) do
-        resolve_record(player_index)
+        compact_records(player_index)
     end
 end
 
-local function evict_previous(player, new_surface_name, new_position)
-    local record = storage.dropoffs[player.index]
-    if not record then return false end
+local function placement_allowed(player, surface)
+    local home_planet = factions.of_player(player)
+    if not home_planet or player.force ~= factions.of_planet(home_planet) then
+        return false
+    end
+    if surface.name == home_planet then return true end
+    for _, planet_name in ipairs(config.public_planets) do
+        if surface.name == planet_name then
+            return not settings.get('personal_linked_chest_home_planet_only')
+        end
+    end
+    if surfaces.hospice_planet(surface) then
+        return settings.get('personal_linked_chest_allow_hospice')
+    end
+    if surfaces.property_planet(surface) then
+        return settings.get('personal_linked_chest_allow_property')
+    end
+    return false
+end
 
-    local old = resolve_record(player.index)
-    if old and not same_position(record, new_surface_name, new_position) then
+local function evict_oldest(player)
+    local list = compact_records(player.index)
+    local record = table.remove(list, 1)
+    if not record then return false end
+    local old = resolve_record(player.index, record)
+    if old then
         local surface = old.surface
         local position = old.position
         local quality = old.quality.name
@@ -80,33 +121,53 @@ local function evict_previous(player, new_surface_name, new_position)
         give_wooden_chest(player, surface, position, quality)
         player.print({'un.dropoff-replaced'})
     end
-    storage.dropoffs[player.index] = nil
     return old ~= nil
+end
+
+function M.enforce_limit()
+    local limit = settings.get('personal_linked_chest_limit')
+    local indexes = {}
+    for player_index in pairs(storage.dropoffs) do
+        indexes[#indexes + 1] = player_index
+    end
+    table.sort(indexes)
+    for _, player_index in ipairs(indexes) do
+        local player = game.get_player(player_index)
+        if player then
+            local list = compact_records(player_index)
+            while #list > limit do
+                evict_oldest(player)
+                list = records(player_index)
+            end
+        end
+    end
 end
 
 local function on_player_built(event)
     local entity = event.entity
-    if not (entity and entity.valid) then return end
-
-    local player = game.get_player(event.player_index)
-    if not player then return end
-
-    if entity.name ~= config.wooden_chest_name then return end
-    local home_planet = factions.of_player(player)
-    if not home_planet or entity.surface.name ~= home_planet
-            or entity.force ~= player.force then
+    if not (entity and entity.valid
+            and entity.name == config.wooden_chest_name) then
         return
     end
+    local player = game.get_player(event.player_index)
+    if not (player and entity.force == player.force
+            and placement_allowed(player, entity.surface)) then
+        return
+    end
+    local limit = settings.get('personal_linked_chest_limit')
+    if limit <= 0 then return end
 
-    state.ensure()
-    evict_previous(player, entity.surface.name, entity.position)
+    local list = compact_records(player.index)
+    while #list >= limit do
+        evict_oldest(player)
+        list = records(player.index)
+    end
 
     local surface = entity.surface
     local position = entity.position
     local force = entity.force
     local quality = entity.quality.name
     entity.destroy()
-
     local chest = surface.create_entity{
         name = config.linked_chest_name,
         position = position,
@@ -120,49 +181,49 @@ local function on_player_built(event)
         player.print({'un.dropoff-create-failed'})
         return
     end
-
     chest.link_id = player.index
     chest.operable = false
-    storage.dropoffs[player.index] = {
+    list[#list + 1] = {
         surface = surface.name,
         x = position.x,
         y = position.y,
     }
-    player.print({'un.dropoff-created'})
+    player.print({'un.dropoff-created-count', #list, limit})
 end
 
 local function forget_chest(entity)
-    if not (entity and entity.valid and entity.name == config.linked_chest_name) then
-        return
+    if not (entity and entity.valid
+            and entity.name == config.linked_chest_name) then
+        return false
     end
-    state.ensure()
-    local owner_index = entity.link_id
-    local record = storage.dropoffs[owner_index]
-    if same_position(record, entity.surface.name, entity.position) then
-        storage.dropoffs[owner_index] = nil
+    local list = records(entity.link_id)
+    for index = #list, 1, -1 do
+        if same_position(list[index], entity.surface.name, entity.position) then
+            table.remove(list, index)
+            return true
+        end
     end
+    return false
 end
 
-local function on_player_mined(event)
+local function on_mined(event)
     local entity = event.entity
-    if not (entity and entity.valid and entity.name == config.linked_chest_name) then
+    if not (entity and entity.valid
+            and entity.name == config.linked_chest_name) then
         return
     end
-    forget_chest(entity)
-
+    if not forget_chest(entity) then return end
     local quality = entity.quality.name
-    local removed = event.buffer.remove{
+    event.buffer.remove{
         name = config.linked_chest_name,
         count = 1,
         quality = quality,
     }
-    if removed > 0 then
-        event.buffer.insert{
-            name = config.wooden_chest_name,
-            count = removed,
-            quality = quality,
-        }
-    end
+    event.buffer.insert{
+        name = config.wooden_chest_name,
+        count = 1,
+        quality = quality,
+    }
 end
 
 local function remove_science_packs(inventory)
@@ -171,7 +232,6 @@ local function remove_science_packs(inventory)
         if a.name ~= b.name then return a.name < b.name end
         return a.quality < b.quality
     end)
-
     local removed_entries = {}
     local total_items = 0
     for _, item in ipairs(entries) do
@@ -196,42 +256,45 @@ end
 
 function M.get_inventory(player)
     if not (player and player.valid) then return nil end
-
-    -- This project's personal and property chests belong to the player's
-    -- faction, so the force lookup is the cheapest normal path. Unlike
-    -- personal_pocket_factory, its receiving chests are not neutral-force.
     local inventory = player.force.get_linked_inventory(
         config.linked_chest_name,
         player.index
     )
     if inventory and inventory.valid then return inventory end
-
-    -- Fall back to the real registered drop-off so an unexpected failed force
-    -- lookup does not silently disable that player's periodic conversion.
-    local chest = resolve_record(player.index)
+    local list = compact_records(player.index)
+    local chest = list[1] and resolve_record(player.index, list[1])
     inventory = chest and chest.valid
         and chest.get_inventory(defines.inventory.chest) or nil
     return inventory and inventory.valid and inventory or nil
 end
 
 function M.has_active_dropoff(player_index)
-    return resolve_record(player_index) ~= nil
+    return #compact_records(player_index) > 0
+end
+
+function M.active_count()
+    state.ensure()
+    local total = 0
+    for player_index in pairs(storage.dropoffs) do
+        total = total + #compact_records(player_index)
+    end
+    return total
 end
 
 function M.get_active_dropoff(player_index)
-    return resolve_record(player_index)
+    local list = compact_records(player_index)
+    return list[1] and resolve_record(player_index, list[1]) or nil
 end
 
 function M.clear_player_dropoff(player_index)
-    state.ensure()
-    local chest = resolve_record(player_index)
-    if chest and chest.valid then chest.destroy() end
+    local list = compact_records(player_index)
+    for _, record in ipairs(list) do
+        local chest = resolve_record(player_index, record)
+        if chest then chest.destroy() end
+    end
     storage.dropoffs[player_index] = nil
 end
 
--- Removing the LuaPlayer must also remove inventories which can outlive an
--- individual chest entity. Keep this separate from normal drop-off removal:
--- a planetary shift must not empty the same linked inventory inside a property.
 function M.purge_player(player_index)
     state.ensure()
     M.clear_player_dropoff(player_index)
@@ -245,30 +308,35 @@ function M.purge_player(player_index)
 end
 
 function M.release_player_dropoff(player)
-    state.ensure()
-    local chest = resolve_record(player.index)
-    if chest and chest.valid then
-        local quality = chest.quality.name
-        chest.destroy()
-        give_wooden_chest(
-            player,
-            player.physical_surface,
-            player.physical_position,
-            quality
-        )
+    local list = compact_records(player.index)
+    for _, record in ipairs(list) do
+        local chest = resolve_record(player.index, record)
+        if chest then
+            local quality = chest.quality.name
+            chest.destroy()
+            give_wooden_chest(
+                player,
+                player.physical_surface,
+                player.physical_position,
+                quality
+            )
+        end
     end
     storage.dropoffs[player.index] = nil
 end
 
 function M.clear_surface_dropoffs(surface_name)
     state.ensure()
-    local indexes = {}
-    for player_index, record in pairs(storage.dropoffs) do
-        if record.surface == surface_name then indexes[#indexes + 1] = player_index end
-    end
-    table.sort(indexes)
-    for _, player_index in ipairs(indexes) do
-        M.clear_player_dropoff(player_index)
+    for player_index in pairs(storage.dropoffs) do
+        local list = records(player_index)
+        for index = #list, 1, -1 do
+            local record = list[index]
+            if record.surface == surface_name then
+                local chest = resolve_record(player_index, record)
+                if chest then chest.destroy() end
+                table.remove(list, index)
+            end
+        end
     end
 end
 
@@ -285,8 +353,8 @@ function M.convert_player(player)
 end
 
 events.on(defines.events.on_built_entity, on_player_built)
-events.on(defines.events.on_player_mined_entity, on_player_mined)
-events.on(defines.events.on_robot_mined_entity, on_player_mined)
+events.on(defines.events.on_player_mined_entity, on_mined)
+events.on(defines.events.on_robot_mined_entity, on_mined)
 events.on(defines.events.on_entity_died, function(event)
     forget_chest(event.entity)
 end)

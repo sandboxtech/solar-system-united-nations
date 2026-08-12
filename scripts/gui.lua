@@ -5,6 +5,7 @@ local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
 local factions = require('scripts.factions')
+local linked_inventory = require('scripts.linked_inventory')
 local permissions = require('scripts.permissions')
 local playtime = require('scripts.playtime')
 local properties = require('scripts.properties')
@@ -49,9 +50,6 @@ local HELP_ADVANCED_NAME = 'un_help_advanced'
 local HELP_FULL_NAME = 'un_help_full'
 local HELP_ADMIN_NAME = 'un_help_admin'
 local HELP_DETAILS_NAME = 'un_help_details'
-local HELP_OPEN_OVERVIEW_NAME = 'un_help_open_overview'
-local HELP_OPEN_BUILD_NAME = 'un_help_open_build'
-local HELP_OPEN_PROPERTY_NAME = 'un_help_open_property'
 local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
 local PROPERTY_PLANET_TABS_NAME = 'un_property_planet_tabs'
@@ -108,6 +106,8 @@ local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
 
 local ADMIN_NUMBER_SETTINGS = {
+    {'personal_linked_chest_limit',
+        'un.admin-setting-personal-linked-chest-limit'},
     {'initial_coin', 'un.admin-setting-initial-coin'},
     {'friend_limit', 'un.admin-setting-friend-limit'},
     {'ship_life_hours', 'un.admin-setting-ship-life'},
@@ -146,7 +146,6 @@ local PROPERTY_SORT_FIELDS = {
     owner = true,
     expiry = true,
     price = true,
-    change = true,
     period = true,
 }
 
@@ -354,10 +353,6 @@ local function property_price_name(property_id)
     return 'un_property_price_' .. tostring(property_id)
 end
 
-local function property_price_change_name(property_id)
-    return 'un_property_price_change_' .. tostring(property_id)
-end
-
 local function property_price_change_caption(property, current_price)
     local change = current_price - property.base_price
     if change > 0 then
@@ -534,6 +529,46 @@ local function property_construction_caption(property)
     }
 end
 
+local function property_name_tooltip(property)
+    return properties.feature_description(property)
+end
+
+local function property_enter_tooltip(can_enter, enter_error)
+    return {
+        '',
+        {'un.property-enter-tooltip'},
+        not can_enter and {'', '\n\n', disabled_tooltip('enter', enter_error)}
+            or '',
+    }
+end
+
+local function property_buy_tooltip(player, property, can_buy, buy_error)
+    local owner = properties.owner_name(property)
+    local ownership
+    if property.owner_index == player.index then
+        ownership = {'un.property-buy-own-tooltip'}
+    elseif owner then
+        ownership = {'un.property-buy-owner-tooltip', owner}
+    else
+        ownership = {'un.property-buy-vacant-tooltip'}
+    end
+    return {
+        '',
+        ownership,
+        not can_buy and {'', '\n\n', disabled_tooltip('buy', buy_error)} or '',
+    }
+end
+
+local function property_period_tooltip(property)
+    local construction = property_construction_caption(property)
+    local hours = tostring(property.decay_ticks / config.ticks_per_hour)
+    return {
+        '',
+        {'un.property-price-period-tooltip', hours},
+        construction ~= '' and {'', '\n\n', construction} or '',
+    }
+end
+
 local function set_frame_state(frame, page, property_revision)
     local tags = frame.tags
     tags.page = page
@@ -570,8 +605,6 @@ local function sort_properties(property_list, field, descending)
             )
         elseif field == 'price' then
             values[property.id] = price
-        elseif field == 'change' then
-            values[property.id] = price - property.base_price
         elseif field == 'period' then
             values[property.id] = property.decay_ticks
         else
@@ -601,6 +634,7 @@ local function add_property_sort_header(list, frame, field, caption)
         tags = {action = 'property-sort-column', field = field},
     }
     button.style.horizontally_stretchable = true
+    if field == 'name' then button.style.minimal_width = 240 end
 end
 
 local function render_property_access_section(player, content)
@@ -758,17 +792,16 @@ local function render_property_table(player, frame, content)
     local list = scroll.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
-        column_count = read_only and 7 or 9,
+        column_count = read_only and 5 or 7,
         style = 'bordered_table',
     }
     add_property_sort_header(
         list, frame, 'name', {'un.property-column-name'}
     )
-    list.add{
-        type = 'label',
-        caption = {'un.property-column-construction'},
-        tooltip = {'un.property-construction-tooltip'},
-    }
+    if not read_only then
+        list.add{type = 'label', caption = {'un.property-enter'}}
+        list.add{type = 'label', caption = {'un.property-buy'}}
+    end
     add_property_sort_header(
         list, frame, 'owner', {'un.property-column-owner'}
     )
@@ -779,26 +812,43 @@ local function render_property_table(player, frame, content)
         list, frame, 'price', {'un.property-column-price'}
     )
     add_property_sort_header(
-        list, frame, 'change', {'un.property-column-price-change'}
+        list, frame, 'period', {'un.property-column-type'}
     )
-    add_property_sort_header(
-        list, frame, 'period', {'un.property-column-price-period'}
-    )
-    if not read_only then
-        list.add{type = 'label', caption = {'un.property-buy'}}
-        list.add{type = 'label', caption = {'un.property-enter'}}
-    end
 
     for _, property in ipairs(property_list) do
-        list.add{
+        local property_name = list.add{
             type = 'label',
             caption = properties.surface_display_name(property),
-            tooltip = properties.feature_description(property),
+            tooltip = property_name_tooltip(property),
         }
-        list.add{
-            type = 'label',
-            caption = property_construction_caption(property),
-        }
+        property_name.style.minimal_width = 240
+        if not read_only then
+            local can_enter, enter_error
+                = properties.enter_availability(player, property)
+            list.add{
+                type = 'button',
+                name = property_enter_name(property.id),
+                caption = {'un.property-enter'},
+                tooltip = property_enter_tooltip(can_enter, enter_error),
+                enabled = can_enter,
+                tags = {action = 'property-enter', property_id = property.id},
+            }
+            local can_buy, buy_error
+                = properties.buy_availability(player, property)
+            list.add{
+                type = 'button',
+                name = property_buy_name(property.id),
+                caption = {'un.property-buy'},
+                tooltip = property_buy_tooltip(
+                    player, property, can_buy, buy_error
+                ),
+                enabled = can_buy,
+                tags = {
+                    action = 'property-buy',
+                    property_id = property.id,
+                },
+            }
+        end
         local owner = properties.owner_name(property)
         list.add{
             type = 'label',
@@ -815,12 +865,10 @@ local function render_property_table(player, frame, content)
             name = property_price_name(property.id),
             caption = {'un.coin-amount',
                 format_integer(current_price)},
-        }
-        list.add{
-            type = 'label',
-            name = property_price_change_name(property.id),
-            caption = property_price_change_caption(property, current_price),
-            tooltip = {'un.property-price-change-tooltip'},
+            tooltip = {
+                'un.property-price-with-change-tooltip',
+                property_price_change_caption(property, current_price),
+            },
         }
         list.add{
             type = 'label',
@@ -828,33 +876,8 @@ local function render_property_table(player, frame, content)
                 'un.property-price-period-hours',
                 tostring(property.decay_ticks / config.ticks_per_hour),
             },
-            tooltip = {'un.property-price-period-tooltip'},
+            tooltip = property_period_tooltip(property),
         }
-        if not read_only then
-            local can_buy, buy_error = properties.buy_availability(player, property)
-            list.add{
-                type = 'button',
-                name = property_buy_name(property.id),
-                caption = {'un.property-buy'},
-                tooltip = can_buy and {'un.property-buy'}
-                    or disabled_tooltip('buy', buy_error),
-                enabled = can_buy,
-                tags = {
-                    action = 'property-buy',
-                    property_id = property.id,
-                },
-            }
-            local can_enter, enter_error = properties.enter_availability(player, property)
-            list.add{
-                type = 'button',
-                name = property_enter_name(property.id),
-                caption = {'un.property-enter'},
-                tooltip = can_enter and {'un.property-enter'}
-                    or disabled_tooltip('enter', enter_error),
-                enabled = can_enter,
-                tags = {action = 'property-enter', property_id = property.id},
-            }
-        end
     end
     set_frame_state(frame, 'property', storage.property_revision or 0)
     local tags = frame.tags
@@ -1591,7 +1614,7 @@ local function render_admin_page(player, frame, content)
     summary.add{type = 'label', caption = {'un.admin-summary-ships'}}
     summary.add{type = 'label', caption = #ships.list()}
     summary.add{type = 'label', caption = {'un.admin-summary-dropoffs'}}
-    summary.add{type = 'label', caption = count_pairs(storage.dropoffs)}
+    summary.add{type = 'label', caption = linked_inventory.active_count()}
     summary.add{type = 'label', caption = {'un.admin-summary-ledger'}}
     summary.add{type = 'label', caption = count_pairs(storage.ledger.records)}
 
@@ -1679,6 +1702,42 @@ local function render_admin_page(player, frame, content)
         allow_none_state = false,
         tags = {action = 'admin-setting-switch', setting = 'admin_property_access'},
     }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-setting-linked-chest-all-planets'},
+        right_label_caption = {'un.admin-setting-linked-chest-home-only'},
+        switch_state = settings.get('personal_linked_chest_home_planet_only')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'personal_linked_chest_home_planet_only',
+        },
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-linked-chest-hospice'},
+        switch_state = settings.get('personal_linked_chest_allow_hospice')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'personal_linked_chest_allow_hospice',
+        },
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-linked-chest-property'},
+        switch_state = settings.get('personal_linked_chest_allow_property')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'personal_linked_chest_allow_property',
+        },
+    }
 
     set_frame_state(frame, 'admin')
 end
@@ -1692,13 +1751,22 @@ local function add_help_line(parent, caption, heading)
     return label
 end
 
-local function add_help_card(parent, title)
+local function add_help_card(parent, title, tooltip)
     local card = parent.add{type = 'frame', direction = 'vertical'}
     card.style.horizontally_stretchable = true
     card.style.padding = 12
-    local heading = card.add{type = 'label', caption = title}
+    local heading_row = card.add{type = 'flow', direction = 'horizontal'}
+    heading_row.style.vertical_align = 'center'
+    local heading = heading_row.add{type = 'label', caption = title}
     heading.style.font = 'default-large-bold'
     heading.style.bottom_margin = 6
+    if tooltip then
+        heading_row.add{
+            type = 'sprite',
+            sprite = 'virtual-signal/signal-info',
+            tooltip = tooltip,
+        }
+    end
     return card
 end
 
@@ -1769,33 +1837,6 @@ local function render_help_page(player, frame, content, mode)
         intro.style.single_line = false
         intro.style.maximal_width = 700
         intro.style.font_color = {0.72, 0.72, 0.72}
-        if mode == 'brief' then
-            local quick = details.add{type = 'flow', direction = 'horizontal'}
-            quick.style.vertical_align = 'center'
-            local quick_label = quick.add{
-                type = 'label',
-                caption = {'un.help-quick-actions'},
-            }
-            quick_label.style.font = 'default-bold'
-            quick.add{
-                type = 'button',
-                name = HELP_OPEN_BUILD_NAME,
-                caption = {'un.page-property-build'},
-                tooltip = {'un.help-quick-build-tooltip'},
-            }
-            quick.add{
-                type = 'button',
-                name = HELP_OPEN_PROPERTY_NAME,
-                caption = {'un.page-property'},
-                tooltip = {'un.help-quick-property-tooltip'},
-            }
-            quick.add{
-                type = 'button',
-                name = HELP_OPEN_OVERVIEW_NAME,
-                caption = {'un.page-overview'},
-                tooltip = {'un.help-quick-overview-tooltip'},
-            }
-        end
         add_help_gap(details)
     end
 
@@ -1816,104 +1857,170 @@ local function render_help_page(player, frame, content, mode)
         add_help_line(property, {'un.help-brief-property'})
         add_help_gap(details)
         local purchase = add_help_card(details, {'un.help-card-purchase'})
-        add_help_line(purchase, {'un.help-brief-purchase'})
+        add_help_line(purchase, {
+            'un.help-brief-purchase',
+            settings.get('property_price_factor'),
+        })
         add_help_gap(details)
         local project = add_help_card(details, {'un.help-card-project'})
         add_help_line(project, {'un.help-brief-project'})
+        add_help_gap(details)
+        local features = add_help_card(details, {'un.help-card-features'})
+        add_help_line(features, {'un.help-brief-features'})
     elseif mode == 'advanced' then
-        local travel = add_help_card(details, {'un.help-detail-ship-heading'})
-        add_help_line(travel, {
+        local travel_tooltip = {
+            '',
+            {
             'un.help-detail-travel',
             config.fast_respawn_stamina_cost,
             config.fast_respawn_seconds,
             config.normal_respawn_seconds,
-        })
-        add_help_line(travel, {'un.help-foreign-survival'})
-        add_help_line(travel, {'un.help-detail-resets'})
+            },
+            '\n\n',
+            {'un.help-foreign-survival'},
+            '\n\n',
+            {'un.help-detail-resets'},
+        }
+        local travel = add_help_card(
+            details,
+            {'un.help-detail-ship-heading'},
+            travel_tooltip
+        )
+        add_help_line(travel, {'un.help-advanced-travel-summary'})
         add_help_gap(details)
 
-        local beginner = add_help_card(details, {'un.help-section-beginner'})
-        add_help_line(beginner, {'un.help-detail-linked-chest'})
-        add_help_line(beginner, {
-            'un.help-detail-science',
-            config.science_conversion_ticks / config.ticks_per_minute,
-        })
+        local linked_tooltip = {
+            '',
+            {
+                'un.help-detail-linked-chest',
+                settings.get('personal_linked_chest_limit'),
+            },
+            '\n\n',
+            {
+                'un.help-detail-science',
+                config.science_conversion_ticks / config.ticks_per_minute,
+            },
+        }
+        local beginner = add_help_card(
+            details,
+            {'un.help-section-beginner'},
+            linked_tooltip
+        )
+        add_help_line(beginner, {'un.help-advanced-linked-summary'})
         add_help_gap(details)
 
-        local property = add_help_card(details, {'un.help-detail-property-heading'})
-        add_help_line(property, {'un.help-detail-property-build'})
-        add_help_line(property, {'un.help-detail-property-basic'})
+        local property_tooltip = {
+            '',
+            {'un.help-detail-property-build'},
+            '\n\n',
+            {'un.help-detail-property-basic'},
+        }
+        local property = add_help_card(
+            details,
+            {'un.help-detail-property-heading'},
+            property_tooltip
+        )
+        add_help_line(property, {'un.help-advanced-property-summary'})
         add_help_gap(details)
 
-        local world = add_help_card(details, {'un.help-detail-world-heading'})
-        add_help_line(world, {
+        local technology_tooltip = {
             'un.help-detail-tech-leak',
             settings.get('tech_leak_interval_hours'),
-        })
+        }
+        local world = add_help_card(
+            details,
+            {'un.help-detail-world-heading'},
+            technology_tooltip
+        )
+        add_help_line(world, {'un.help-advanced-world-summary'})
     elseif mode == 'full' then
-        local growth = add_help_card(details, {
-            'un.help-detail-growth-heading',
-        })
-        add_help_line(growth, {
+        local growth_tooltip = {
             'un.help-detail-experience-effects',
             config.ship_base_width,
             config.ship_width_per_level,
             settings.get('ship_life_hours'),
             settings.get('property_tax_percent'),
-        })
+        }
+        local growth = add_help_card(
+            details,
+            {'un.help-detail-growth-heading'},
+            growth_tooltip
+        )
+        add_help_line(growth, {'un.help-full-growth-summary'})
         add_help_gap(details)
 
-        local formulas = add_help_card(details, {
-            'un.help-detail-formulas-heading',
-        })
+        local formulas_tooltip = {
+            '',
+            {
+                'un.help-detail-property-build-formula',
+                config.property_build_experience_base,
+                config.property_build_experience_per_level,
+                config.property_build_stamina_cost,
+                settings.get('property_build_price_multiplier'),
+                settings.get('property_limit_per_planet'),
+                config.property_price_cap,
+            },
+            '\n\n',
+            {
+                'un.help-detail-property-price',
+                config.property_price_cap,
+                settings.get('property_price_factor'),
+            },
+            '\n\n',
+            {
+                'un.help-detail-property-trade',
+                settings.get('property_tax_percent'),
+                settings.get('property_salvage_percent'),
+            },
+        }
+        local formulas = add_help_card(
+            details,
+            {'un.help-detail-formulas-heading'},
+            formulas_tooltip
+        )
         add_help_line(formulas, {
-            'un.help-detail-property-build-formula',
-            config.property_build_experience_base,
-            config.property_build_experience_per_level,
-            config.property_build_stamina_cost,
-            settings.get('property_build_price_multiplier'),
-            settings.get('property_limit_per_planet'),
-            config.property_price_cap,
-        })
-        add_help_line(formulas, {
-            'un.help-detail-property-price',
-            config.property_price_cap,
+            'un.help-full-property-summary',
             settings.get('property_price_factor'),
         })
-        add_help_line(formulas, {
-            'un.help-detail-property-trade',
-            settings.get('property_tax_percent'),
-            settings.get('property_salvage_percent'),
-        })
         add_help_gap(details)
 
-        local world = add_help_card(details, {'un.help-detail-world-heading'})
-        add_help_line(world, {
-            'un.help-detail-world-randomization',
-            config.public_planet_resource_base.frequency,
-            config.public_planet_resource_base.size,
-            config.public_planet_resource_base.richness,
-            config.public_planet_resource_spread,
-            config.public_planet_terrain_spread,
-            config.public_planet_cliff_spread,
-            config.public_planet_enemy_spread,
-            config.public_planet_peaceful_chance * 100,
-            settings.get('technology_price_multiplier'),
-            settings.get('spoil_time_modifier'),
-            settings.get('asteroid_spawning_rate'),
-        })
-        add_help_line(world, {
-            'un.help-detail-reset-schedule',
-            settings.get('planet_reset_min_hours'),
-            settings.get('planet_reset_max_hours'),
-            settings.get('planet_reset_exponent'),
-        })
-        add_help_line(world, {
-            'un.help-detail-tech-leak-formula',
-            settings.get('tech_leak_max_percent'),
-            settings.get('tech_leak_max_affected'),
-            config.tech_leak_chance_multiplier_by_planet.aquilo,
-        })
+        local world_tooltip = {
+            '',
+            {
+                'un.help-detail-world-randomization',
+                config.public_planet_resource_base.frequency,
+                config.public_planet_resource_base.size,
+                config.public_planet_resource_base.richness,
+                config.public_planet_resource_spread,
+                config.public_planet_terrain_spread,
+                config.public_planet_cliff_spread,
+                config.public_planet_enemy_spread,
+                config.public_planet_peaceful_chance * 100,
+                settings.get('technology_price_multiplier'),
+                settings.get('spoil_time_modifier'),
+                settings.get('asteroid_spawning_rate'),
+            },
+            '\n\n',
+            {
+                'un.help-detail-reset-schedule',
+                settings.get('planet_reset_min_hours'),
+                settings.get('planet_reset_max_hours'),
+                settings.get('planet_reset_exponent'),
+            },
+            '\n\n',
+            {
+                'un.help-detail-tech-leak-formula',
+                settings.get('tech_leak_max_percent'),
+                settings.get('tech_leak_max_affected'),
+                config.tech_leak_chance_multiplier_by_planet.aquilo,
+            },
+        }
+        local world = add_help_card(
+            details,
+            {'un.help-detail-world-heading'},
+            world_tooltip
+        )
+        add_help_line(world, {'un.help-full-world-summary'})
     else
         local security = add_help_card(details, {
             'un.help-admin-security-heading',
@@ -2152,18 +2259,19 @@ local function update_property_row(player, property_table, property)
     if price and price.valid then
         price.caption = {'un.coin-amount',
             format_integer(current_price)}
-    end
-    local change = property_table[property_price_change_name(property.id)]
-    if change and change.valid then
-        change.caption = property_price_change_caption(property, current_price)
+        price.tooltip = {
+            'un.property-price-with-change-tooltip',
+            property_price_change_caption(property, current_price),
+        }
     end
 
     local can_buy, buy_error = properties.buy_availability(player, property)
     local buy = property_table[property_buy_name(property.id)]
     if buy and buy.valid then
         buy.enabled = can_buy
-        buy.tooltip = can_buy and {'un.property-buy'}
-            or disabled_tooltip('buy', buy_error)
+        buy.tooltip = property_buy_tooltip(
+            player, property, can_buy, buy_error
+        )
         if buy.tags.action ~= 'property-confirm-buy' then
             buy.caption = {'un.property-buy'}
             buy.tags = {
@@ -2177,8 +2285,7 @@ local function update_property_row(player, property_table, property)
     local enter = property_table[property_enter_name(property.id)]
     if enter and enter.valid then
         enter.enabled = can_enter
-        enter.tooltip = can_enter and {'un.property-enter'}
-            or disabled_tooltip('enter', enter_error)
+        enter.tooltip = property_enter_tooltip(can_enter, enter_error)
     end
 
 end
@@ -2411,8 +2518,7 @@ local function update_frame(player)
         if not read_only then update_property_salvage_action(player, content) end
         local sort_field = property_sort_state(frame)
         local sort_bucket = math.floor(game.tick / config.ticks_per_minute)
-        local price_sort_changed = (sort_field == 'price'
-                or sort_field == 'change')
+        local price_sort_changed = sort_field == 'price'
             and frame.tags.property_sort_bucket ~= sort_bucket
         local refresh_rows = list_refresh_due(frame, 'property')
         if (frame.tags.property_revision or -1)
@@ -2685,21 +2791,6 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_UBI_NAME then
         render_page(player, 'overview')
         update_frame(player)
-    elseif element.name == HELP_OPEN_OVERVIEW_NAME then
-        render_page(player, 'overview')
-        update_frame(player)
-    elseif element.name == HELP_OPEN_BUILD_NAME then
-        render_page(player, 'property-build')
-        update_frame(player)
-    elseif element.name == HELP_OPEN_PROPERTY_NAME then
-        local frame = player.gui.screen[FRAME_NAME]
-        if frame and frame.valid then
-            local tags = frame.tags
-            tags.property_planet = factions.of_player(player)
-            frame.tags = tags
-        end
-        render_page(player, 'property')
-        update_frame(player)
     elseif element.name == NAV_PROPERTY_BUILD_NAME then
         render_page(player, 'property-build')
         update_frame(player)
@@ -2929,6 +3020,9 @@ events.on(defines.events.on_gui_click, function(event)
                 end
                 if ok and tags.setting == 'deconstruction_min_online_hours' then
                     permissions.refresh_connected(true)
+                end
+                if ok and tags.setting == 'personal_linked_chest_limit' then
+                    linked_inventory.enforce_limit()
                 end
                 player.print(ok and {'un.admin-setting-saved'}
                     or {'un.admin-invalid-value'})

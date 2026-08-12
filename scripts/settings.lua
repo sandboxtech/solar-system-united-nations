@@ -5,6 +5,12 @@ local state = require('scripts.state')
 local M = {}
 
 local DEFINITIONS = {
+    personal_linked_chest_limit = {
+        default = config.personal_linked_chest_limit,
+        min = 0,
+        max = 100,
+        integer = true,
+    },
     initial_coin = {default = config.initial_credit, min = 0, max = 1000000000000, integer = true},
     friend_limit = {default = config.friend_limit, min = 0, max = 100, integer = true},
     ship_life_hours = {default = config.ship_life_hours, min = 1, max = 10000},
@@ -112,6 +118,18 @@ local DEFINITIONS = {
     planet_resets_enabled = {default = true, boolean = true},
     tech_leak_enabled = {default = true, boolean = true},
     admin_property_access = {default = false, boolean = true},
+    personal_linked_chest_home_planet_only = {
+        default = config.personal_linked_chest_home_planet_only,
+        boolean = true,
+    },
+    personal_linked_chest_allow_hospice = {
+        default = config.personal_linked_chest_allow_hospice,
+        boolean = true,
+    },
+    personal_linked_chest_allow_property = {
+        default = config.personal_linked_chest_allow_property,
+        boolean = true,
+    },
 }
 
 local function values()
