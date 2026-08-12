@@ -121,7 +121,7 @@ function M.display_name(property)
         if property.sample_planet then
             return {
                 '',
-                '[planet=' .. property.sample_planet .. '] ',
+                '[img=space-location/' .. property.sample_planet .. '] ',
                 {
                     'un.property-surface-vacant',
                     property.planet_property_number or property.id,
@@ -140,7 +140,7 @@ function M.display_name(property)
         and (' ' .. tostring(number)) or ''
     return {
         '',
-        '[planet=' .. property.sample_planet .. '] ',
+        '[img=space-location/' .. property.sample_planet .. '] ',
         {'un.property-surface-owned', owner_name, suffix},
     }
 end
@@ -625,7 +625,7 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         'un.property-built-broadcast',
         player.name,
         M.display_name(property),
-        {'', '[planet=' .. planet_name .. '] ',
+        {'', '[img=space-location/' .. planet_name .. '] ',
             {'space-location-name.' .. planet_name}},
         requirement.experience_cost,
         requirement.stamina_cost,

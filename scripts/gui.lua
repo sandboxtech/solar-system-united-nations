@@ -431,7 +431,11 @@ local function planet_traits_name(name)
 end
 
 local function planet_label(name)
-    return {'', '[planet=' .. name .. '] ', {'space-location-name.' .. name}}
+    return {
+        '',
+        '[img=space-location/' .. name .. '] ',
+        {'space-location-name.' .. name},
+    }
 end
 
 local function is_public_planet(name)
@@ -741,7 +745,11 @@ local function render_property_table(player, frame, content)
         '',
         {'un.property-page-tooltip'},
         '\n\n',
-        {'un.property-faction-survival-tooltip'},
+        {
+            'un.property-faction-survival-tooltip',
+            settings.get('planet_foreign_warning_early_minutes'),
+            settings.get('planet_foreign_warning_final_minutes'),
+        },
     })
     local tabs = content.add{
         type = 'flow',
@@ -1892,7 +1900,14 @@ local function render_help_page(player, frame, content, mode)
         local storage_card = add_help_card(details, {'un.help-card-storage'})
         add_help_line(storage_card, {'un.help-brief-storage'})
         add_help_gap(details)
-        local advice = add_help_card(details, {'un.help-card-advice'})
+        local advice = add_help_card(
+            details,
+            {'un.help-card-advice'},
+            {
+                'un.help-brief-deconstruction',
+                settings.get('deconstruction_min_online_hours'),
+            }
+        )
         add_help_line(advice, {'un.help-brief-advice'})
         add_help_gap(details)
         local features = add_help_card(details, {'un.help-card-features'})
@@ -1936,6 +1951,12 @@ local function render_help_page(player, frame, content, mode)
             {
                 'un.help-detail-science',
                 config.science_conversion_ticks / config.ticks_per_minute,
+            },
+            '\n\n',
+            {
+                'un.help-detail-logistics-limits',
+                config.logistic_network_roboport_limit,
+                config.logistic_network_logistic_robot_limit,
             },
         }
         local beginner = add_help_card(

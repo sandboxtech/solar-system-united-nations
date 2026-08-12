@@ -235,7 +235,11 @@ local STATISTIC_GETTERS = {
 }
 
 local function planet_label(name)
-    return {'', '[planet=' .. name .. '] ', {'space-location-name.' .. name}}
+    return {
+        '',
+        '[img=space-location/' .. name .. '] ',
+        {'space-location-name.' .. name},
+    }
 end
 
 local function ensure_surface(name)
