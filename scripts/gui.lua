@@ -104,6 +104,7 @@ local FACTION_TABLE_NAME = 'un_faction_table'
 local FACTION_SWITCH_PREFIX = 'un_faction_switch_'
 local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
+local ADMIN_RENTAL_TABLE_NAME = 'un_admin_rental_table'
 
 local ADMIN_NUMBER_SETTINGS = {
     {'personal_linked_chest_limit',
@@ -135,6 +136,8 @@ local ADMIN_NUMBER_SETTINGS = {
     {'property_limit_per_planet', 'un.admin-setting-property-limit'},
     {'property_build_price_multiplier', 'un.admin-setting-property-build-price'},
     {'property_salvage_percent', 'un.admin-setting-property-salvage'},
+    {'rental_property_width', 'un.admin-setting-rental-width'},
+    {'rental_property_height', 'un.admin-setting-rental-height'},
     {'tech_leak_interval_hours', 'un.admin-setting-tech-leak-interval'},
     {'tech_leak_max_percent', 'un.admin-setting-tech-leak-strength'},
     {'tech_leak_max_affected', 'un.admin-setting-tech-leak-limit'},
@@ -150,7 +153,6 @@ local PROPERTY_SORT_FIELDS = {
     owner = true,
     expiry = true,
     price = true,
-    period = true,
 }
 
 local function add_list_scroll(content, name)
@@ -529,6 +531,9 @@ end
 local function property_construction_caption(property)
     if type(property.construction_type) ~= 'string'
             or type(property.construction_level) ~= 'number' then
+        if property.rental == true then
+            return {'un.property-construction-public-rental'}
+        end
         return ''
     end
     return {
@@ -538,7 +543,16 @@ local function property_construction_caption(property)
 end
 
 local function property_name_tooltip(property)
-    return properties.feature_description(property)
+    local construction = property_construction_caption(property)
+    local hours = tostring(property.decay_ticks / config.ticks_per_hour)
+    return {
+        '',
+        construction,
+        construction ~= '' and {'', '\n\n'} or '',
+        properties.feature_description(property),
+        '\n\n',
+        {'un.property-price-period-tooltip', hours},
+    }
 end
 
 local function property_enter_tooltip(can_enter, enter_error)
@@ -564,16 +578,6 @@ local function property_buy_tooltip(player, property, can_buy, buy_error)
         '',
         ownership,
         not can_buy and {'', '\n\n', disabled_tooltip('buy', buy_error)} or '',
-    }
-end
-
-local function property_period_tooltip(property)
-    local construction = property_construction_caption(property)
-    local hours = tostring(property.decay_ticks / config.ticks_per_hour)
-    return {
-        '',
-        {'un.property-price-period-tooltip', hours},
-        construction ~= '' and {'', '\n\n', construction} or '',
     }
 end
 
@@ -804,7 +808,7 @@ local function render_property_table(player, frame, content)
     local list = scroll.add{
         type = 'table',
         name = PROPERTY_TABLE_NAME,
-        column_count = read_only and 5 or 7,
+        column_count = read_only and 4 or 6,
         style = 'bordered_table',
     }
     add_property_sort_header(
@@ -812,19 +816,18 @@ local function render_property_table(player, frame, content)
     )
     if not read_only then
         list.add{type = 'label', caption = {'un.property-enter'}}
-        list.add{type = 'label', caption = {'un.property-buy'}}
     end
     add_property_sort_header(
-        list, frame, 'owner', {'un.property-column-owner'}
+        list, frame, 'price', {'un.property-column-price'}
     )
+    if not read_only then
+        list.add{type = 'label', caption = {'un.property-buy'}}
+    end
     add_property_sort_header(
         list, frame, 'expiry', {'un.property-column-lifetime'}
     )
     add_property_sort_header(
-        list, frame, 'price', {'un.property-column-price'}
-    )
-    add_property_sort_header(
-        list, frame, 'period', {'un.property-column-type'}
+        list, frame, 'owner', {'un.property-column-owner'}
     )
 
     for _, property in ipairs(property_list) do
@@ -845,6 +848,19 @@ local function render_property_table(player, frame, content)
                 enabled = can_enter,
                 tags = {action = 'property-enter', property_id = property.id},
             }
+        end
+        local current_price = properties.current_price(property)
+        list.add{
+            type = 'label',
+            name = property_price_name(property.id),
+            caption = {'un.coin-amount',
+                format_integer(current_price)},
+            tooltip = {
+                'un.property-price-with-change-tooltip',
+                property_price_change_caption(property, current_price),
+            },
+        }
+        if not read_only then
             local can_buy, buy_error
                 = properties.buy_availability(player, property)
             list.add{
@@ -861,34 +877,15 @@ local function render_property_table(player, frame, content)
                 },
             }
         end
-        local owner = properties.owner_name(property)
-        list.add{
-            type = 'label',
-            caption = owner or {'un.property-vacant'},
-        }
         list.add{
             type = 'label',
             name = property_remaining_name(property.id),
             caption = property_lifetime_caption(property),
         }
-        local current_price = properties.current_price(property)
+        local owner = properties.owner_name(property)
         list.add{
             type = 'label',
-            name = property_price_name(property.id),
-            caption = {'un.coin-amount',
-                format_integer(current_price)},
-            tooltip = {
-                'un.property-price-with-change-tooltip',
-                property_price_change_caption(property, current_price),
-            },
-        }
-        list.add{
-            type = 'label',
-            caption = {
-                'un.property-price-period-hours',
-                tostring(property.decay_ticks / config.ticks_per_hour),
-            },
-            tooltip = property_period_tooltip(property),
+            caption = owner or {'un.property-vacant'},
         }
     end
     set_frame_state(frame, 'property', storage.property_revision or 0)
@@ -1636,6 +1633,60 @@ local function render_admin_page(player, frame, content)
         tooltip = {'un.admin-fill-stamina-tooltip', config.stamina_max},
         tags = {action = 'admin-fill-stamina'},
     }
+
+    scroll.add{type = 'line'}
+    scroll.add{
+        type = 'label',
+        caption = {'un.admin-rentals-title'},
+        style = 'heading_2_label',
+    }
+    local rental_help = scroll.add{
+        type = 'label',
+        caption = {'un.admin-rentals-help'},
+    }
+    rental_help.style.single_line = false
+    rental_help.style.maximal_width = 720
+    local rental_table = scroll.add{
+        type = 'table',
+        name = ADMIN_RENTAL_TABLE_NAME,
+        column_count = 5,
+        style = 'bordered_table',
+    }
+    rental_table.add{
+        type = 'label', caption = {'un.admin-rental-column-planet'},
+    }
+    rental_table.add{
+        type = 'label', caption = {'un.admin-rental-column-total'},
+    }
+    rental_table.add{
+        type = 'label', caption = {'un.admin-rental-column-vacant'},
+    }
+    rental_table.add{type = 'label', caption = ''}
+    rental_table.add{type = 'label', caption = ''}
+    for _, planet_name in ipairs(config.public_planets) do
+        local total, vacant = properties.rental_counts(planet_name)
+        rental_table.add{type = 'label', caption = planet_label(planet_name)}
+        rental_table.add{type = 'label', caption = total}
+        rental_table.add{type = 'label', caption = vacant}
+        rental_table.add{
+            type = 'button',
+            caption = {'un.admin-rental-remove'},
+            enabled = vacant > 0,
+            tooltip = vacant > 0 and {'un.admin-rental-remove-tooltip'}
+                or {'un.admin-rental-no-vacant-tooltip'},
+            tags = {action = 'admin-rental-remove', planet = planet_name},
+        }
+        rental_table.add{
+            type = 'button',
+            caption = {'un.admin-rental-add'},
+            enabled = #properties.list(planet_name)
+                < settings.get('property_limit_per_planet'),
+            tooltip = {'un.admin-rental-add-tooltip',
+                settings.get('rental_property_width'),
+                settings.get('rental_property_height')},
+            tags = {action = 'admin-rental-add', planet = planet_name},
+        }
+    end
 
     scroll.add{type = 'line'}
     scroll.add{type = 'label', caption = {'un.admin-settings-title'}, style = 'heading_2_label'}
@@ -3086,6 +3137,26 @@ events.on(defines.events.on_gui_click, function(event)
             elseif tags.action == 'admin-fill-stamina' then
                 stamina.fill(player.index)
                 player.print({'un.admin-stamina-filled', config.stamina_max})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-rental-add' then
+                if not is_public_planet(tags.planet) then return end
+                local property, err = properties.add_rental(tags.planet)
+                player.print(property and {
+                    'un.admin-rental-added', planet_label(tags.planet),
+                } or err == 'property-limit' and {
+                    'un.admin-rental-limit', planet_label(tags.planet),
+                } or {'un.admin-rental-failed'})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-rental-remove' then
+                if not is_public_planet(tags.planet) then return end
+                local ok, err = properties.remove_rental(tags.planet)
+                player.print(ok and {
+                    'un.admin-rental-removed', planet_label(tags.planet),
+                } or err == 'no-vacant-rental' and {
+                    'un.admin-rental-no-vacant', planet_label(tags.planet),
+                } or {'un.admin-rental-failed'})
                 render_page(player, 'admin')
                 update_frame(player)
             end

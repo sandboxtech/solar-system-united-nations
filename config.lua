@@ -394,10 +394,26 @@ M.property_build_types = {
     },
 }
 M.property_lifecycle_ticks = M.ticks_per_minute
-M.property_permanent_defaults = {
-    {count = 1, width = 64, height = 32, decay_hours = 3},
-    {count = 1, width = 128, height = 64, decay_hours = 3},
-    {count = 1, width = 256, height = 128, decay_hours = 3},
+M.rental_property_default_width = 24
+M.rental_property_default_height = 16
+M.rental_property_decay_hours = 2
+local function permanent_rentals(count)
+    return {
+        {
+            count = count,
+            width = M.rental_property_default_width,
+            height = M.rental_property_default_height,
+            decay_hours = M.rental_property_decay_hours,
+            fixed_layout = {fill_tile = 'tutorial-grid'},
+        },
+    }
+end
+M.property_permanent_defaults_by_planet = {
+    nauvis = permanent_rentals(10),
+    vulcanus = permanent_rentals(3),
+    gleba = permanent_rentals(3),
+    fulgora = permanent_rentals(3),
+    aquilo = permanent_rentals(3),
 }
 
 M.stamina_max = 108000

@@ -100,10 +100,13 @@ local function assign_owner(property, owner_index)
         and next_owner_property_number(owner_index, property.id) or nil
 end
 
+local create
+
 local function next_planet_property_number(planet_name, excluded_property_id)
     local used = {}
     for _, candidate in pairs(storage.properties) do
-        if candidate.permanent
+        if candidate.status == 'active'
+                and candidate.permanent
                 and candidate.sample_planet == planet_name
                 and candidate.id ~= excluded_property_id
                 and is_positive_integer(candidate.planet_property_number) then
@@ -303,7 +306,7 @@ local function sync_surface_visibility(property)
     return true
 end
 
-local function create(spec)
+create = function(spec)
     state.ensure()
     spec = spec or {}
     local custom_name, name_err = M.normalize_build_name(spec.custom_name)
@@ -386,6 +389,7 @@ local function create(spec)
         expires_tick = expires_tick,
         lifetime_hours = lifetime_hours,
         permanent = permanent,
+        rental = spec.rental == true,
         construction_value = tonumber(spec.construction_value),
         construction_type = type(spec.construction_type) == 'string'
             and spec.construction_type or nil,
@@ -409,37 +413,54 @@ local function create(spec)
     return property
 end
 
-function M.ensure()
-    state.ensure()
-    if not storage.permanent_properties_created then
-        local complete = true
-        for _, planet_name in ipairs(config.public_planets) do
-            for tier_index, spec in ipairs(config.property_permanent_defaults) do
-                for slot = 1, spec.count do
-                    local key = table.concat({planet_name, tier_index, slot}, ':')
-                    local existing = false
-                    for _, property in pairs(storage.properties) do
-                        if property.system_key == key then existing = true; break end
+local function create_permanent_defaults()
+    local complete = true
+    local created = 0
+    for _, planet_name in ipairs(config.public_planets) do
+        local defaults = config.property_permanent_defaults_by_planet
+            and config.property_permanent_defaults_by_planet[planet_name] or {}
+        for tier_index, spec in ipairs(defaults) do
+            for slot = 1, spec.count do
+                local key = table.concat({planet_name, tier_index, slot}, ':')
+                local existing = false
+                for _, property in pairs(storage.properties) do
+                    if property.status == 'active'
+                            and property.system_key == key then
+                        existing = true
+                        break
                     end
-                    if not existing then
-                        local property, err = create{
-                            sample_planet = planet_name,
-                            width = spec.width,
-                            height = spec.height,
-                            decay_hours = spec.decay_hours,
-                            permanent = true,
-                            system_key = key,
-                        }
-                        if not property then
-                            complete = false
-                            log('[un] failed to create permanent property '
-                                .. key .. ': ' .. tostring(err))
-                        end
+                end
+                if not existing then
+                    local property, err = create{
+                        sample_planet = planet_name,
+                        terrain_planet = spec.terrain_planet,
+                        width = spec.width,
+                        height = spec.height,
+                        decay_hours = spec.decay_hours,
+                        fixed_layout = spec.fixed_layout,
+                        permanent = true,
+                        rental = true,
+                        system_key = key,
+                    }
+                    if property then
+                        created = created + 1
+                    else
+                        complete = false
+                        log('[un] failed to create permanent property '
+                            .. key .. ': ' .. tostring(err))
                     end
                 end
             end
         end
-        if complete then storage.permanent_properties_created = true end
+    end
+    storage.permanent_properties_created = complete
+    return created, complete
+end
+
+function M.ensure()
+    state.ensure()
+    if not storage.permanent_properties_created then
+        create_permanent_defaults()
     end
     for _, property in ipairs(M.list()) do
         sync_surface_visibility(property)
@@ -1064,6 +1085,97 @@ local function delete_property_surface(property)
     property.status = 'active'
     return false, 'surface-delete-failed'
 end
+
+function M.rental_counts(planet_name)
+    if not build_planets[planet_name] then return 0, 0 end
+    local total = 0
+    local vacant = 0
+    for _, property in ipairs(M.list(planet_name)) do
+        if property.rental == true then
+            total = total + 1
+            if not property.owner_index then vacant = vacant + 1 end
+        end
+    end
+    return total, vacant
+end
+
+function M.add_rental(planet_name)
+    if not build_planets[planet_name] then return nil, 'invalid-planet' end
+    if #M.list(planet_name) >= settings.get('property_limit_per_planet') then
+        return nil, 'property-limit'
+    end
+    return create{
+        sample_planet = planet_name,
+        width = settings.get('rental_property_width'),
+        height = settings.get('rental_property_height'),
+        decay_hours = config.rental_property_decay_hours,
+        fixed_layout = {fill_tile = 'tutorial-grid'},
+        permanent = true,
+        rental = true,
+    }
+end
+
+function M.remove_rental(planet_name)
+    if not build_planets[planet_name] then return false, 'invalid-planet' end
+    local target = nil
+    for _, property in ipairs(M.list(planet_name)) do
+        if property.rental == true and not property.owner_index
+                and (not target
+                    or (property.planet_property_number or 0)
+                        > (target.planet_property_number or 0)
+                    or property.planet_property_number
+                        == target.planet_property_number
+                        and property.id > target.id) then
+            target = property
+        end
+    end
+    if not target then return false, 'no-vacant-rental' end
+    local surface = game.surfaces[target.surface_name]
+    if surface and surface.valid then return delete_property_surface(target) end
+    clear_name_translation_requests(target.id)
+    storage.properties[target.id] = nil
+    bump_revision()
+    return true
+end
+
+function M.reset_permanent_defaults()
+    state.ensure()
+    local permanent = {}
+    for _, property in pairs(storage.properties) do
+        if property.permanent and property.status == 'active' then
+            permanent[#permanent + 1] = property
+        end
+    end
+    table.sort(permanent, function(a, b) return a.id < b.id end)
+
+    local removed = 0
+    local failed = 0
+    for _, property in ipairs(permanent) do
+        local surface = game.surfaces[property.surface_name]
+        if surface and surface.valid then
+            local ok = delete_property_surface(property)
+            if ok then removed = removed + 1 else failed = failed + 1 end
+        else
+            clear_name_translation_requests(property.id)
+            storage.properties[property.id] = nil
+            removed = removed + 1
+            bump_revision()
+        end
+    end
+
+    storage.permanent_properties_created = false
+    local created, complete = create_permanent_defaults()
+    return {
+        removed = removed,
+        failed = failed,
+        created = created,
+        complete = complete and failed == 0,
+    }
+end
+
+remote.add_interface('un_properties', {
+    reset_permanent_defaults = M.reset_permanent_defaults,
+})
 
 -- Account cleanup removes player-built property surfaces without a salvage
 -- payout. Permanent public properties survive and return to the vacant pool.

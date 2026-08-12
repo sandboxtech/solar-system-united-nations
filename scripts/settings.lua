@@ -111,6 +111,18 @@ local DEFINITIONS = {
         min = 0.01,
         max = 100,
     },
+    rental_property_width = {
+        default = config.rental_property_default_width,
+        min = 8,
+        max = 128,
+        integer = true,
+    },
+    rental_property_height = {
+        default = config.rental_property_default_height,
+        min = 8,
+        max = 128,
+        integer = true,
+    },
     tech_leak_interval_hours = {
         default = config.tech_leak_interval_hours,
         min = 0.1,
