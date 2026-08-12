@@ -1,4 +1,14 @@
+local config = require('config')
+
 local M = {}
+
+local function copy_item_list(source)
+    local result = {}
+    for _, item in ipairs(source or {}) do
+        result[#result + 1] = {name = item.name, count = item.count}
+    end
+    return result
+end
 
 function M.ensure()
     if storage.players == nil then storage.players = {} end
@@ -27,6 +37,9 @@ function M.ensure()
         storage.public_planet_resets = {}
     end
     if storage.admin_settings == nil then storage.admin_settings = {} end
+    if storage.starter_resources == nil then
+        storage.starter_resources = copy_item_list(config.starter_resources)
+    end
     if storage.hospice_grid_versions == nil then storage.hospice_grid_versions = {} end
     if storage.respawn_hospice_planets == nil then
         storage.respawn_hospice_planets = {}

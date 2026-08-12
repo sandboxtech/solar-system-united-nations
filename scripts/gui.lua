@@ -1514,8 +1514,6 @@ local function render_factions_page(player, frame, content)
         '',
         {
             'un.faction-page-tooltip',
-            config.suicide_stamina_cost,
-            config.normal_respawn_seconds,
             settings.get('faction_friendly_to_hostile_percent'),
             settings.get('faction_hostile_to_friendly_percent'),
         },
@@ -1841,7 +1839,7 @@ local function render_help_page(player, frame, content, mode)
     details.style.minimal_width = 740
     details.style.maximal_height = 620
 
-    if mode == 'brief' or mode == 'advanced' or mode == 'full' then
+    if mode == 'advanced' or mode == 'full' then
         local intro = details.add{
             type = 'label',
             caption = {'un.help-layer-' .. mode},
@@ -1866,11 +1864,7 @@ local function render_help_page(player, frame, content, mode)
         local foreign = add_help_card(
             details,
             {'un.help-card-foreign-expedition'},
-            {
-                'un.help-story-foreign-detail',
-                settings.get('planet_foreign_warning_early_minutes'),
-                settings.get('planet_foreign_warning_final_minutes'),
-            }
+            {'un.help-story-foreign-detail'}
         )
         add_help_line(foreign, {'un.help-story-foreign'})
         add_help_gap(details)
@@ -1927,11 +1921,7 @@ local function render_help_page(player, frame, content, mode)
             '\n\n',
             {'un.help-foreign-survival'},
             '\n\n',
-            {
-                'un.help-detail-resets',
-                settings.get('planet_foreign_warning_early_minutes'),
-                settings.get('planet_foreign_warning_final_minutes'),
-            },
+            {'un.help-detail-resets'},
         }
         local travel = add_help_card(
             details,
@@ -2063,7 +2053,6 @@ local function render_help_page(player, frame, content, mode)
                 'un.help-detail-reset-schedule',
                 settings.get('planet_reset_min_hours'),
                 settings.get('planet_reset_max_hours'),
-                settings.get('planet_reset_exponent'),
             },
             '\n\n',
             {
@@ -2093,6 +2082,14 @@ local function render_help_page(player, frame, content, mode)
             'un.help-admin-limits',
             settings.get('property_limit_per_planet'),
             settings.get('cleanup_idle_hours'),
+        })
+        add_help_gap(details)
+
+        local starter_resources = add_help_card(details, {
+            'un.help-admin-starter-resources-heading',
+        })
+        add_help_line(starter_resources, {
+            'un.help-admin-starter-resources',
         })
         add_help_gap(details)
 

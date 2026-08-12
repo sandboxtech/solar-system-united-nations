@@ -1,11 +1,15 @@
 local config = require('config')
 local events = require('scripts.events')
+local state = require('scripts.state')
 local stamina = require('scripts.stamina')
 
 local M = {}
 
 local function deliver_item(player, item)
-    local count = math.max(0, math.floor(tonumber(item.count) or 0))
+    if type(item) ~= 'table' or type(item.name) ~= 'string' then return 0 end
+    local count = tonumber(item.count) or 0
+    if count ~= count or count == math.huge or count == -math.huge then return 0 end
+    count = math.max(0, math.floor(count))
     if count == 0 or not prototypes.item[item.name] then return 0 end
     local inserted = player.insert{name = item.name, count = count}
     local remainder = count - inserted
@@ -108,7 +112,10 @@ end
 events.on(defines.events.on_player_created, function(event)
     local player = game.get_player(event.player_index)
     if not (player and player.valid) then return end
-    for _, item in ipairs(config.starter_resources) do
+    state.ensure()
+    local resources = type(storage.starter_resources) == 'table'
+        and storage.starter_resources or config.starter_resources
+    for _, item in ipairs(resources) do
         deliver_item(player, item)
     end
     player.print({'un.starter-resources-granted'})
