@@ -232,6 +232,8 @@ M.hospice_tiles = {
     aquilo = {land = 'dust-lumpy', liquid = 'ammoniacal-ocean'},
 }
 M.property_surface_prefix = 'un-property-'
+M.surface_hidden_from_foreign_factions = false
+M.surface_hidden_from_home_faction = false
 M.property_default_tax = 0.10
 M.property_solar_multiplier = 0.10
 M.property_min_brightness = 0.05

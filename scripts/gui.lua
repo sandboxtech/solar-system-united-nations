@@ -1609,6 +1609,10 @@ local function render_factions_page(player, frame, content)
             'un.faction-page-tooltip',
             settings.get('faction_friendly_to_hostile_percent'),
             settings.get('faction_hostile_to_friendly_percent'),
+            settings.get('surface_hidden_from_foreign_factions')
+                and {'un.yes'} or {'un.no'},
+            settings.get('surface_hidden_from_home_faction')
+                and {'un.yes'} or {'un.no'},
         },
         '\n\n',
         {'un.faction-aquilo-neutral'},
@@ -1859,6 +1863,34 @@ local function render_admin_page(player, frame, content)
         switch_state = settings.get('admin_property_access') and 'right' or 'left',
         allow_none_state = false,
         tags = {action = 'admin-setting-switch', setting = 'admin_property_access'},
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-hide-foreign-surfaces'},
+        left_label_tooltip = {'un.admin-setting-surface-visibility-tooltip'},
+        right_label_tooltip = {'un.admin-setting-surface-visibility-tooltip'},
+        switch_state = settings.get('surface_hidden_from_foreign_factions')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'surface_hidden_from_foreign_factions',
+        },
+    }
+    switches.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-disabled'},
+        right_label_caption = {'un.admin-setting-hide-home-surfaces'},
+        left_label_tooltip = {'un.admin-setting-surface-visibility-tooltip'},
+        right_label_tooltip = {'un.admin-setting-surface-visibility-tooltip'},
+        switch_state = settings.get('surface_hidden_from_home_faction')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'surface_hidden_from_home_faction',
+        },
     }
     switches.add{
         type = 'switch',
@@ -3559,6 +3591,11 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
         end
         if ok and tags.setting == 'tech_leak_enabled' then
             technology_decay.apply_enabled(enabled)
+        end
+        if ok and (tags.setting == 'surface_hidden_from_foreign_factions'
+                or tags.setting == 'surface_hidden_from_home_faction') then
+            factions.apply_all_surface_visibility()
+            ships.ensure()
         end
         player.print(ok and {'un.admin-setting-saved'}
             or {'un.admin-invalid-value'})

@@ -105,19 +105,42 @@ local function ensure_diplomacy_state()
     end
 end
 
-function M.reveal_surface_to_factions(surface)
+local function surface_home_planet(surface)
+    if planet_set[surface.name] then return surface.name end
+    local hospice_prefix = config.hospice_surface_prefix
+    if surface.name:sub(1, #hospice_prefix) == hospice_prefix then
+        local planet_name = surface.name:sub(#hospice_prefix + 1)
+        if planet_set[planet_name] then return planet_name end
+    end
+    for _, property in pairs(storage.properties or {}) do
+        if property.status == 'active'
+                and property.surface_index == surface.index
+                and planet_set[property.sample_planet] then
+            return property.sample_planet
+        end
+    end
+    return nil
+end
+
+function M.apply_surface_visibility(surface)
     if not (surface and surface.valid) then return false end
     local platform = surface.platform
     if platform and platform.valid then return false end
+    local home_planet = surface_home_planet(surface)
+    local hide_home = settings.get('surface_hidden_from_home_faction')
+    local hide_foreign = settings.get('surface_hidden_from_foreign_factions')
     for _, entry in ipairs(M.all()) do
-        entry.force.set_surface_hidden(surface, false)
+        local hidden = home_planet and (entry.planet_name == home_planet
+            and hide_home or entry.planet_name ~= home_planet and hide_foreign)
+            or false
+        entry.force.set_surface_hidden(surface, hidden)
     end
     return true
 end
 
-local function reveal_all_non_platform_surfaces()
+function M.apply_all_surface_visibility()
     for _, surface in pairs(game.surfaces) do
-        M.reveal_surface_to_factions(surface)
+        M.apply_surface_visibility(surface)
     end
 end
 
@@ -139,7 +162,7 @@ local function configure_relations()
             apply_relation(a, b, storage.faction_pair_relations[key])
         end
     end
-    reveal_all_non_platform_surfaces()
+    M.apply_all_surface_visibility()
 end
 
 function M.update_diplomacy_after_reset(planet_name)
@@ -332,7 +355,7 @@ events.on(defines.events.on_player_respawned, function(event)
 end)
 
 events.on(defines.events.on_surface_created, function(event)
-    M.reveal_surface_to_factions(game.surfaces[event.surface_index])
+    M.apply_surface_visibility(game.surfaces[event.surface_index])
 end)
 
 return M

@@ -147,6 +147,14 @@ local DEFINITIONS = {
     planet_resets_enabled = {default = true, boolean = true},
     tech_leak_enabled = {default = true, boolean = true},
     admin_property_access = {default = false, boolean = true},
+    surface_hidden_from_foreign_factions = {
+        default = config.surface_hidden_from_foreign_factions,
+        boolean = true,
+    },
+    surface_hidden_from_home_faction = {
+        default = config.surface_hidden_from_home_faction,
+        boolean = true,
+    },
     personal_linked_chest_home_planet_only = {
         default = config.personal_linked_chest_home_planet_only,
         boolean = true,

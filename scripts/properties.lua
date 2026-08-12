@@ -324,7 +324,7 @@ end
 local function sync_surface_visibility(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
-    return factions.reveal_surface_to_factions(surface)
+    return factions.apply_surface_visibility(surface)
 end
 
 create = function(spec)
