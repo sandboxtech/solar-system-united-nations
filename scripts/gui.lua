@@ -2433,6 +2433,9 @@ local function property_error(err)
         return {'un.property-expand-unavailable'}
     end
     if err == 'lifetime-full' then return {'un.property-renew-full'} end
+    if err == 'management-cost-changed' then
+        return {'un.property-manage-cost-changed'}
+    end
     if err == 'not-inside' then return {'un.property-manage-not-inside'} end
     if err == 'not-player-built' or err == 'permanent' then
         return {'un.property-salvage-unavailable'}
@@ -3368,6 +3371,7 @@ events.on(defines.events.on_gui_click, function(event)
             element.tags = {
                 action = 'property-confirm-renew',
                 property_id = property.id,
+                quoted_experience_cost = requirement.experience_cost,
             }
         elseif tags.action == 'property-expand' then
             local property = properties.get(tags.property_id)
@@ -3391,6 +3395,8 @@ events.on(defines.events.on_gui_click, function(event)
             element.tags = {
                 action = 'property-confirm-expand',
                 property_id = property.id,
+                quoted_experience_cost = requirement.experience_cost,
+                quoted_stage = requirement.stage,
             }
         elseif tags.action == 'property-buy' then
             local property = properties.get(tags.property_id)
@@ -3464,14 +3470,23 @@ events.on(defines.events.on_gui_click, function(event)
             update_frame(player)
             update_travel_buttons(player)
         elseif tags.action == 'property-confirm-renew' then
-            local ok, err = properties.renew(player, tags.property_id)
+            local ok, err = properties.renew(
+                player,
+                tags.property_id,
+                tags.quoted_experience_cost
+            )
             if not ok and not property_disappeared(err) then
                 player.print(property_error(err))
             end
             render_property_table(player, frame, content)
             update_frame(player)
         elseif tags.action == 'property-confirm-expand' then
-            local ok, err = properties.expand(player, tags.property_id)
+            local ok, err = properties.expand(
+                player,
+                tags.property_id,
+                tags.quoted_experience_cost,
+                tags.quoted_stage
+            )
             if not ok and not property_disappeared(err) then
                 player.print(property_error(err))
             end

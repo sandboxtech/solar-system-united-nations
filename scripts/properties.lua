@@ -1452,10 +1452,14 @@ function M.renew_availability(player, property)
     return true, nil, requirement
 end
 
-function M.renew(player, property_id)
+function M.renew(player, property_id, quoted_experience_cost)
     local property = M.get(property_id)
     local available, err, requirement = M.renew_availability(player, property)
     if not available then return false, err, requirement end
+    if quoted_experience_cost ~= nil
+            and requirement.experience_cost ~= quoted_experience_cost then
+        return false, 'management-cost-changed', requirement
+    end
     if not experience.spend(
         player.index,
         requirement.pack,
@@ -1543,10 +1547,15 @@ function M.expansion_availability(player, property)
     return true, nil, requirement
 end
 
-function M.expand(player, property_id)
+function M.expand(player, property_id, quoted_experience_cost, quoted_stage)
     local property = M.get(property_id)
     local available, err, requirement = M.expansion_availability(player, property)
     if not available then return false, err, requirement end
+    if (quoted_experience_cost ~= nil
+            and requirement.experience_cost ~= quoted_experience_cost)
+            or (quoted_stage ~= nil and requirement.stage ~= quoted_stage) then
+        return false, 'management-cost-changed', requirement
+    end
     if not experience.spend(
         player.index,
         requirement.pack,
