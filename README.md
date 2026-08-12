@@ -1,32 +1,81 @@
 # 太阳系联合国 / United Nations of Sol
 
-一个无需安装模组的 Factorio: Space Age 多人场景。
+一个无需额外模组的 Factorio: Space Age 多人场景。
 
-五个阵营在周期跃迁的公共星球上生产、贸易、合作或交战。玩家把科技瓶转换成个人经验，用经验建造限时房产，并通过关联物流把重要物资转移到安全据点，让自己的产业延续到下一轮世界。
+五个阵营在不断跃迁的公共星球上重新开拓。玩家可以把科技瓶转换成个人经验，用经验建立限时房产，再通过关联物流保留自己最看重的物资。你可以安静建设，也可以参与贸易、外交、入侵和战争。
 
-## 最简玩法
+## 四步开始
 
-1. 点击左上角“传送”，前往本国公共星球开始生产。
-2. 在本国公共星球亲手放置木箱，建立个人关联箱；用机械臂送入科技瓶，转换成个人经验。
-3. 用经验和体力建造房产，或领取低保金币购买本国现成房产。
-4. 用机械臂连接个人关联箱与房产中央的关联箱，在星球跃迁前转移重要物资。
+1. 点击左上角“传送”，前往本国公共星球，像普通异星工厂一样采矿、供电和研究。
+2. 做出科技瓶后，亲手放置木箱。它会成为个人关联箱；用机械臂投入科技瓶，获得对应的个人经验。
+3. 在“建造”页用经验和体力建立房产；也可以领取低保金币，购买本国现成房产。第一套选负担得起的小屋即可。
+4. 房产中央的四个关联箱与屋主的个人关联箱共享物品。用机械臂存取，把想保留的物资送进房产。
 
-不需要先读完规则，也不必担心房产交易让游戏无法继续。房产被买走时，原屋主会收到扣税后的成交款，可以继续建造或购买新家。
+不用先读完规则，也不用一开始就建造大型工厂。先做一条小规模科技瓶产线，再逐步扩张即可。
 
-## 场景特色
+## 新玩家建议
 
-- 五个独立阵营：各自拥有科技、领土、房产市场和太空平台。
-- 周期跃迁：五颗公共星球分别生成新的地形、资源与特色词条。
-- 个人成长：科技瓶经验形成等级，影响房产、飞船和交易税率。
-- 限时房产：不同科技瓶建成不同尺寸、寿命、地貌和安全性的据点。
-- 动态外交：国家可能开放边界、共享视野，也可能敌对交战。
-- 多种角色：建设、贸易、合作、外交、入侵和战争都可以成为玩法。
+- 留意左上角的星球跃迁倒计时，优先搬走稀有物资、设备和预制工厂。
+- 房产不是开局门槛。没有房产时可以先正常生产、积累经验和领取金币。
+- 房产可能被再次购买，但原屋主会收到扣税后的成交款，可以继续建造或购买新家。
+- 不熟悉阵营玩法也没关系。留在本国发展最稳妥，等熟悉场景后再考虑外交、犯罪或换国。
+
+## 公共星球与安全地点
+
+五颗公共星球分别计算跃迁时间。每次跃迁都会生成新的地图、资源分布和星球特色，公共星球上的旧设施不会跟随抵达新世界。
+
+每个国家都有自己的联合国难民营。本国难民营和房产不会随公共星球一起跃迁；玩家建造的房产有独立寿命，到期后才会消失。
+
+左上角“传送”按钮在本国公共星球与难民营之间切换。“房产”按钮前往自己的房产；拥有多套时会依次循环。
+
+## 经验、等级与房产
+
+关联箱中的每瓶科技瓶都会增加对应种类的个人经验。各类经验分别形成等级，再合计为总等级。
+
+总等级会影响新建飞船的尺寸和寿命，并降低玩家卖出房产时承担的税率。建造房产会永久消耗对应经验，所以等级既是成长，也是一种可投入的资源。
+
+不同科技瓶会建成不同房型。它们可能在空间、寿命、地貌、降价速度和入室风险上有所区别；建造页会直接预览本次结果，不需要背公式。
+
+房产中央始终有四个系统关联箱。小屋和大屋的物流能力相同：小屋容易负担，大屋则有更多生产空间。
+
+## 房产市场
+
+只能正常建造和购买本国房产，其他国家的房产页面用于查看市场状况。
+
+每套房产的报价会随时间回落。成交后，下一次报价会立即提高；成交款扣税后交给原屋主。屋主也可以购买自己的房产，提高后续报价并承担本次交易税。
+
+精确价格公式、税率和降价周期 T 放在游戏内“规则数据”和相关 tooltip 中，不需要为了开始游戏提前阅读。
+
+## 五个阵营
+
+- Nauvis：地球人民共和国
+- Vulcanus：火星军政委员会
+- Fulgora：雷星企业董事会
+- Gleba：草星自由公社
+- Aquilo：冰星技术官僚学院
+
+阵营各自拥有科技、建筑、房产市场和太空平台。友好国家会开放边界并共享视野；敌对国家可能互相攻击。Aquilo 长期保持中立友好，其他国家的外交关系可能随星球跃迁变化。
+
+玩家可以扮演建设者、商人和外交者，也可以成为入侵者或战士。场景不要求所有人采用同一种玩法。
+
+## 其他系统
+
+- 飞船：个人等级决定新船的基础尺寸与寿命。
+- 体力：在线和离线都会恢复，用于建房、建船和部分高成本行动。
+- 低保：金币按时间积累，需要在个人页手动领取。
+- 科技失传：进入太空阶段后，部分已研究科技可能失去；关键免疫项由服务器管理。
+- 犯罪：满足条件后可尝试闯入当前所在国家的非公开房产。
+- 好友与开放：双向好友和公开设置可让其他玩家进入房产。
+
+具体费用、概率、边界条件和管理员设置均以游戏内 tooltip、“规则数据”与当前服务器配置为准。
 
 ## 安装与运行
 
-将整个目录放入 Factorio 的 `scenarios` 文件夹，从“多人游戏 → 创建游戏 → 场景”中选择本场景。需要 Factorio 2.0 与 Space Age 官方扩展内容。
+需要 Factorio 2.0/2.1 与 Space Age 官方扩展内容。
 
-玩家规则以游戏内“新手指南”和 tooltip 为准；简明玩法及维护资料位于 [`docs`](docs/README.md)。
+将整个目录放入 Factorio 的 `scenarios` 文件夹，然后从“多人游戏 → 创建游戏 → 场景”中选择本场景。场景代码、locale 与元数据应作为同一个版本完整更新。
+
+维护者入口见 [`docs`](docs/README.md)。
 
 ## 社区
 
@@ -35,4 +84,10 @@
 
 ---
 
-United Nations of Sol is a mod-free Factorio: Space Age multiplayer scenario. Five factions develop periodically shifting public planets, convert science packs into personal experience, and build temporary properties whose linked logistics preserve selected production between worlds. Players may build, trade, cooperate, negotiate, raid, or wage war.
+## English overview
+
+United Nations of Sol is a mod-free Factorio: Space Age multiplayer scenario about five factions developing periodically shifting public planets.
+
+Start an ordinary factory on your faction's home planet, feed science packs into a personal linked chest with inserters, and spend the resulting experience on temporary property. A property's built-in linked chests share your personal linked inventory, allowing selected supplies to remain outside the shifting public world.
+
+Each faction has separate research, territory, property markets, and space platforms. Countries may cooperate and share vision or become hostile. Players are free to build, trade, negotiate, raid, or fight. Exact formulas and restrictions are explained in the in-game tooltips only when they matter.

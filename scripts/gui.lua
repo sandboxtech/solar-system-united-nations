@@ -1846,6 +1846,12 @@ local function render_help_page(player, frame, content, mode)
         add_help_gap(details)
         local forces = add_help_card(details, {'un.help-card-factions'})
         add_help_line(forces, {'un.help-story-factions'})
+        add_help_gap(details)
+        local diplomacy = add_help_card(details, {'un.help-card-diplomacy'})
+        add_help_line(diplomacy, {'un.help-story-diplomacy'})
+        add_help_gap(details)
+        local switching = add_help_card(details, {'un.help-card-faction-switch'})
+        add_help_line(switching, {'un.help-story-faction-switch'})
     elseif mode == 'brief' then
         local travel = add_help_card(details, {'un.help-card-travel'})
         add_help_line(travel, {'un.help-brief-travel'})
@@ -1856,17 +1862,17 @@ local function render_help_page(player, frame, content, mode)
         local property = add_help_card(details, {'un.help-card-property'})
         add_help_line(property, {'un.help-brief-property'})
         add_help_gap(details)
-        local purchase = add_help_card(details, {'un.help-card-purchase'})
-        add_help_line(purchase, {
-            'un.help-brief-purchase',
-            settings.get('property_price_factor'),
-        })
+        local storage_card = add_help_card(details, {'un.help-card-storage'})
+        add_help_line(storage_card, {'un.help-brief-storage'})
         add_help_gap(details)
-        local project = add_help_card(details, {'un.help-card-project'})
-        add_help_line(project, {'un.help-brief-project'})
+        local advice = add_help_card(details, {'un.help-card-advice'})
+        add_help_line(advice, {'un.help-brief-advice'})
         add_help_gap(details)
         local features = add_help_card(details, {'un.help-card-features'})
         add_help_line(features, {'un.help-brief-features'})
+        add_help_gap(details)
+        local project = add_help_card(details, {'un.help-card-project'})
+        add_help_line(project, {'un.help-brief-project'})
     elseif mode == 'advanced' then
         local travel_tooltip = {
             '',
