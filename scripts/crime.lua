@@ -21,6 +21,12 @@ local function targets(planet_name, player_index)
     return result
 end
 
+local function success_chance(property)
+    local price = properties.current_price(property)
+    return math.min(1, (1 / (1 + price / config.crime_price_scale))
+        * (tonumber(property.crime_chance_multiplier) or 1))
+end
+
 local function context(player)
     if not (player and player.valid) then return nil, 'invalid-player' end
     local surface = player.physical_surface
@@ -56,6 +62,17 @@ function M.availability(player)
     return true, nil, planet_name, #candidates
 end
 
+function M.list_targets(player)
+    local planet_name, err = context(player)
+    if not planet_name then return {}, nil, err end
+    return targets(planet_name, player.index), planet_name
+end
+
+function M.success_chance(property)
+    if not property then return 0 end
+    return success_chance(property)
+end
+
 local function chance_text(chance)
     local percent = chance * 100
     if percent >= 1 then return string.format('%.2f', percent) end
@@ -68,9 +85,7 @@ function M.attempt(player)
     local candidates = targets(planet_name, player.index)
     if #candidates == 0 then return false, 'no-targets' end
     local property = candidates[math.random(#candidates)]
-    local price = properties.current_price(property)
-    local chance = math.min(1, (1 / (1 + price / config.crime_price_scale))
-        * (tonumber(property.crime_chance_multiplier) or 1))
+    local chance = success_chance(property)
 
     if not stamina.spend(player.index, config.crime_stamina_cost) then
         return false, 'insufficient-stamina'

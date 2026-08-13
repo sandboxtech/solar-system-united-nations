@@ -54,7 +54,6 @@ local PROPERTY_ACCESS_NAME = 'un_property_access'
 local PROPERTY_ACCESS_SECTION_NAME = 'un_property_access_section'
 local PROPERTY_PLANET_TABS_NAME = 'un_property_planet_tabs'
 local PROPERTY_HEADER_NAME = 'un_property_header'
-local PROPERTY_HOSPICE_BUTTON_NAME = 'un_property_hospice_button'
 local PROPERTY_SALVAGE_BUTTON_NAME = 'un_property_salvage_button'
 local PROPERTY_RENEW_BUTTON_NAME = 'un_property_renew_button'
 local PROPERTY_EXPAND_BUTTON_NAME = 'un_property_expand_button'
@@ -800,24 +799,11 @@ local function update_property_expand_action(player, content)
     }
 end
 
-local function update_property_hospice_action(player, content)
-    local actions = content[CRIME_ACTIONS_NAME]
-    local button = actions and actions.valid
-        and actions[PROPERTY_HOSPICE_BUTTON_NAME]
-    if not (button and button.valid) then return end
-    local available, err = properties.hospice_travel_availability(player)
-    button.enabled = available
-    button.tooltip = available and {'un.travel-hospice'}
-        or disabled_tooltip('hospice', err)
-end
-
 local function render_property_table(player, frame, content)
     local old_header = content[PROPERTY_HEADER_NAME]
     if old_header and old_header.valid then old_header.destroy() end
     local old_tabs = content[PROPERTY_PLANET_TABS_NAME]
     if old_tabs and old_tabs.valid then old_tabs.destroy() end
-    local old_crime = content[CRIME_ACTIONS_NAME]
-    if old_crime and old_crime.valid then old_crime.destroy() end
     local old_management = content[PROPERTY_MANAGEMENT_ACTIONS_NAME]
     if old_management and old_management.valid then old_management.destroy() end
     local old_access = content[PROPERTY_ACCESS_SECTION_NAME]
@@ -871,26 +857,7 @@ local function render_property_table(player, frame, content)
             tags = {action = 'property-select-planet', planet = planet_name},
         }
     end
-    local crime_actions = content.add{
-        type = 'flow',
-        name = CRIME_ACTIONS_NAME,
-        direction = 'horizontal',
-    }
-    crime_actions.add{
-        type = 'button',
-        name = PROPERTY_HOSPICE_BUTTON_NAME,
-        caption = {'un.travel-hospice'},
-        tags = {action = 'property-travel-hospice'},
-    }
     if not read_only then
-        if settings.get('crime_enabled') then
-            crime_actions.add{
-                type = 'button',
-                name = CRIME_BUTTON_NAME,
-                caption = {'un.crime-button'},
-            }
-            crime_actions.add{type = 'label', name = CRIME_STATUS_NAME}
-        end
         local management_actions = content.add{
             type = 'flow',
             name = PROPERTY_MANAGEMENT_ACTIONS_NAME,
@@ -919,9 +886,8 @@ local function render_property_table(player, frame, content)
             }
         end
     else
-        crime_actions.add{type = 'label', caption = {'un.property-read-only'}}
+        header.add{type = 'label', caption = {'un.property-read-only'}}
     end
-    update_property_hospice_action(player, content)
     if not read_only then
         update_property_renew_action(player, content)
         update_property_expand_action(player, content)
@@ -1021,7 +987,6 @@ local function render_property_table(player, frame, content)
     tags.property_sort_descending = sort_descending
     tags.property_sort_bucket = math.floor(game.tick / config.ticks_per_minute)
     frame.tags = tags
-    if not read_only then update_crime_action(player, content) end
 end
 
 local function property_build_planet(player)
@@ -1726,6 +1691,84 @@ update_crime_action = function(player, content)
         '\n\n',
         details,
     }
+end
+
+function M.render_crime_page(player, frame, content)
+    local actions = content.add{
+        type = 'flow',
+        name = CRIME_ACTIONS_NAME,
+        direction = 'horizontal',
+    }
+    actions.style.vertical_align = 'center'
+    actions.add{
+        type = 'button',
+        name = CRIME_BUTTON_NAME,
+        caption = {'un.crime-button'},
+    }
+    actions.add{type = 'label', name = CRIME_STATUS_NAME}
+    update_crime_action(player, content)
+
+    local candidates, planet_name, context_error = crime.list_targets(player)
+    if not planet_name then
+        content.add{
+            type = 'label',
+            caption = crime_error_caption(context_error),
+        }
+        set_frame_state(frame, 'crime', storage.property_revision or 0)
+        return
+    end
+    content.add{
+        type = 'label',
+        caption = {
+            'un.crime-page-summary',
+            planet_label(planet_name),
+            #candidates,
+        },
+    }
+    if #candidates == 0 then
+        content.add{type = 'label', caption = {'un.crime-list-empty'}}
+        set_frame_state(frame, 'crime', storage.property_revision or 0)
+        return
+    end
+
+    local scroll = add_list_scroll(content, 'un_crime_scroll')
+    local list = scroll.add{
+        type = 'table',
+        name = 'un_crime_table',
+        column_count = 5,
+        style = 'bordered_table',
+    }
+    list.add{type = 'label', caption = {'un.property-column-name'}}
+    list.add{type = 'label', caption = {'un.property-column-price'}}
+    list.add{type = 'label', caption = {'un.property-column-lifetime'}}
+    list.add{type = 'label', caption = {'un.property-column-owner'}}
+    list.add{type = 'label', caption = {'un.crime-column-chance'}}
+    for _, property in ipairs(candidates) do
+        local name = list.add{
+            type = 'label',
+            caption = properties.surface_display_name(property),
+            tooltip = property_name_tooltip(property),
+        }
+        name.style.minimal_width = 240
+        list.add{
+            type = 'label',
+            caption = {'un.coin-amount',
+                format_integer(properties.current_price(property))},
+        }
+        list.add{type = 'label', caption = property_lifetime_caption(property)}
+        list.add{
+            type = 'label',
+            caption = properties.owner_name(property) or {'un.property-vacant'},
+        }
+        local percent = crime.success_chance(property) * 100
+        list.add{
+            type = 'label',
+            caption = percent >= 1 and string.format('%.2f%%', percent)
+                or string.format('%.4f%%', percent),
+            tooltip = {'un.crime-chance-tooltip'},
+        }
+    end
+    set_frame_state(frame, 'crime', storage.property_revision or 0)
 end
 
 local function count_pairs(value)
@@ -2478,6 +2521,8 @@ local function render_page(player, page)
         render_property_build_page(player, frame, content)
     elseif page == 'property' then
         render_property_table(player, frame, content)
+    elseif page == 'crime' then
+        M.render_crime_page(player, frame, content)
     elseif page == 'planets' then
         render_planets_page(player, frame, content)
     elseif page == 'ships' then
@@ -2498,6 +2543,7 @@ local function render_page(player, page)
     navigation[NAV_UBI_NAME].enabled = page ~= 'overview'
     navigation[NAV_PROPERTY_BUILD_NAME].enabled = page ~= 'property-build'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
+    navigation.un_nav_crime.enabled = page ~= 'crime'
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
@@ -2843,7 +2889,6 @@ local function update_frame(player)
             end
         end
     elseif page == 'property' then
-        update_property_hospice_action(player, content)
         local selected_planet = is_public_planet(frame.tags.property_planet)
             and frame.tags.property_planet or factions.of_player(player)
         local read_only = selected_planet ~= factions.of_player(player)
@@ -2873,7 +2918,14 @@ local function update_frame(player)
                     update_property_row(player, property_table, property)
                 end
             end
-            if not read_only then update_crime_action(player, content) end
+        end
+    elseif page == 'crime' then
+        update_crime_action(player, content)
+        if (frame.tags.property_revision or -1)
+                ~= (storage.property_revision or 0)
+                or list_refresh_due(frame, 'crime') then
+            content.clear()
+            M.render_crime_page(player, frame, content)
         end
     elseif page == 'factions' then
         if list_refresh_due(frame, 'factions') then
@@ -2986,6 +3038,11 @@ local function open_frame(player, initial_page)
         caption = {'un.page-property-build'},
     }
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
+    navigation.add{
+        type = 'button',
+        name = 'un_nav_crime',
+        caption = {'un.page-crime'},
+    }
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{
         type = 'button',
@@ -3058,7 +3115,9 @@ events.on(defines.events.on_player_changed_surface, function(event)
     if player then
         update_travel_buttons(player)
         local frame = player.gui.screen[FRAME_NAME]
-        if frame and frame.valid and frame.tags.page == 'property' then
+        if frame and frame.valid
+                and (frame.tags.page == 'property'
+                    or frame.tags.page == 'crime') then
             update_frame(player)
         end
     end
@@ -3138,6 +3197,9 @@ events.on(defines.events.on_gui_click, function(event)
             frame.tags = tags
         end
         render_page(player, 'property')
+        update_frame(player)
+    elseif element.name == 'un_nav_crime' then
+        render_page(player, 'crime')
         update_frame(player)
     elseif element.name == NAV_PLANETS_NAME then
         render_page(player, 'planets')
@@ -3242,14 +3304,6 @@ events.on(defines.events.on_gui_click, function(event)
         elseif result then
             close_frame(player)
         else
-            update_frame(player)
-        end
-    elseif element.name == PROPERTY_HOSPICE_BUTTON_NAME then
-        local ok, err = properties.travel_to_hospice(player)
-        if ok then
-            close_frame(player)
-        else
-            player.print(property_error(err))
             update_frame(player)
         end
     elseif element.name:sub(1, #FACTION_SWITCH_PREFIX)
@@ -3696,8 +3750,9 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
             for _, connected in pairs(game.connected_players) do
                 local connected_frame = connected.gui.screen[FRAME_NAME]
                 if connected_frame and connected_frame.valid
-                        and connected_frame.tags.page == 'property' then
-                    render_page(connected, 'property')
+                        and (connected_frame.tags.page == 'property'
+                            or connected_frame.tags.page == 'crime') then
+                    render_page(connected, connected_frame.tags.page)
                     update_frame(connected)
                 end
             end
@@ -3753,6 +3808,7 @@ local PERIODIC_LIST_PAGES = {
     planets = true,
     ships = true,
     property = true,
+    crime = true,
     factions = true,
     players = true,
 }
