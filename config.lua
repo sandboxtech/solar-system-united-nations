@@ -146,6 +146,27 @@ M.ledger_record_limit = 2000
 M.transfer_min_amount = 1000
 M.transfer_fee_rate = 0.001
 M.transfer_min_fee = 100
+M.market_process_ticks = 5 * M.ticks_per_second
+M.market_boxes_per_pass = 20
+M.market_max_items_per_trade = 1000
+M.market_items = {
+    {name = 'iron-ore', base_price = 100,
+        base_stock = 100000, virtual_stock = 900000},
+    {name = 'copper-ore', base_price = 100,
+        base_stock = 100000, virtual_stock = 900000},
+    {name = 'coal', base_price = 100,
+        base_stock = 100000, virtual_stock = 900000},
+    {name = 'stone', base_price = 100,
+        base_stock = 100000, virtual_stock = 900000},
+    {name = 'uranium-ore', base_price = 500,
+        base_stock = 20000, virtual_stock = 180000},
+    {name = 'iron-plate', base_price = 200,
+        base_stock = 100000, virtual_stock = 900000},
+    {name = 'copper-plate', base_price = 200,
+        base_stock = 100000, virtual_stock = 900000},
+    {name = 'steel-plate', base_price = 1000,
+        base_stock = 20000, virtual_stock = 180000},
+}
 M.gui_refresh_ticks = M.ticks_per_second
 -- Large lists use revisions for immediate structural changes. This slower
 -- fallback only refreshes values which naturally change with elapsed time.
