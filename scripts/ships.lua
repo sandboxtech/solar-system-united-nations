@@ -6,7 +6,6 @@ local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local state = require('scripts.state')
 local stamina = require('scripts.stamina')
-local surfaces = require('scripts.surfaces')
 
 local M = {}
 local STARTER_PACK = 'space-platform-starter-pack'
@@ -108,7 +107,7 @@ function M.left_ticks(record)
     return record.built_tick + M.life_ticks(record) - game.tick
 end
 
-function M.of(player_index)
+function M.of(player_index, planet_name)
     reconcile()
     local best_platform = nil
     local best_record = nil
@@ -119,7 +118,8 @@ function M.of(player_index)
             if not platform then
                 records()[index] = nil
                 bump_revision()
-            elseif not (record.scuttled_tick or is_scheduled(platform))
+            elseif (not planet_name or record.planet_name == planet_name)
+                    and not (record.scuttled_tick or is_scheduled(platform))
                     and (not best_index or index < best_index) then
                 best_platform = platform
                 best_record = record
@@ -140,8 +140,7 @@ function M.list(viewer_index)
             bump_revision()
         elseif record.owner_index
                 and not (record.scuttled_tick or is_scheduled(platform)) then
-            if not viewer_index or record.owner_index == viewer_index
-                    or M.is_public(record.owner_index) then
+            if not viewer_index or M.is_public(record.owner_index) then
                 result[#result + 1] = {
                     index = index,
                     platform = platform,
@@ -169,8 +168,12 @@ function M.set_public(player_index, public)
         storage.players[player_index] = account
     end
     account.ship_public = public == true
-    local platform = M.of(player_index)
-    if platform then apply_visibility(platform, player_index) end
+    for index, record in pairs(records()) do
+        if record.owner_index == player_index then
+            local platform = platform_of(index, record)
+            if platform then apply_visibility(platform, player_index) end
+        end
+    end
     bump_revision()
     return true
 end
@@ -194,7 +197,7 @@ function M.create(player, planet_name)
     if not faction_planet or planet_name ~= faction_planet then
         return nil, 'ship-invalid-planet'
     end
-    if M.of(player.index) then return nil, 'ship-already-have' end
+    if M.of(player.index, planet_name) then return nil, 'ship-already-have' end
     if not settings.online_requirement_met(
             player,
             'ship_build_min_online_hours'
@@ -257,15 +260,31 @@ function M.create(player, planet_name)
     return platform
 end
 
-function M.enter(player)
-    local platform = M.of(player.index)
+function M.remote_view(player, platform_index)
+    local record = records()[platform_index]
+    if not record then return false, 'ship-missing' end
+    local platform = platform_of(platform_index, record)
     if not platform then return false, 'ship-missing' end
+    if record.owner_index ~= player.index and not M.is_public(record.owner_index) then
+        return false, 'ship-missing'
+    end
     if not is_ready(platform) then return false, 'ship-not-ready' end
-    return surfaces.teleport(player, platform.surface)
+    local ok, err = pcall(function()
+        player.set_controller{
+            type = defines.controllers.remote,
+            surface = platform.surface,
+            position = {0, 0},
+        }
+    end)
+    if not ok then
+        log('[un] failed to open ship remote view: ' .. tostring(err))
+        return false, 'ship-not-ready'
+    end
+    return true
 end
 
 function M.scuttle(player)
-    local platform, record = M.of(player.index)
+    local platform, record = M.of(player.index, factions.of_player(player))
     if not platform then return false, 'ship-missing' end
     record.scuttled_tick = game.tick
     platform.destroy(1)
@@ -352,16 +371,6 @@ scheduler.every(config.ship_lifecycle_ticks, function()
         end
     end
     if changed then bump_revision() end
-end)
-
-factions.on_switch_cleanup(function(player, source_planet)
-    local source_force = factions.of_planet(source_planet)
-    local platform, record = M.of(player.index)
-    if platform and source_force and platform.force == source_force then
-        record.scuttled_tick = game.tick
-        platform.destroy(1)
-        bump_revision()
-    end
 end)
 
 return M
