@@ -1,5 +1,6 @@
 local config = require('config')
 local factions = require('scripts.factions')
+local properties = require('scripts.properties')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
@@ -280,7 +281,6 @@ function M.migrate_layout()
             if not M.ensure_hospice(planet_name) then failed = failed + 1 end
         end
     end
-    local properties = require('scripts.properties')
     local rebuilt, property_failures
         = properties.migrate_permanent_rental_layouts()
     changed = changed + rebuilt
