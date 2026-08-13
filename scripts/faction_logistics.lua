@@ -39,7 +39,8 @@ local function ensure_station(surface, force)
     return true
 end
 
-local function ensure_loader(surface, force, chest_position, offset)
+local function ensure_loader(surface, force, chest_position, offset,
+        direction, loader_type)
     local position = {
         x = chest_position.x + offset.x,
         y = chest_position.y + offset.y,
@@ -54,19 +55,21 @@ local function ensure_loader(surface, force, chest_position, offset)
         loader = surface.create_entity{
             name = config.property_linked_loader_name,
             position = position,
-            direction = defines.direction.north,
+            direction = direction,
             force = force,
             raise_built = false,
         }
     end
     if not (loader and loader.valid) then return false end
+    loader.direction = direction
+    loader.loader_type = loader_type
     loader.rotatable = true
     protect(loader)
     return true
 end
 
 function M.ensure_on_surface(surface, planet_name, with_station, chest_positions,
-        loader_offset)
+        loader_offset, loader_direction, loader_type)
     local force = factions.of_planet(planet_name)
     if not (surface and surface.valid and force and force.valid) then return false end
     chest_positions = chest_positions or config.faction_logistics_chest_positions
@@ -90,7 +93,14 @@ function M.ensure_on_surface(surface, planet_name, with_station, chest_positions
         chest.operable = false
         protect(chest)
         if loader_offset
-                and not ensure_loader(surface, force, position, loader_offset) then
+                and not ensure_loader(
+                    surface,
+                    force,
+                    position,
+                    loader_offset,
+                    loader_direction or defines.direction.north,
+                    loader_type or 'output'
+                ) then
             return false
         end
     end
@@ -104,7 +114,9 @@ function M.ensure_planet(planet_name)
         planet_name,
         true,
         config.faction_logistics_chest_positions,
-        config.faction_logistics_loader_offset
+        config.faction_logistics_loader_offset,
+        defines.direction.south,
+        'output'
     )
 end
 
@@ -114,7 +126,9 @@ function M.ensure_hospice(planet_name)
         planet_name,
         false,
         config.faction_logistics_hospice_chest_positions,
-        config.faction_logistics_hospice_loader_offset
+        config.faction_logistics_hospice_loader_offset,
+        defines.direction.north,
+        'output'
     )
 end
 
@@ -132,6 +146,21 @@ local function migrate_chests(surface, planet_name, old_positions)
         local old = surface.find_entity(config.linked_chest_name, old_position)
         if old and old.valid and old.link_id == expected_link_id then
             old.destroy()
+            changed = changed + 1
+        end
+    end
+    return changed
+end
+
+local function destroy_managed_loaders(surface, force, positions)
+    local changed = 0
+    for _, position in ipairs(positions) do
+        local loader = surface.find_entity(
+            config.property_linked_loader_name,
+            position
+        )
+        if loader and loader.valid and loader.force == force then
+            loader.destroy()
             changed = changed + 1
         end
     end
@@ -179,6 +208,7 @@ function M.migrate_layout()
     for _, planet_name in ipairs(config.public_planets) do
         local planet_surface = game.surfaces[planet_name]
         if planet_surface and planet_surface.valid then
+            local force = factions.of_planet(planet_name)
             local moved = migrate_chests(
                 planet_surface,
                 planet_name,
@@ -187,10 +217,29 @@ function M.migrate_layout()
                     {x = -1, y = 0},
                     {x = 0, y = 0},
                     {x = 1, y = 0},
+                    {x = -2, y = 1},
+                    {x = -1, y = 1},
+                    {x = 0, y = 1},
+                    {x = 1, y = 1},
                 }
             )
             changed = changed + moved
+            changed = changed + destroy_managed_loaders(
+                planet_surface,
+                force,
+                {
+                    {x = -2, y = 2},
+                    {x = -1, y = 2},
+                    {x = 0, y = 2},
+                    {x = 1, y = 2},
+                }
+            )
             local errors
+            moved, errors = migrate_station(
+                planet_surface, planet_name, {x = 0, y = -4}
+            )
+            changed = changed + moved
+            failed = failed + errors
             moved, errors = migrate_station(
                 planet_surface, planet_name, {x = 0, y = -8}
             )
@@ -201,6 +250,7 @@ function M.migrate_layout()
 
         local hospice = game.surfaces[surfaces.hospice_surface_name(planet_name)]
         if hospice and hospice.valid then
+            local force = factions.of_planet(planet_name)
             local moved = migrate_chests(
                 hospice,
                 planet_name,
@@ -212,9 +262,29 @@ function M.migrate_layout()
                 }
             )
             changed = changed + moved
+            changed = changed + destroy_managed_loaders(
+                hospice,
+                force,
+                {
+                    {x = -2, y = 2},
+                    {x = -1, y = 2},
+                    {x = 0, y = 2},
+                    {x = 1, y = 2},
+                }
+            )
+            if surfaces.rebuild_hospice_layout(planet_name) then
+                changed = changed + 1
+            else
+                failed = failed + 1
+            end
             if not M.ensure_hospice(planet_name) then failed = failed + 1 end
         end
     end
+    local properties = require('scripts.properties')
+    local rebuilt, property_failures
+        = properties.migrate_permanent_rental_layouts()
+    changed = changed + rebuilt
+    failed = failed + property_failures
     return changed, failed
 end
 

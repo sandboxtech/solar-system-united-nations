@@ -355,6 +355,7 @@ local function ensure_linked_chests(property)
             if not (loader and loader.valid) then return false end
             if fix_loader_direction then
                 loader.direction = defines.direction.north
+                loader.loader_type = 'output'
             end
             loader.rotatable = true
             loader.destructible = false
@@ -365,6 +366,33 @@ local function ensure_linked_chests(property)
         property.loader_direction_version = 1
     end
     return true
+end
+
+local function destroy_managed_property_logistics(property)
+    local surface = game.surfaces[property.surface_name]
+    if not (surface and surface.valid) then return end
+    local chest_positions = {
+        {x = -0.5, y = -0.5},
+        {x = 0.5, y = -0.5},
+        {x = -0.5, y = 0.5},
+        {x = 0.5, y = 0.5},
+    }
+    for _, position in ipairs(config.property_linked_chest_positions) do
+        chest_positions[#chest_positions + 1] = position
+    end
+    for _, position in ipairs(chest_positions) do
+        local chest = surface.find_entity(config.linked_chest_name, position)
+        if chest and chest.valid then chest.destroy() end
+    end
+    for x = -2, 1 do
+        for y = 1, 2 do
+            local loader = surface.find_entity(
+                config.property_linked_loader_name,
+                {x = x, y = y}
+            )
+            if loader and loader.valid then loader.destroy() end
+        end
+    end
 end
 
 local function sync_surface_visibility(property)
@@ -1345,6 +1373,75 @@ function M.reset_permanent_defaults()
         created = created,
         complete = complete and failed == 0,
     }
+end
+
+function M.migrate_permanent_rental_layouts()
+    state.ensure()
+    local desired = {}
+    for planet_name, defaults in pairs(
+        config.property_permanent_defaults_by_planet or {}
+    ) do
+        for tier_index, spec in ipairs(defaults) do
+            for slot = 1, spec.count do
+                desired[table.concat({planet_name, tier_index, slot}, ':')] = {
+                    width = spec.width,
+                    height = spec.height,
+                    fixed_layout = spec.fixed_layout,
+                    special_areas = spec.special_areas,
+                    lower_half_out_of_map = spec.lower_half_out_of_map,
+                    layout_anchor_up = spec.layout_anchor_up == true,
+                    layout_base_height = spec.height,
+                    terrain_planet = spec.terrain_planet,
+                }
+            end
+        end
+    end
+    local rentals = {}
+    for _, property in pairs(storage.properties) do
+        if property.status == 'active' and property.permanent
+                and property.rental and desired[property.system_key] then
+            rentals[#rentals + 1] = property
+        end
+    end
+    table.sort(rentals, function(a, b) return a.id < b.id end)
+    local rebuilt = 0
+    local failed = 0
+    for _, property in ipairs(rentals) do
+        local spec = desired[property.system_key]
+        if surfaces.rebuild_property_surface(property, spec) then
+            destroy_managed_property_logistics(property)
+            property.width = spec.width
+            property.height = spec.height
+            property.base_width = spec.width
+            property.base_height = spec.height
+            property.max_width = spec.width
+            property.max_height = spec.height
+            property.layout_anchor_up = spec.layout_anchor_up
+            property.layout_base_height = spec.layout_base_height
+            property.entity_layout_version = config.property_entity_layout_version
+            property.loader_direction_version = nil
+            property.linked_chest_positions = config.property_linked_chest_positions
+            property.decay_ticks = config.rental_property_decay_hours
+                * config.ticks_per_hour
+            if ensure_linked_chests(property) then
+                ensure_property_name_rendering(
+                    property,
+                    property.rendered_name
+                        or property_rendering_fallback(property)
+                )
+                rebuilt = rebuilt + 1
+            else
+                failed = failed + 1
+            end
+        else
+            failed = failed + 1
+        end
+    end
+    local created, complete = create_permanent_defaults()
+    rebuilt = rebuilt + created
+    storage.permanent_properties_created = complete and failed == 0
+    if rebuilt > 0 then bump_revision() end
+    return rebuilt, failed
 end
 
 remote.add_interface('un_properties', {

@@ -300,6 +300,27 @@ local function apply_hospice_tiles(surface, planet_name)
     return true
 end
 
+-- Explicit one-shot repair path. Normal travel only resolves an existing
+-- surface and never pays the cost of regenerating the fixed terrain.
+function M.rebuild_hospice_layout(planet_name)
+    planet_name = public_planets[planet_name] and planet_name or nil
+    if not planet_name then return false end
+    local surface = game.surfaces[M.hospice_surface_name(planet_name)]
+    if not (surface and surface.valid) then return false end
+    ensure_generated(
+        surface,
+        math.max(1, math.ceil(math.max(
+            config.hospice_surface_width,
+            config.hospice_surface_height
+        ) / 64))
+    )
+    if not apply_hospice_tiles(surface, planet_name) then return false end
+    storage.hospice_grid_versions[planet_name]
+        = config.hospice_tile_layout_version
+    M.sync_property_environment(surface, nil, planet_name, true)
+    return true
+end
+
 function M.hospice_surface_name(planet_name)
     return config.hospice_surface_prefix .. (planet_name or 'nauvis')
 end
@@ -545,6 +566,89 @@ function M.create_property_surface(property_id, spec)
         })
     end
     return surface, half_width, half_height, sample_planet, sample_position
+end
+
+-- Rebuild script-owned property terrain in place so existing machines,
+-- inventories and circuit connections remain untouched. set_tiles is always
+-- called with remove_colliding_entities=false by the helpers above.
+function M.rebuild_property_surface(property, spec)
+    local surface = property and game.surfaces[property.surface_name]
+    if not (surface and surface.valid and type(spec) == 'table') then
+        return false
+    end
+    local width = tonumber(spec.width)
+    local height = tonumber(spec.height)
+    if not width or not height then return false end
+    local anchored_up = spec.layout_anchor_up == true
+    local surface_width = tonumber(spec.surface_width) or width
+    local surface_height = tonumber(spec.surface_height)
+        or (anchored_up and height * 2 or height)
+    local old_settings = surface.map_gen_settings
+    local clear_width = math.max(
+        tonumber(old_settings.width) or 0,
+        surface_width
+    )
+    local clear_height = math.max(
+        tonumber(old_settings.height) or 0,
+        surface_height
+    )
+    old_settings.width = surface_width
+    old_settings.height = surface_height
+    surface.map_gen_settings = old_settings
+    ensure_generated(surface, math.max(
+        1,
+        math.ceil(math.max(surface_width, surface_height) / 64)
+    ))
+    fill_tile_area(
+        surface,
+        -clear_width / 2,
+        -clear_height / 2,
+        clear_width / 2,
+        clear_height / 2,
+        'out-of-map'
+    )
+    local active_bounds = property_bounds(
+        width,
+        height,
+        spec.layout_base_height or height,
+        anchored_up
+    )
+    apply_fixed_property_tiles(
+        surface,
+        width / 2,
+        height / 2,
+        spec.fixed_layout or {fill_tile = TUTORIAL_GRID_NAME},
+        nil,
+        active_bounds.offset_y
+    )
+    local special_bounds = property_special_bounds(active_bounds)
+    clear_property_lower_half(surface, spec, special_bounds, nil)
+    apply_property_special_tiles(
+        surface,
+        width / 2,
+        height / 2,
+        spec,
+        nil,
+        special_bounds
+    )
+    apply_property_entrance_tiles(surface)
+    M.sync_property_environment(
+        surface,
+        nil,
+        spec.terrain_planet or property.terrain_planet
+            or property.sample_planet,
+        nil,
+        spec.construction_type or property.construction_type
+    )
+    local force = factions.of_planet(property.sample_planet)
+    if force and force.valid then
+        force.set_spawn_position({0, 0}, surface)
+        force.chart(surface, {
+            {active_bounds.left, active_bounds.top},
+            {active_bounds.right, active_bounds.bottom},
+        })
+    end
+    return true
 end
 
 function M.expand_property_surface(property, new_width, new_height, layout)
