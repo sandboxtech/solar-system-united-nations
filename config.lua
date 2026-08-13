@@ -10,92 +10,6 @@ M.personal_linked_chest_limit = 1
 M.personal_linked_chest_home_planet_only = true
 M.personal_linked_chest_allow_hospice = true
 M.personal_linked_chest_allow_property = true
-M.faction_initial_technologies = {
-    -- Generic trigger technologies.
-    'steam-power',
-    'electronics',
-    'automation-science-pack',
-    'steel-axe',
-    'oil-processing',
-    -- 'uranium-processing',
-    'space-platform',
-    'space-science-pack',
-}
-M.faction_initial_technologies_by_planet = {
-    -- Nauvis is the default location and has no planet-discovery-nauvis
-    -- technology prototype.
-    nauvis = {},
-    vulcanus = {
-        'planet-discovery-vulcanus',
-        'calcite-processing',
-        'tungsten-carbide',
-        'big-mining-drill',
-        'foundry',
-        'tungsten-steel',
-        'metallurgic-science-pack',
-    },
-    gleba = {
-        'planet-discovery-gleba',
-        'agriculture',
-        'heating-tower',
-        'yumako',
-        'biochamber',
-        'jellynut',
-        'bioflux',
-        'artificial-soil',
-        'bacteria-cultivation',
-        'bioflux-processing',
-        'agricultural-science-pack',
-        -- 'biter-egg-handling',
-    },
-    fulgora = {
-        'planet-discovery-fulgora',
-        'recycling',
-        'holmium-processing',
-        'electromagnetic-plant',
-        'electromagnetic-science-pack',
-    },
-    aquilo = {
-        'planet-discovery-aquilo',
-        'heating-tower',
-        'lithium-processing',
-        'cryogenic-plant',
-        'cryogenic-science-pack',
-    },
-}
-M.faction_initial_technologies_recursive = {
-    'landfill',
-    'solar-energy',
-    'electric-engine',
-    'electric-energy-accumulators',
-}
-M.faction_initial_technologies_recursive_by_planet = {
-    nauvis = {},
-    vulcanus = {
-    },
-    gleba = {
-    },
-    fulgora = {
-    },
-    aquilo = {
-        'cryogenic-science-pack',
-    },
-}
-M.faction_initial_recipes = {
-    'ice-melting',
-    'loader',
-    'fast-loader',
-    'express-loader',
-    'turbo-loader',
-}
-M.tech_leak_immune_technologies = {
-    'logistic-robotics',
-    'space-platform-thruster',
-    'planet-discovery-vulcanus',
-    'planet-discovery-gleba',
-    'planet-discovery-fulgora',
-    'planet-discovery-aquilo',
-}
 M.faction_chat_colors = {
     nauvis = '0.35,0.70,1.00',
     vulcanus = '1.00,0.45,0.25',
@@ -108,6 +22,7 @@ M.faction_force_prefix = 'un-faction-'
 M.faction_diplomacy_technology = 'space-platform-thruster'
 M.faction_friendly_to_hostile_chance = 0.2
 M.faction_hostile_to_friendly_chance = 0.9
+require('config.technologies')(M)
 M.public_planet_arrival_radius = 128
 M.public_planet_reset_min_hours = 0.5
 M.public_planet_reset_max_hours = 2.5
@@ -146,27 +61,7 @@ M.ledger_record_limit = 2000
 M.transfer_min_amount = 1000
 M.transfer_fee_rate = 0.001
 M.transfer_min_fee = 100
-M.market_process_ticks = 5 * M.ticks_per_second
-M.market_boxes_per_pass = 20
-M.market_max_items_per_trade = 1000
-M.market_items = {
-    {name = 'iron-ore', base_price = 100,
-        base_stock = 100000, virtual_stock = 900000},
-    {name = 'copper-ore', base_price = 100,
-        base_stock = 100000, virtual_stock = 900000},
-    {name = 'coal', base_price = 100,
-        base_stock = 100000, virtual_stock = 900000},
-    {name = 'stone', base_price = 100,
-        base_stock = 100000, virtual_stock = 900000},
-    {name = 'uranium-ore', base_price = 500,
-        base_stock = 20000, virtual_stock = 180000},
-    {name = 'iron-plate', base_price = 200,
-        base_stock = 100000, virtual_stock = 900000},
-    {name = 'copper-plate', base_price = 200,
-        base_stock = 100000, virtual_stock = 900000},
-    {name = 'steel-plate', base_price = 1000,
-        base_stock = 20000, virtual_stock = 180000},
-}
+require('config.market')(M)
 M.gui_refresh_ticks = M.ticks_per_second
 -- Large lists use revisions for immediate structural changes. This slower
 -- fallback only refreshes values which naturally change with elapsed time.
@@ -194,18 +89,6 @@ M.wood_supply_count = 100
 M.wood_supply_stamina_cost = 1000
 
 M.property_limit_per_planet = 100
-M.tech_leak_interval_hours = 1
-M.tech_leak_coefficient_max_percent = 0.25
-M.tech_leak_max_affected = 5
-M.tech_leak_unlock_technology = M.faction_diplomacy_technology
-M.tech_leak_chance_multiplier_by_planet = {
-    nauvis = 1,
-    vulcanus = 1,
-    gleba = 1,
-    fulgora = 1,
-    aquilo = 0.001,
-}
-
 M.wooden_chest_name = 'wooden-chest'
 M.science_conversion_ticks = M.ticks_per_minute
 M.science_conversion_notifications = true
@@ -213,35 +96,6 @@ M.science_offline_conversion_ticks = 10 * M.ticks_per_minute
 M.science_offline_conversion_max_hours = 12
 M.logistic_network_roboport_limit = 16
 M.logistic_network_logistic_robot_limit = 512
-M.science_pack_experience = {
-    ['automation-science-pack'] = 1,
-    ['logistic-science-pack'] = 1,
-    ['military-science-pack'] = 1,
-    ['chemical-science-pack'] = 1,
-    ['production-science-pack'] = 1,
-    ['utility-science-pack'] = 1,
-    ['space-science-pack'] = 1,
-    ['metallurgic-science-pack'] = 1,
-    ['agricultural-science-pack'] = 1,
-    ['electromagnetic-science-pack'] = 1,
-    ['cryogenic-science-pack'] = 1,
-    ['promethium-science-pack'] = 1,
-}
-M.science_pack_order = {
-    'automation-science-pack',
-    'logistic-science-pack',
-    'military-science-pack',
-    'chemical-science-pack',
-    'production-science-pack',
-    'utility-science-pack',
-    'space-science-pack',
-    'metallurgic-science-pack',
-    'agricultural-science-pack',
-    'electromagnetic-science-pack',
-    'cryogenic-science-pack',
-    'promethium-science-pack',
-}
-
 M.hospice_surface_prefix = 'un-hospice-'
 M.hospice_surface_width = 128
 M.hospice_surface_height = 64
@@ -284,199 +138,11 @@ M.property_renew_stamina_base_cost = 1000
 M.property_renew_stamina_multiplier = 1
 M.property_expansion_experience_multiplier = 2
 M.property_expansion_stamina_cost = 50000
-local function property_build_type(spec)
-    spec.base_width = spec.base_width or 32
-    spec.width_per_level = spec.width_per_level or 2
-    spec.height = spec.height or 32
-    spec.height_per_level = spec.height_per_level or 0
-    spec.max_width = spec.max_width or 256
-    spec.max_height = spec.max_height or 256
-    spec.initial_price_multiplier = spec.initial_price_multiplier or 1
-    spec.base_decay_hours = spec.base_decay_hours or 10
-    spec.decay_hours_per_level = spec.decay_hours_per_level or 1
-    spec.base_lifetime_hours = spec.base_lifetime_hours or 100
-    spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
-    if spec.expandable == nil then spec.expandable = true end
-    return spec
-end
-M.property_build_types = {
-    property_build_type{
-        pack = 'automation-science-pack',
-        key = 'shelter',
-        base_decay_hours = 2,
-        decay_hours_per_level = 0.1,
-        base_lifetime_hours = 10,
-        lifetime_hours_per_level = 1,
-    },
-    property_build_type{
-        pack = 'logistic-science-pack',
-        key = 'cottage',
-        initial_price_multiplier = 2,
-        base_decay_hours = 6,
-        decay_hours_per_level = 0.2,
-        base_lifetime_hours = 30,
-        lifetime_hours_per_level = 3,
-    },
-    property_build_type{
-        pack = 'military-science-pack',
-        key = 'secure-cottage',
-        initial_price_multiplier = 10,
-        base_decay_hours = 100,
-        decay_hours_per_level = 10,
-        crime_chance_multiplier = 0.1,
-        fixed_layout = {
-            fill_tile = 'tutorial-grid',
-        },
-    },
-    property_build_type{
-        pack = 'chemical-science-pack',
-        key = 'shore-cottage',
-        initial_price_multiplier = 3,
-        terrain_planet = 'nauvis',
-        special_areas = {
-            {tile = 'water', left = -8, top = -10, right = 8, bottom = -8},
-        },
-    },
-    property_build_type{
-        pack = 'production-science-pack',
-        key = 'rail-estate',
-        base_width = 512,
-        width_per_level = 2,
-        max_width = 1024,
-        height = 64,
-        height_per_level = 1,
-        max_height = 320,
-        exact_dimensions = true,
-        initial_price_multiplier = 4,
-        fixed_layout = {
-            fill_tile = 'out-of-map',
-            railway_tile = 'tutorial-grid',
-            railway_corridor_length = 384,
-            railway_corridor_height = 8,
-        },
-    },
-    property_build_type{
-        pack = 'utility-science-pack',
-        key = 'utility-grid',
-        base_width = 128,
-        width_per_level = 1,
-        height = 128,
-        height_per_level = 1,
-        max_width = 1024,
-        max_height = 1024,
-        exact_dimensions = true,
-        initial_price_multiplier = 5,
-        fixed_layout = {
-            fill_tile = 'out-of-map',
-            chunk_grid_tile = 'tutorial-grid',
-            chunk_size = 32,
-            chunk_inner_size = 30,
-            core_tile = 'tutorial-grid',
-            core_size = 16,
-        },
-    },
-    property_build_type{
-        pack = 'space-science-pack',
-        key = 'sky-cottage',
-        expandable = false,
-        base_width = 96,
-        width_per_level = 3,
-        height = 96,
-        initial_price_multiplier = 3,
-        fixed_layout = {
-            fill_tile = 'empty-space',
-            middle_tile = 'space-platform-foundation',
-            middle_size = 16,
-            core_tile = 'tutorial-grid',
-            core_size = 8,
-        },
-        surface_property_overrides = {
-            gravity = 0,
-            pressure = 0,
-            ['magnetic-field'] = 0,
-            ['day-night-cycle'] = 0,
-        },
-    },
-    property_build_type{
-        pack = 'metallurgic-science-pack',
-        key = 'lava-cottage',
-        initial_price_multiplier = 6,
-        terrain_planet = 'vulcanus',
-        special_areas = {
-            {tile = 'lava', left = -8, top = -10, right = 8, bottom = -8},
-        },
-    },
-    property_build_type{
-        pack = 'electromagnetic-science-pack',
-        key = 'oil-cottage',
-        initial_price_multiplier = 7,
-        terrain_planet = 'fulgora',
-        special_areas = {
-            {
-                tile = 'oil-ocean-deep',
-                left = -8,
-                top = -10,
-                right = 8,
-                bottom = -8,
-            },
-        },
-    },
-    property_build_type{
-        pack = 'agricultural-science-pack',
-        key = 'garden-cottage',
-        initial_price_multiplier = 8,
-        terrain_planet = 'gleba',
-        special_areas = {
-            {
-                tile = 'natural-yumako-soil',
-                left = -8,
-                top = -12,
-                right = 0,
-                bottom = -4,
-            },
-            {
-                tile = 'natural-jellynut-soil',
-                left = 0,
-                top = -12,
-                right = 8,
-                bottom = -4,
-            },
-        },
-    },
-    property_build_type{
-        pack = 'cryogenic-science-pack',
-        key = 'cryogenic-cottage',
-        initial_price_multiplier = 12,
-        base_decay_hours = 192,
-        decay_hours_per_level = 2,
-        base_lifetime_hours = 288,
-        lifetime_hours_per_level = 24,
-        terrain_planet = 'aquilo',
-        crime_chance_multiplier = 10,
-    },
-}
 M.property_lifecycle_ticks = M.ticks_per_minute
 M.rental_property_default_width = 24
 M.rental_property_default_height = 16
 M.rental_property_decay_hours = 2
-local function permanent_rentals(count)
-    return {
-        {
-            count = count,
-            width = M.rental_property_default_width,
-            height = M.rental_property_default_height,
-            decay_hours = M.rental_property_decay_hours,
-            fixed_layout = {fill_tile = 'tutorial-grid'},
-        },
-    }
-end
-M.property_permanent_defaults_by_planet = {
-    nauvis = permanent_rentals(10),
-    vulcanus = permanent_rentals(3),
-    gleba = permanent_rentals(3),
-    fulgora = permanent_rentals(3),
-    aquilo = permanent_rentals(3),
-}
+require('config.property_types')(M)
 
 M.stamina_max = 108000
 M.stamina_per_second = 1
