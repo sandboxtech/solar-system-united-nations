@@ -756,7 +756,12 @@ local function update_property_renew_action(player, content)
         format_integer(requirement.experience_cost),
         format_integer(requirement.stamina_cost),
         property and property.lifetime_hours or 0,
-    } or disabled_tooltip('renew', err)
+    } or {
+        '',
+        disabled_tooltip('renew', err),
+        '\n\n',
+        {'un.property-renew-rule-tooltip'},
+    }
 end
 
 local function update_property_expand_action(player, content)
@@ -783,7 +788,16 @@ local function update_property_expand_action(player, content)
         format_integer(requirement.stamina_cost),
         requirement.source_level,
         requirement.target_level,
-    } or disabled_tooltip('expand', err)
+    } or {
+        '',
+        disabled_tooltip('expand', err),
+        '\n\n',
+        {
+            'un.property-expand-rule-tooltip',
+            settings.get('property_expansion_cost_multiplier'),
+            config.property_expansion_stamina_cost,
+        },
+    }
 end
 
 local function update_property_hospice_action(player, content)
