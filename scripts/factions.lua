@@ -198,6 +198,32 @@ function M.update_diplomacy_after_reset(planet_name)
     return true, friendly
 end
 
+function M.set_all_diplomacy(friendly)
+    state.ensure()
+    ensure_diplomacy_state()
+    for _, planet_name in ipairs(config.public_planets) do
+        storage.faction_diplomacy_friendly[planet_name]
+            = planet_name == OBSERVER_PLANET or friendly
+    end
+    for first = 1, #config.public_planets do
+        for second = first + 1, #config.public_planets do
+            local first_planet = config.public_planets[first]
+            local second_planet = config.public_planets[second]
+            local relation = first_planet == OBSERVER_PLANET
+                or second_planet == OBSERVER_PLANET or friendly
+            local key = pair_key(first_planet, second_planet)
+            storage.faction_pair_relations[key] = relation
+            local first_force = M.of_planet(first_planet)
+            local second_force = M.of_planet(second_planet)
+            if first_force and second_force then
+                apply_relation(first_force, second_force, relation)
+            end
+        end
+    end
+    storage.faction_revision = (storage.faction_revision or 0) + 1
+    return true
+end
+
 function M.relation_caption(first_planet, second_planet)
     local first = M.of_planet(first_planet)
     local second = M.of_planet(second_planet)

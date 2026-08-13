@@ -66,9 +66,7 @@ function M.ensure()
         storage.ledger = {first_id = 1, next_id = 1, records = {}}
     end
     if storage.local_markets == nil then storage.local_markets = {} end
-    if storage.market_trade_boxes == nil then storage.market_trade_boxes = {} end
-    if storage.market_trade_order == nil then storage.market_trade_order = {} end
-    if storage.market_trade_cursor == nil then storage.market_trade_cursor = 1 end
+    if storage.market_revisions == nil then storage.market_revisions = {} end
     return storage
 end
 

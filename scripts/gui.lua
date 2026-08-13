@@ -19,6 +19,7 @@ local surfaces = require('scripts.surfaces')
 local technology_decay = require('scripts.technology_decay')
 
 local M = {}
+M.market_gui = require('scripts.market_gui')
 
 local HUD_FLOW_NAME = 'un_hud_flow'
 local HUD_LAYOUT_VERSION = 15
@@ -152,7 +153,7 @@ local ADMIN_NUMBER_SETTINGS = {
 local crime_error_caption
 local update_crime_action
 
-local PERSONAL_ACTION_WIDTH = 300
+local PERSONAL_ACTION_WIDTH = 360
 local LIST_SCROLL_MAX_HEIGHT = 520
 local PROPERTY_SORT_FIELDS = {
     name = true,
@@ -1232,8 +1233,13 @@ local function render_ubi_section(content)
         value = 0,
         tooltip = ubi_tooltip,
     }
-    progress.style.width = PERSONAL_ACTION_WIDTH
-    local claim = content.add{
+    progress.style.width = PERSONAL_ACTION_WIDTH * 2 + 8
+    local actions = content.add{
+        type = 'table',
+        name = 'un_personal_actions',
+        column_count = 2,
+    }
+    local claim = actions.add{
         type = 'button',
         name = UBI_CLAIM_NAME,
         caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
@@ -1241,7 +1247,15 @@ local function render_ubi_section(content)
     }
     claim.style.width = PERSONAL_ACTION_WIDTH
 
-    local kit = content.add{
+    local convert = actions.add{
+        type = 'button',
+        name = 'un_experience_convert',
+        caption = {'un.experience-convert-backpack'},
+        tooltip = {'un.experience-convert-backpack-tooltip'},
+    }
+    convert.style.width = PERSONAL_ACTION_WIDTH
+
+    local kit = actions.add{
         type = 'button',
         name = STARTER_KIT_NAME,
         caption = {
@@ -1255,7 +1269,7 @@ local function render_ubi_section(content)
     }
     kit.style.width = PERSONAL_ACTION_WIDTH
 
-    local wood = content.add{
+    local wood = actions.add{
         type = 'button',
         name = WOOD_SUPPLY_NAME,
         caption = {
@@ -1346,7 +1360,6 @@ local function render_overview_page(player, frame, content)
     tags.list_refresh_experience = nil
     frame.tags = tags
 end
-
 
 local function ship_signature(list)
     local parts = {}
@@ -1806,6 +1819,18 @@ local function render_admin_page(player, frame, content)
         caption = {'un.admin-fill-stamina'},
         tooltip = {'un.admin-fill-stamina-tooltip', config.stamina_max},
         tags = {action = 'admin-fill-stamina'},
+    }
+    actions.add{
+        type = 'button',
+        caption = {'un.admin-diplomacy-friendly'},
+        tooltip = {'un.admin-diplomacy-friendly-tooltip'},
+        tags = {action = 'admin-diplomacy-friendly'},
+    }
+    actions.add{
+        type = 'button',
+        caption = {'un.admin-diplomacy-hostile'},
+        tooltip = {'un.admin-diplomacy-hostile-tooltip'},
+        tags = {action = 'admin-diplomacy-hostile'},
     }
 
     scroll.add{type = 'line'}
@@ -2517,6 +2542,8 @@ local function render_page(player, page)
         render_help_page(player, frame, content)
     elseif page == 'overview' then
         render_overview_page(player, frame, content)
+    elseif page == 'market' then
+        M.market_gui.render(player, frame, content)
     elseif page == 'property-build' then
         render_property_build_page(player, frame, content)
     elseif page == 'property' then
@@ -2541,6 +2568,7 @@ local function render_page(player, page)
     local navigation = frame[NAVIGATION_NAME]
     navigation[NAV_HELP_NAME].enabled = page ~= 'help'
     navigation[NAV_UBI_NAME].enabled = page ~= 'overview'
+    navigation.un_nav_market.enabled = page ~= 'market'
     navigation[NAV_PROPERTY_BUILD_NAME].enabled = page ~= 'property-build'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
     navigation.un_nav_crime.enabled = page ~= 'crime'
@@ -2742,7 +2770,9 @@ local function update_frame(player)
             progress.value = capacity > 0 and claimable / capacity or 0
             progress.caption = ''
         end
-        local claim = content[UBI_CLAIM_NAME]
+        local personal_actions = content.un_personal_actions
+        local claim = personal_actions and personal_actions.valid
+            and personal_actions[UBI_CLAIM_NAME]
         if claim and claim.valid then
             claim.enabled = claimable > 0
             claim.caption = {
@@ -2751,7 +2781,13 @@ local function update_frame(player)
                 format_integer(capacity),
             }
         end
-        local kit = content[STARTER_KIT_NAME]
+        local convert = personal_actions and personal_actions.valid
+            and personal_actions.un_experience_convert
+        if convert and convert.valid then
+            convert.enabled = linked_inventory.backpack_science_count(player) > 0
+        end
+        local kit = personal_actions and personal_actions.valid
+            and personal_actions[STARTER_KIT_NAME]
         if kit and kit.valid then
             local can_buy, buy_error = starter.can_buy(player)
             kit.enabled = can_buy
@@ -2774,7 +2810,8 @@ local function update_frame(player)
                 kit.tags = {action = 'starter-kit-buy'}
             end
         end
-        local wood = content[WOOD_SUPPLY_NAME]
+        local wood = personal_actions and personal_actions.valid
+            and personal_actions[WOOD_SUPPLY_NAME]
         if wood and wood.valid then
             local can_buy, buy_error = starter.can_buy_wood(player)
             wood.enabled = can_buy
@@ -2827,6 +2864,18 @@ local function update_frame(player)
                     experience.total_level(player.index),
                 }
             end
+        end
+    elseif page == 'market' then
+        if list_refresh_due(frame, 'market') then
+            local amount = M.market_gui.amount(content) or 1
+            content.clear()
+            M.market_gui.render(
+                player,
+                frame,
+                content,
+                amount,
+                frame.tags.market_group
+            )
         end
     elseif page == 'property-build' then
         update_property_build_page(player, content)
@@ -3032,6 +3081,7 @@ local function open_frame(player, initial_page)
     }
     navigation.add{type = 'button', name = NAV_HELP_NAME, caption = {'un.page-help'}}
     navigation.add{type = 'button', name = NAV_UBI_NAME, caption = {'un.page-overview'}}
+    navigation.add{type = 'button', name = 'un_nav_market', caption = {'un.page-market'}}
     navigation.add{
         type = 'button',
         name = NAV_PROPERTY_BUILD_NAME,
@@ -3186,6 +3236,9 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_UBI_NAME then
         render_page(player, 'overview')
         update_frame(player)
+    elseif element.name == 'un_nav_market' then
+        render_page(player, 'market')
+        update_frame(player)
     elseif element.name == NAV_PROPERTY_BUILD_NAME then
         render_page(player, 'property-build')
         update_frame(player)
@@ -3241,6 +3294,19 @@ events.on(defines.events.on_gui_click, function(event)
         end
     elseif element.name == UBI_CLAIM_NAME then
         economy.claim_ubi(player.index)
+        update_frame(player)
+    elseif element.name == 'un_experience_convert' then
+        local converted = linked_inventory.convert_backpack(player)
+        player.print(converted > 0 and {
+            'un.experience-convert-backpack-result',
+            format_integer(converted),
+        } or {'un.experience-convert-backpack-empty'})
+        render_page(player, 'overview')
+        update_frame(player)
+    elseif element.tags.action and element.tags.action:match('^market%-') then
+        local frame = player.gui.screen[FRAME_NAME]
+        local content = frame and frame.valid and frame[CONTENT_NAME]
+        M.market_gui.handle_click(player, element, frame, content)
         update_frame(player)
     elseif element.name == STARTER_KIT_NAME then
         if element.tags.action == 'starter-kit-confirm' then
@@ -3421,6 +3487,25 @@ events.on(defines.events.on_gui_click, function(event)
             elseif tags.action == 'admin-fill-stamina' then
                 stamina.fill(player.index)
                 player.print({'un.admin-stamina-filled', config.stamina_max})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-diplomacy-friendly'
+                    or tags.action == 'admin-diplomacy-hostile' then
+                local friendly = tags.action == 'admin-diplomacy-friendly'
+                if not tags.confirm then
+                    element.caption = friendly
+                        and {'un.admin-diplomacy-friendly-confirm'}
+                        or {'un.admin-diplomacy-hostile-confirm'}
+                    element.tags = {
+                        action = tags.action,
+                        confirm = true,
+                    }
+                    return
+                end
+                factions.set_all_diplomacy(friendly)
+                game.print(friendly
+                    and {'un.admin-diplomacy-friendly-broadcast'}
+                    or {'un.admin-diplomacy-hostile-broadcast'})
                 render_page(player, 'admin')
                 update_frame(player)
             elseif tags.action == 'admin-rental-add' then
@@ -3811,6 +3896,7 @@ local PERIODIC_LIST_PAGES = {
     crime = true,
     factions = true,
     players = true,
+    market = true,
 }
 
 scheduler.every(config.gui_list_refresh_ticks, function()

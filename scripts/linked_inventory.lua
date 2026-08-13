@@ -382,7 +382,7 @@ function M.clear_surface_dropoffs(surface_name)
     end
 end
 
-local function convert_inventory(player, inventory)
+function M.convert_inventory(player, inventory)
     if not (inventory and inventory.valid) then return 0 end
     local removed, total_items = remove_science_packs(inventory)
     if total_items <= 0 then return 0 end
@@ -391,7 +391,24 @@ local function convert_inventory(player, inventory)
 end
 
 function M.convert_player(player)
-    return convert_inventory(player, M.get_inventory(player))
+    return M.convert_inventory(player, M.get_inventory(player))
+end
+
+function M.convert_backpack(player)
+    local inventory = player and player.get_main_inventory()
+    return M.convert_inventory(player, inventory)
+end
+
+function M.backpack_science_count(player)
+    local inventory = player and player.get_main_inventory()
+    if not (inventory and inventory.valid) then return 0 end
+    local total = 0
+    for _, item in ipairs(inventory.get_contents()) do
+        if config.science_pack_experience[item.name] then
+            total = total + item.count
+        end
+    end
+    return total
 end
 
 local function notify_online_conversion(player, converted)
