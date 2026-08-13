@@ -98,17 +98,9 @@ M.logistic_network_roboport_limit = 16
 M.logistic_network_logistic_robot_limit = 512
 M.hospice_surface_prefix = 'un-hospice-'
 M.hospice_surface_width = 128
-M.hospice_surface_height = 64
-M.hospice_core_size = 32
-M.hospice_liquid_border_width = 2
+M.hospice_surface_height = 128
+M.hospice_property_level = 48
 M.hospice_tile_layout_version = 4
-M.hospice_tiles = {
-    nauvis = {land = 'grass-1', liquid = 'water'},
-    vulcanus = {land = 'volcanic-ash-soil', liquid = 'lava'},
-    gleba = {land = 'highland-yellow-rock', liquid = 'wetland-blue-slime'},
-    fulgora = {land = 'fulgoran-dunes', liquid = 'oil-ocean-deep'},
-    aquilo = {land = 'dust-lumpy', liquid = 'ammoniacal-ocean'},
-}
 M.property_surface_prefix = 'un-property-'
 M.surface_hidden_from_foreign_factions = false
 M.surface_hidden_from_home_faction = false
@@ -122,6 +114,24 @@ M.property_daytime_parameters = {
     dawn = 0.75,
 }
 M.property_link_id_unowned = 0
+M.property_entity_layout_version = 2
+M.property_linked_chest_positions = {
+    {x = 0, y = 3},
+    {x = 1, y = 3},
+    {x = -1, y = 3},
+    {x = -2, y = 3},
+}
+M.property_linked_loader_name = 'turbo-loader'
+M.property_linked_loader_offset = {x = 0, y = -2}
+M.faction_logistics_link_id_base = 4000000000
+M.faction_logistics_station_name = 'cargo-landing-pad'
+M.faction_logistics_station_position = {x = 0, y = -8}
+M.faction_logistics_chest_positions = {
+    {x = -2, y = 0},
+    {x = -1, y = 0},
+    {x = 0, y = 0},
+    {x = 1, y = 0},
+}
 M.property_max_size = 1024
 M.property_name_max_characters = 64
 M.property_name_max_bytes = 256
@@ -139,9 +149,14 @@ M.property_renew_stamina_multiplier = 1
 M.property_expansion_experience_multiplier = 2
 M.property_expansion_stamina_cost = 50000
 M.property_lifecycle_ticks = M.ticks_per_minute
+M.admin_experience_grant = 1000000
+M.blueprint_max_entities = 16384
+M.blueprint_max_tiles = 4096
+M.blueprint_max_span = 256
 M.rental_property_default_width = 24
 M.rental_property_default_height = 16
 M.rental_property_decay_hours = 2
+M.rental_property_fixed_layout = {fill_tile = 'tutorial-grid'}
 require('config.property_types')(M)
 
 M.stamina_max = 108000

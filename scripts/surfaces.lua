@@ -5,7 +5,17 @@ local factions = require('scripts.factions')
 local M = {}
 local TUTORIAL_GRID_NAME = 'tutorial-grid'
 local public_planets = {}
-for _, name in ipairs(config.public_planets) do public_planets[name] = true end
+local public_planet_indexes = {}
+for index, name in ipairs(config.public_planets) do
+    public_planets[name] = true
+    public_planet_indexes[name] = index
+end
+local function property_build_type(key)
+    for _, spec in ipairs(config.property_build_types or {}) do
+        if spec.key == key then return spec end
+    end
+    return nil
+end
 local function map_gen_settings(width, height)
     return {
         width = width,
@@ -71,14 +81,19 @@ local function in_core(x, y, core_half)
 end
 
 local function clone_sample_tile_area(
-        source, center, destination, left, top, right, bottom)
+        source, center, destination, left, top, right, bottom,
+        destination_offset_y)
     if left >= right or top >= bottom then return end
+    destination_offset_y = destination_offset_y or 0
     source.clone_area{
         source_area = {
             {center.x + left, center.y + top},
             {center.x + right, center.y + bottom},
         },
-        destination_area = {{left, top}, {right, bottom}},
+        destination_area = {
+            {left, top + destination_offset_y},
+            {right, bottom + destination_offset_y},
+        },
         destination_surface = destination,
         clone_tiles = true,
         clone_entities = false,
@@ -106,24 +121,30 @@ local function fill_tile_area(surface, left, top, right, bottom, tile_name)
 end
 
 local function apply_sample_tiles(
-        source, center, destination, half_width, half_height, core_half)
+        source, center, destination, half_width, half_height, core_half,
+        destination_offset_y)
+    destination_offset_y = destination_offset_y or 0
     -- Let the engine copy the four natural-terrain strips. The central area
     -- is never copied because it is always replaced with tutorial grid.
     clone_sample_tile_area(
         source, center, destination,
-        -half_width, -half_height, half_width, -core_half
+        -half_width, -half_height, half_width, -core_half,
+        destination_offset_y
     )
     clone_sample_tile_area(
         source, center, destination,
-        -half_width, core_half, half_width, half_height
+        -half_width, core_half, half_width, half_height,
+        destination_offset_y
     )
     clone_sample_tile_area(
         source, center, destination,
-        -half_width, -core_half, -core_half, core_half
+        -half_width, -core_half, -core_half, core_half,
+        destination_offset_y
     )
     clone_sample_tile_area(
         source, center, destination,
-        core_half, -core_half, half_width, core_half
+        core_half, -core_half, half_width, core_half,
+        destination_offset_y
     )
 
     local tiles = {}
@@ -131,7 +152,7 @@ local function apply_sample_tiles(
         for x = -core_half, core_half - 1 do
             tiles[#tiles + 1] = {
                 name = TUTORIAL_GRID_NAME,
-                position = {x, y},
+                position = {x, y + destination_offset_y},
             }
         end
     end
@@ -151,7 +172,8 @@ end
 
 local function copy_sample_entities(
         source, center, destination, half_width, half_height, core_half,
-        exclude_half_width, exclude_half_height)
+        exclude_bounds, destination_offset_y)
+    destination_offset_y = destination_offset_y or 0
     local entities = source.find_entities_filtered{
         area = {
             {center.x - half_width, center.y - half_height},
@@ -168,14 +190,18 @@ local function copy_sample_entities(
         if entity.valid and (entity.type == 'tree' or is_rock(entity)) then
             local position = {
                 x = entity.position.x - center.x,
-                y = entity.position.y - center.y,
+                y = entity.position.y - center.y + destination_offset_y,
             }
-            local excluded = exclude_half_width and exclude_half_height
-                and position.x >= -exclude_half_width
-                and position.x < exclude_half_width
-                and position.y >= -exclude_half_height
-                and position.y < exclude_half_height
-            if not excluded and not in_core(position.x, position.y, core_half) then
+            local excluded = exclude_bounds
+                and position.x >= exclude_bounds.left
+                and position.x < exclude_bounds.right
+                and position.y >= exclude_bounds.top
+                and position.y < exclude_bounds.bottom
+            if not excluded and not in_core(
+                position.x,
+                position.y - destination_offset_y,
+                core_half
+            ) then
                 destination.create_entity{
                     name = entity.name,
                     position = position,
@@ -189,8 +215,18 @@ local function copy_sample_entities(
     end
 end
 
-local function apply_natural_expansion(surface, property, half_width, half_height,
-        old_half_width, old_half_height)
+local function property_bounds(width, height, base_height, anchored_up)
+    local offset_y = anchored_up and (base_height - height) / 2 or 0
+    return {
+        left = -width / 2,
+        top = -height / 2 + offset_y,
+        right = width / 2,
+        bottom = height / 2 + offset_y,
+        offset_y = offset_y,
+    }
+end
+
+local function apply_natural_expansion(surface, property, new_bounds, old_bounds)
     local planet_name = sample_planet_name(
         property.id,
         property.terrain_planet or property.sample_planet
@@ -200,27 +236,52 @@ local function apply_natural_expansion(surface, property, half_width, half_heigh
     if not (source and center) then return false end
     local radius = math.max(
         1,
-        math.ceil(math.max(half_width, half_height) / 32) + 1
+        math.ceil(math.max(
+            new_bounds.right - new_bounds.left,
+            new_bounds.bottom - new_bounds.top
+        ) / 64) + 1
     )
     source.request_to_generate_chunks(center, radius)
     source.force_generate_chunk_requests()
 
     clone_sample_tile_area(
         source, center, surface,
-        -half_width, -half_height, half_width, -old_half_height
+        new_bounds.left,
+        new_bounds.top - new_bounds.offset_y,
+        new_bounds.right,
+        old_bounds.top - new_bounds.offset_y,
+        new_bounds.offset_y
     )
     clone_sample_tile_area(
         source, center, surface,
-        -half_width, old_half_height, half_width, half_height
+        new_bounds.left,
+        old_bounds.top - new_bounds.offset_y,
+        old_bounds.left,
+        new_bounds.bottom - new_bounds.offset_y,
+        new_bounds.offset_y
     )
     clone_sample_tile_area(
         source, center, surface,
-        -half_width, -old_half_height, -old_half_width, old_half_height
+        old_bounds.right,
+        old_bounds.top - new_bounds.offset_y,
+        new_bounds.right,
+        new_bounds.bottom - new_bounds.offset_y,
+        new_bounds.offset_y
     )
-    clone_sample_tile_area(
-        source, center, surface,
-        old_half_width, -old_half_height, half_width, old_half_height
-    )
+    -- Legacy centred layouts may still grow downward. New property layouts
+    -- keep their lower edge fixed, so no bottom strip is needed there.
+    if new_bounds.bottom > old_bounds.bottom then
+        clone_sample_tile_area(
+            source, center, surface,
+            old_bounds.left,
+            old_bounds.bottom - new_bounds.offset_y,
+            old_bounds.right,
+            new_bounds.bottom - new_bounds.offset_y,
+            new_bounds.offset_y
+        )
+    end
+    local half_width = (new_bounds.right - new_bounds.left) / 2
+    local half_height = (new_bounds.bottom - new_bounds.top) / 2
     local core_half = core_half_size(half_width, half_height)
     copy_sample_entities(
         source,
@@ -229,33 +290,52 @@ local function apply_natural_expansion(surface, property, half_width, half_heigh
         half_width,
         half_height,
         core_half,
-        old_half_width,
-        old_half_height
+        old_bounds,
+        new_bounds.offset_y
     )
     local tiles = {}
     for y = -core_half, core_half - 1 do
         for x = -core_half, core_half - 1 do
-            tiles[#tiles + 1] = {
-                name = TUTORIAL_GRID_NAME,
-                position = {x, y},
-            }
+            local destination_y = y + new_bounds.offset_y
+            local already_inside = x >= old_bounds.left
+                and x < old_bounds.right
+                and destination_y >= old_bounds.top
+                and destination_y < old_bounds.bottom
+            if not already_inside then
+                tiles[#tiles + 1] = {
+                    name = TUTORIAL_GRID_NAME,
+                    position = {x, destination_y},
+                }
+            end
         end
     end
-    local natural_entities = surface.find_entities_filtered{
-        area = {{-core_half, -core_half}, {core_half, core_half}},
-        type = {'tree', 'simple-entity', 'simple-entity-with-force'},
-    }
-    for _, entity in ipairs(natural_entities) do
-        if entity.valid and (entity.type == 'tree' or is_rock(entity)) then
-            entity.destroy()
+    if #tiles > 0 then
+        local natural_entities = surface.find_entities_filtered{
+            area = {
+                {-core_half, -core_half + new_bounds.offset_y},
+                {core_half, core_half + new_bounds.offset_y},
+            },
+            type = {'tree', 'simple-entity', 'simple-entity-with-force'},
+        }
+        for _, entity in ipairs(natural_entities) do
+            local p = entity.position
+            local already_inside = p.x >= old_bounds.left
+                and p.x < old_bounds.right
+                and p.y >= old_bounds.top
+                and p.y < old_bounds.bottom
+            if not already_inside and entity.valid
+                    and (entity.type == 'tree' or is_rock(entity)) then
+                entity.destroy()
+            end
         end
+        surface.set_tiles(tiles, true, false, true, false)
     end
-    surface.set_tiles(tiles, true, false, true, false)
     return true
 end
 
 local function apply_natural_sample(surface, property_id, half_width, half_height,
-        requested_planet, sample_half_width, sample_half_height)
+        requested_planet, sample_half_width, sample_half_height,
+        destination_offset_y)
     local planet_name = sample_planet_name(property_id, requested_planet)
     local source = ensure_planet_surface(planet_name)
     if not source then return nil, nil end
@@ -273,29 +353,51 @@ local function apply_natural_sample(surface, property_id, half_width, half_heigh
     source.force_generate_chunk_requests()
     local core_half = core_half_size(half_width, half_height)
     apply_sample_tiles(
-        source, center, surface, half_width, half_height, core_half
+        source, center, surface, half_width, half_height, core_half,
+        destination_offset_y
     )
     copy_sample_entities(
-        source, center, surface, half_width, half_height, core_half
+        source, center, surface, half_width, half_height, core_half,
+        nil, destination_offset_y
     )
     return planet_name, center
 end
 
 local function apply_property_special_tiles(surface, half_width, half_height, spec,
-        exclude_half_width, exclude_half_height)
+        exclude_bounds, active_bounds)
     if type(spec.special_areas) ~= 'table' then return end
     local tiles = {}
     for _, area in ipairs(spec.special_areas) do
-        local left = math.max(-half_width, tonumber(area.left) or 0)
-        local top = math.max(-half_height, tonumber(area.top) or 0)
-        local right = math.min(half_width, tonumber(area.right) or 0)
-        local bottom = math.min(half_height, tonumber(area.bottom) or 0)
+        local bounds = active_bounds or {
+            left = -half_width,
+            top = -half_height,
+            right = half_width,
+            bottom = half_height,
+        }
+        local left = tonumber(area.left)
+        local right = tonumber(area.right)
+        if area.direction == 'right' then
+            left = tonumber(area.start) or 0
+            right = bounds.right
+        elseif area.direction == 'left' then
+            left = bounds.left
+            right = tonumber(area.finish) or 0
+        end
+        left = math.max(bounds.left, left or 0)
+        right = math.min(bounds.right, right or 0)
+        local top = math.max(bounds.top, tonumber(area.top) or 0)
+        local bottom = math.min(
+            bounds.bottom,
+            tonumber(area.bottom) or top + (tonumber(area.thickness) or 0)
+        )
         if type(area.tile) == 'string' then
             for y = top, bottom - 1 do
                 for x = left, right - 1 do
-                    local excluded = exclude_half_width and exclude_half_height
-                        and x >= -exclude_half_width and x < exclude_half_width
-                        and y >= -exclude_half_height and y < exclude_half_height
+                    local excluded = exclude_bounds
+                        and x >= exclude_bounds.left
+                        and x < exclude_bounds.right
+                        and y >= exclude_bounds.top
+                        and y < exclude_bounds.bottom
                     if not excluded then
                         tiles[#tiles + 1] = {
                             name = area.tile,
@@ -310,7 +412,8 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
 end
 
 local function apply_fixed_property_tiles(surface, half_width, half_height, layout,
-        exclude_half_width, exclude_half_height)
+        exclude_bounds, destination_offset_y)
+    destination_offset_y = destination_offset_y or 0
     local middle_half = (tonumber(layout.middle_size) or 0) / 2
     local core_half = (tonumber(layout.core_size) or 0) / 2
     local chunk_size = tonumber(layout.chunk_size) or 0
@@ -329,9 +432,11 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
     local tiles = {}
     for y = top, bottom - 1 do
         for x = left, right - 1 do
-            local excluded = exclude_half_width and exclude_half_height
-                and x >= -exclude_half_width and x < exclude_half_width
-                and y >= -exclude_half_height and y < exclude_half_height
+            local destination_y = y + destination_offset_y
+            local excluded = exclude_bounds
+                and x >= exclude_bounds.left and x < exclude_bounds.right
+                and destination_y >= exclude_bounds.top
+                and destination_y < exclude_bounds.bottom
             if not excluded then
             local in_core = core_half > 0
                 and x >= -core_half and x < core_half
@@ -372,7 +477,7 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
             tiles[#tiles + 1] = {
                 name = tile_name or in_middle and layout.middle_tile
                     or layout.fill_tile,
-                position = {x, y},
+                position = {x, destination_y},
             }
             end
         end
@@ -381,31 +486,55 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
 end
 
 local function apply_hospice_tiles(surface, planet_name)
-    local half_width = config.hospice_surface_width / 2
-    local half_height = config.hospice_surface_height / 2
-    local core_half = config.hospice_core_size / 2
-    local border = config.hospice_liquid_border_width
-    local planet_tiles = config.hospice_tiles[planet_name]
-    local tiles = {}
-    for y = -half_height, half_height - 1 do
-        for x = -half_width, half_width - 1 do
-            local in_liquid_border = x < -half_width + border
-                or x >= half_width - border
-                or y < -half_height + border
-                or y >= half_height - border
-            local tile_name = in_core(x, y, core_half)
-                and TUTORIAL_GRID_NAME
-                or in_liquid_border and planet_tiles.liquid
-                or planet_tiles.land
-            tiles[#tiles + 1] = {
-                name = tile_name,
-                position = {x, y},
-            }
-        end
-    end
-    -- Submit the complete layout in one batch, then let Factorio correct all
-    -- neighbouring tiles so liquids receive their native coast transitions.
-    surface.set_tiles(tiles, true, false, true, false)
+    local key = config.hospice_property_types_by_planet[planet_name]
+    local spec = property_build_type(key)
+    if not spec then return false end
+    local level = config.hospice_property_level
+    local width = math.min(
+        spec.max_width,
+        math.floor(spec.base_width + spec.width_per_level * level)
+    )
+    local height = math.min(
+        spec.max_height,
+        math.floor(spec.height + spec.height_per_level * level)
+    )
+    local surface_width = math.max(config.hospice_surface_width, width)
+    local surface_height = math.max(config.hospice_surface_height, height)
+    local map_settings = surface.map_gen_settings
+    map_settings.width = surface_width
+    map_settings.height = surface_height
+    surface.map_gen_settings = map_settings
+    local half_width = width / 2
+    local half_height = height / 2
+    local bounds = property_bounds(width, height, spec.height, true)
+    fill_tile_area(
+        surface,
+        -surface_width / 2,
+        -surface_height / 2,
+        surface_width / 2,
+        surface_height / 2,
+        'out-of-map'
+    )
+    local sample_planet = apply_natural_sample(
+        surface,
+        100000 + public_planet_indexes[planet_name],
+        half_width,
+        half_height,
+        spec.terrain_planet or planet_name,
+        half_width,
+        half_height,
+        bounds.offset_y
+    )
+    if not sample_planet then return false end
+    apply_property_special_tiles(
+        surface,
+        half_width,
+        half_height,
+        spec,
+        nil,
+        bounds
+    )
+    return true
 end
 
 function M.hospice_surface_name(planet_name)
@@ -581,6 +710,12 @@ function M.create_property_surface(property_id, spec)
     local surface_height = spec.surface_height or height
     local surface_half_width = surface_width / 2
     local surface_half_height = surface_height / 2
+    local active_bounds = property_bounds(
+        width,
+        height,
+        spec.layout_base_height or height,
+        spec.layout_anchor_up == true
+    )
     local requested_planet = sample_planet_name(
         property_id,
         spec.terrain_planet or spec.sample_planet
@@ -600,7 +735,7 @@ function M.create_property_surface(property_id, spec)
     end
     ensure_generated(surface, math.max(
         1,
-        math.ceil(math.max(surface_width, surface_height) / 64)
+        math.ceil(math.max(width, height) / 64)
     ))
     if surface_width > width or surface_height > height then
         fill_tile_area(
@@ -616,7 +751,12 @@ function M.create_property_surface(property_id, spec)
     if spec.fixed_layout then
         sample_planet = requested_planet
         apply_fixed_property_tiles(
-            surface, half_width, half_height, spec.fixed_layout
+            surface,
+            half_width,
+            half_height,
+            spec.fixed_layout,
+            nil,
+            active_bounds.offset_y
         )
     else
         sample_planet, sample_position = apply_natural_sample(
@@ -626,11 +766,19 @@ function M.create_property_surface(property_id, spec)
             half_height,
             requested_planet,
             surface_half_width,
-            surface_half_height
+            surface_half_height,
+            active_bounds.offset_y
         )
     end
     if not sample_planet then return nil, nil, nil, nil, nil end
-    apply_property_special_tiles(surface, half_width, half_height, spec)
+    apply_property_special_tiles(
+        surface,
+        half_width,
+        half_height,
+        spec,
+        nil,
+        active_bounds
+    )
     M.sync_property_environment(
         surface,
         nil,
@@ -643,8 +791,8 @@ function M.create_property_surface(property_id, spec)
     if force and force.valid then
         force.set_spawn_position({0, 0}, surface)
         force.chart(surface, {
-        {-half_width, -half_height},
-        {half_width, half_height},
+            {active_bounds.left, active_bounds.top},
+            {active_bounds.right, active_bounds.bottom},
         })
     end
     return surface, half_width, half_height, sample_planet, sample_position
@@ -663,8 +811,14 @@ function M.expand_property_surface(property, new_width, new_height, layout)
             or new_width > max_width or new_height > max_height then
         return false, 'invalid-expansion'
     end
-    local old_half_width = old_width / 2
-    local old_half_height = old_height / 2
+    local anchored_up = property.layout_anchor_up == true
+    local layout_base_height = tonumber(property.layout_base_height) or old_height
+    local old_bounds = property_bounds(
+        old_width, old_height, layout_base_height, anchored_up
+    )
+    local new_bounds = property_bounds(
+        new_width, new_height, layout_base_height, anchored_up
+    )
     local half_width = new_width / 2
     local half_height = new_height / 2
     ensure_generated(surface, math.max(
@@ -678,18 +832,16 @@ function M.expand_property_surface(property, new_width, new_height, layout)
             half_width,
             half_height,
             layout.fixed_layout,
-            old_half_width,
-            old_half_height
+            old_bounds,
+            new_bounds.offset_y
         )
         ok = true
     else
         ok = apply_natural_expansion(
             surface,
             property,
-            half_width,
-            half_height,
-            old_half_width,
-            old_half_height
+            new_bounds,
+            old_bounds
         )
     end
     if not ok then return false, 'terrain-copy-failed' end
@@ -698,14 +850,14 @@ function M.expand_property_surface(property, new_width, new_height, layout)
         half_width,
         half_height,
         layout,
-        old_half_width,
-        old_half_height
+        old_bounds,
+        new_bounds
     )
     local force = factions.of_planet(property.sample_planet)
     if force and force.valid then
         force.chart(surface, {
-            {-half_width, -half_height},
-            {half_width, half_height},
+            {new_bounds.left, new_bounds.top},
+            {new_bounds.right, new_bounds.bottom},
         })
     end
     return true

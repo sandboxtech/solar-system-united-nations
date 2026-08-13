@@ -17,7 +17,7 @@
 [font=default-bold][img=item/stone-brick] 把工厂带往下一颗星球[/font]
 公共星球会定期[color=red]跃迁为全新地图[/color]。
 本国的[color=yellow]联合国难民营、廉租房和私人房产[/color]不会随之跃迁。
-房产中央的四个关联箱与屋主的个人库存相连，可保存机器、物资和预制产线。
+房产入口的四个关联箱与屋主的个人库存相连，可保存机器、物资和预制产线。
 
 [font=default-bold][img=space-location/solar-system-edge] 五国世界[/font]
 [img=space-location/nauvis] 地球人民共和国　[img=space-location/vulcanus] 火星远征军政府　[img=space-location/fulgora] 雷星联合财团

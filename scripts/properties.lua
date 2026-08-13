@@ -253,7 +253,11 @@ function M.surface_display_name(property)
     return M.display_name(property)
 end
 
-local function central_chest_positions()
+local function central_chest_positions(property)
+    if property and property.entity_layout_version
+            == config.property_entity_layout_version then
+        return config.property_linked_chest_positions
+    end
     return {
         {x = -0.5, y = -0.5},
         {x = 0.5, y = -0.5},
@@ -267,7 +271,7 @@ local function position_key(position)
 end
 
 local function normalize_linked_chest_positions(property, surface)
-    local target = central_chest_positions()
+    local target = central_chest_positions(property)
     local target_keys = {}
     for _, position in ipairs(target) do
         target_keys[position_key(position)] = true
@@ -318,6 +322,32 @@ local function ensure_linked_chests(property)
         -- LuaEntity::minable became read-only in Factorio 2.1. The mutable
         -- script flag is available in both 2.0 and 2.1.
         chest.minable_flag = false
+
+        if property.entity_layout_version
+                == config.property_entity_layout_version then
+            local offset = config.property_linked_loader_offset
+            local loader_position = {
+                x = position.x + offset.x,
+                y = position.y + offset.y,
+            }
+            local loader = surface.find_entity(
+                config.property_linked_loader_name,
+                loader_position
+            )
+            if not (loader and loader.valid) then
+                loader = surface.create_entity{
+                    name = config.property_linked_loader_name,
+                    position = loader_position,
+                    direction = defines.direction.south,
+                    force = force,
+                    raise_built = false,
+                }
+            end
+            if not (loader and loader.valid) then return false end
+            loader.rotatable = true
+            loader.destructible = false
+            loader.minable_flag = false
+        end
     end
     return true
 end
@@ -373,10 +403,16 @@ create = function(spec)
     local build_type = build_type_by_key(spec.construction_type)
     local max_width = width
     local max_height = height
+    local max_layout_height = height
     if build_type and build_type.expandable then
         max_width = math.min(config.property_max_size, build_type.max_width)
         max_height = math.min(config.property_max_size, build_type.max_height)
+        max_layout_height = max_height
     end
+    local layout_anchor_up = spec.layout_anchor_up == true
+    local layout_base_height = tonumber(spec.layout_base_height) or height
+    local entity_layout_version = tonumber(spec.entity_layout_version)
+        or config.property_entity_layout_version
 
     local id = next_available_property_id()
     local min_brightness = config.property_min_brightness
@@ -385,11 +421,15 @@ create = function(spec)
         width = width,
         height = height,
         surface_width = max_width,
-        surface_height = max_height,
+        surface_height = layout_anchor_up
+            and max_layout_height * 2 or max_layout_height,
         sample_planet = spec.sample_planet,
         terrain_planet = spec.terrain_planet,
         fixed_layout = spec.fixed_layout,
         special_areas = spec.special_areas,
+        layout_anchor_up = layout_anchor_up,
+        layout_base_height = layout_base_height,
+        construction_type = spec.construction_type,
     })
     if not surface then return nil, 'surface-create-failed' end
     storage.next_property_id = id + 1
@@ -411,12 +451,15 @@ create = function(spec)
         base_height = height,
         max_width = max_width,
         max_height = max_height,
+        layout_anchor_up = layout_anchor_up,
+        layout_base_height = layout_base_height,
+        entity_layout_version = entity_layout_version,
         solar = surface.solar_power_multiplier,
         min_brightness = min_brightness,
         sample_planet = spec.sample_planet,
         terrain_planet = terrain_planet,
         sample_position = sample_position,
-        linked_chest_positions = central_chest_positions(),
+        linked_chest_positions = config.property_linked_chest_positions,
         created_tick = game.tick,
         expires_tick = expires_tick,
         lifetime_hours = lifetime_hours,
@@ -470,6 +513,7 @@ local function create_permanent_defaults()
                         height = spec.height,
                         decay_hours = spec.decay_hours,
                         fixed_layout = spec.fixed_layout,
+                        entity_layout_version = config.property_entity_layout_version,
                         permanent = true,
                         rental = true,
                         system_key = key,
@@ -647,6 +691,9 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         terrain_planet = requirement.build_type.terrain_planet,
         fixed_layout = requirement.build_type.fixed_layout,
         special_areas = requirement.build_type.special_areas,
+        layout_anchor_up = true,
+        layout_base_height = requirement.build_type.height,
+        entity_layout_version = config.property_entity_layout_version,
         price = requirement.initial_price,
         lifetime_hours = requirement.lifetime.hours,
         decay_hours = requirement.lifetime.decay_hours,
@@ -1216,7 +1263,8 @@ function M.add_rental(planet_name)
         width = settings.get('rental_property_width'),
         height = settings.get('rental_property_height'),
         decay_hours = config.rental_property_decay_hours,
-        fixed_layout = {fill_tile = 'tutorial-grid'},
+        fixed_layout = config.rental_property_fixed_layout,
+        entity_layout_version = config.property_entity_layout_version,
         permanent = true,
         rental = true,
     }

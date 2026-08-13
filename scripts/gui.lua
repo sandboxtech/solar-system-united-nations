@@ -1822,6 +1822,13 @@ local function render_admin_page(player, frame, content)
     }
     actions.add{
         type = 'button',
+        caption = {'un.admin-grant-experience'},
+        tooltip = {'un.admin-grant-experience-tooltip',
+            config.admin_experience_grant},
+        tags = {action = 'admin-grant-experience'},
+    }
+    actions.add{
+        type = 'button',
         caption = {'un.admin-diplomacy-friendly'},
         tooltip = {'un.admin-diplomacy-friendly-tooltip'},
         tags = {action = 'admin-diplomacy-friendly'},
@@ -3487,6 +3494,19 @@ events.on(defines.events.on_gui_click, function(event)
             elseif tags.action == 'admin-fill-stamina' then
                 stamina.fill(player.index)
                 player.print({'un.admin-stamina-filled', config.stamina_max})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-grant-experience' then
+                local entries = {}
+                for _, pack in ipairs(config.science_pack_order) do
+                    entries[#entries + 1] = {
+                        name = pack,
+                        count = config.admin_experience_grant,
+                    }
+                end
+                experience.record(player.index, entries)
+                player.print({'un.admin-experience-granted',
+                    config.admin_experience_grant})
                 render_page(player, 'admin')
                 update_frame(player)
             elseif tags.action == 'admin-diplomacy-friendly'

@@ -17,6 +17,7 @@ require('scripts.ships')
 require('scripts.disasters')
 require('scripts.player_cleanup')
 require('scripts.permissions')
+require('scripts.blueprint_limits')
 require('scripts.gui')
 
 local bootstrap = require('scripts.bootstrap')

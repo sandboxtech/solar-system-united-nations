@@ -3,9 +3,10 @@ return function(M)
         spec.base_width = spec.base_width or 32
         spec.width_per_level = spec.width_per_level or 2
         spec.height = spec.height or 32
-        spec.height_per_level = spec.height_per_level or 0
+        spec.height_per_level = spec.height_per_level or 1
         spec.max_width = spec.max_width or 256
         spec.max_height = spec.max_height or 256
+        if spec.exact_dimensions == nil then spec.exact_dimensions = true end
         spec.initial_price_multiplier = spec.initial_price_multiplier or 1
         spec.base_decay_hours = spec.base_decay_hours or 10
         spec.decay_hours_per_level = spec.decay_hours_per_level or 1
@@ -13,6 +14,25 @@ return function(M)
         spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
         if spec.expandable == nil then spec.expandable = true end
         return spec
+    end
+
+    local function side_bands(tile)
+        return {
+            {
+                tile = tile,
+                direction = 'right',
+                start = 2,
+                top = 3,
+                thickness = 2,
+            },
+            {
+                tile = tile,
+                direction = 'left',
+                finish = 0,
+                top = -3,
+                thickness = 2,
+            },
+        }
     end
 
     M.property_build_types = {
@@ -49,9 +69,7 @@ return function(M)
             key = 'shore-cottage',
             initial_price_multiplier = 3,
             terrain_planet = 'nauvis',
-            special_areas = {
-                {tile = 'water', left = -8, top = -10, right = 8, bottom = -8},
-            },
+            special_areas = side_bands('water'),
         },
         property_build_type{
             pack = 'production-science-pack',
@@ -75,7 +93,7 @@ return function(M)
             pack = 'utility-science-pack',
             key = 'utility-grid',
             base_width = 128,
-            width_per_level = 1,
+            width_per_level = 2,
             height = 128,
             height_per_level = 1,
             max_width = 1024,
@@ -96,7 +114,7 @@ return function(M)
             key = 'sky-cottage',
             expandable = false,
             base_width = 96,
-            width_per_level = 3,
+            width_per_level = 2,
             height = 96,
             initial_price_multiplier = 3,
             fixed_layout = {
@@ -118,24 +136,14 @@ return function(M)
             key = 'lava-cottage',
             initial_price_multiplier = 6,
             terrain_planet = 'vulcanus',
-            special_areas = {
-                {tile = 'lava', left = -8, top = -10, right = 8, bottom = -8},
-            },
+            special_areas = side_bands('lava'),
         },
         property_build_type{
             pack = 'electromagnetic-science-pack',
             key = 'oil-cottage',
             initial_price_multiplier = 7,
             terrain_planet = 'fulgora',
-            special_areas = {
-                {
-                    tile = 'oil-ocean-deep',
-                    left = -8,
-                    top = -10,
-                    right = 8,
-                    bottom = -8,
-                },
-            },
+            special_areas = side_bands('oil-ocean-deep'),
         },
         property_build_type{
             pack = 'agricultural-science-pack',
@@ -145,17 +153,17 @@ return function(M)
             special_areas = {
                 {
                     tile = 'natural-yumako-soil',
-                    left = -8,
-                    top = -12,
-                    right = 0,
-                    bottom = -4,
+                    direction = 'right',
+                    start = 2,
+                    top = 3,
+                    thickness = 2,
                 },
                 {
                     tile = 'natural-jellynut-soil',
-                    left = 0,
-                    top = -12,
-                    right = 8,
-                    bottom = -4,
+                    direction = 'left',
+                    finish = 0,
+                    top = -3,
+                    thickness = 2,
                 },
             },
         },
@@ -172,6 +180,14 @@ return function(M)
         },
     }
 
+    M.hospice_property_types_by_planet = {
+        nauvis = 'shore-cottage',
+        vulcanus = 'lava-cottage',
+        gleba = 'garden-cottage',
+        fulgora = 'oil-cottage',
+        aquilo = 'cryogenic-cottage',
+    }
+
     local function permanent_rentals(count)
         return {
             {
@@ -179,7 +195,8 @@ return function(M)
                 width = M.rental_property_default_width,
                 height = M.rental_property_default_height,
                 decay_hours = M.rental_property_decay_hours,
-                fixed_layout = {fill_tile = 'tutorial-grid'},
+                fixed_layout = M.rental_property_fixed_layout,
+                entity_layout_version = M.property_entity_layout_version,
             },
         }
     end

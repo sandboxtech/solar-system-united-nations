@@ -1,6 +1,7 @@
 local config = require('config')
 local events = require('scripts.events')
 local factions = require('scripts.factions')
+local faction_logistics = require('scripts.faction_logistics')
 local linked_inventory = require('scripts.linked_inventory')
 local playtime = require('scripts.playtime')
 local scheduler = require('scripts.scheduler')
@@ -731,6 +732,9 @@ local function finish_reset(name, surface, record)
     if force and force.valid then force.set_spawn_position({0, 0}, surface) end
     surface.request_to_generate_chunks({0, 0}, 1)
     surface.force_generate_chunk_requests()
+    if not faction_logistics.ensure_planet(name) then
+        log('[un] failed to create faction logistics station on ' .. name)
+    end
 
     record.state = 'open'
     record.surface_index = surface.index
