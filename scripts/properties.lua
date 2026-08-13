@@ -292,7 +292,9 @@ local function ensure_linked_chests(property)
     surfaces.sync_property_environment(
         surface,
         property.min_brightness,
-        property.terrain_planet or property.sample_planet
+        property.terrain_planet or property.sample_planet,
+        nil,
+        property.construction_type
     )
     property.solar = surface.solar_power_multiplier
     normalize_linked_chest_positions(property, surface)

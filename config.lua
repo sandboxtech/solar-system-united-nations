@@ -369,6 +369,12 @@ M.property_build_types = {
             core_tile = 'tutorial-grid',
             core_size = 8,
         },
+        surface_property_overrides = {
+            gravity = 0,
+            pressure = 0,
+            ['magnetic-field'] = 0,
+            ['day-night-cycle'] = 0,
+        },
     },
     property_build_type{
         pack = 'metallurgic-science-pack',

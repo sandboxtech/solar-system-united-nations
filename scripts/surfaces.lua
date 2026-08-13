@@ -487,7 +487,8 @@ function M.hospice_surface(planet_name)
 end
 
 function M.sync_property_environment(
-        surface, min_brightness, planet_name, use_planet_solar)
+        surface, min_brightness, planet_name, use_planet_solar,
+        construction_type)
     if not (surface and surface.valid) then return false end
     local planet = game.planets[planet_name or 'nauvis']
     if not (planet and planet.valid) then return false end
@@ -502,16 +503,31 @@ function M.sync_property_environment(
         if value == nil then
             value = prototypes.surface_property[name].default_value
         end
+        local overrides = nil
+        if construction_type then
+            for _, build_type in ipairs(config.property_build_types) do
+                if build_type.key == construction_type then
+                    overrides = build_type.surface_property_overrides
+                    break
+                end
+            end
+        end
+        if overrides and overrides[name] ~= nil then
+            value = overrides[name]
+        end
         pcall(function() surface.set_property(name, value) end)
     end
-    surface.daytime_parameters = config.property_daytime_parameters
-    surface.ticks_per_day = math.max(1, math.floor(
-        (defaults['day-night-cycle']
-            or prototypes.surface_property['day-night-cycle'].default_value)
-            + 0.5
-    ))
-    surface.always_day = false
-    surface.freeze_daytime = false
+    local cycle = surface.get_property('day-night-cycle')
+    if cycle == 0 then
+        surface.always_day = true
+        surface.freeze_daytime = true
+        surface.ticks_per_day = 1
+    else
+        surface.daytime_parameters = config.property_daytime_parameters
+        surface.ticks_per_day = math.max(1, math.floor(cycle + 0.5))
+        surface.always_day = false
+        surface.freeze_daytime = false
+    end
     -- `solar-power` is already a percentage multiplier. The independent
     -- LuaSurface multiplier is compounded with it, so copying the planet's
     -- percentage into both places would square the result (Vulcanus 400%
@@ -548,7 +564,9 @@ function M.sync_all_property_environments()
             M.sync_property_environment(
                 surface,
                 nil,
-                property.terrain_planet or property.sample_planet
+                property.terrain_planet or property.sample_planet,
+                nil,
+                property.construction_type
             )
         end
     end
@@ -613,7 +631,13 @@ function M.create_property_surface(property_id, spec)
     end
     if not sample_planet then return nil, nil, nil, nil, nil end
     apply_property_special_tiles(surface, half_width, half_height, spec)
-    M.sync_property_environment(surface, nil, sample_planet)
+    M.sync_property_environment(
+        surface,
+        nil,
+        sample_planet,
+        nil,
+        spec.construction_type
+    )
     surface.localised_name = spec.name or {'un.property-default-name', property_id}
     local force = factions.of_planet(spec.sample_planet)
     if force and force.valid then
