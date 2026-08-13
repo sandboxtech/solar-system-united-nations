@@ -361,7 +361,7 @@ function M.ensure_hospice(planet_name)
     }
     M.sync_property_environment(surface, nil, planet_name, true)
     local force = factions.of_planet(planet_name)
-    if force and force.valid then force.set_spawn_position({0, 0}, surface) end
+    if force and force.valid then force.set_spawn_position({0, -4}, surface) end
     return surface
 end
 
@@ -719,9 +719,9 @@ local function respawn_destination(player)
     else
         planet_name = factions.of_player(player) or 'nauvis'
     end
-    -- Respawn away from the entrance so the player's first step does not
-    -- immediately send them back to the public planet.
-    return M.hospice_surface(planet_name), {0, 4}
+    -- Spawn on the hospice interior, above the linked chests and outside the
+    -- entrance trigger. Positive Y is outside the anchored hospice terrain.
+    return M.hospice_surface(planet_name), {0, -4}
 end
 
 events.on(defines.events.on_player_created, function(event)

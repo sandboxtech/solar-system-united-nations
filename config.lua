@@ -169,6 +169,7 @@ M.blueprint_max_span = 256
 M.rental_property_default_width = 24
 M.rental_property_default_height = 16
 M.rental_property_decay_hours = 6
+M.rental_property_initial_price = 1000
 M.rental_property_fixed_layout = {fill_tile = 'tutorial-grid'}
 M.rental_property_layout_anchor_up = true
 require('config.property_types')(M)

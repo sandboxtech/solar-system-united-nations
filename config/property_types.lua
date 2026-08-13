@@ -20,7 +20,7 @@ return function(M)
             {
                 tile = tile,
                 direction = 'full',
-                top = -3,
+                top = -2,
                 thickness = 3,
             },
         }
@@ -166,14 +166,14 @@ return function(M)
                     tile = 'natural-yumako-soil',
                     direction = 'left',
                     finish = 0,
-                    top = -3,
+                    top = -2,
                     thickness = 3,
                 },
                 {
                     tile = 'natural-jellynut-soil',
                     direction = 'right',
                     start = 0,
-                    top = -3,
+                    top = -2,
                     thickness = 3,
                 },
             },
@@ -209,6 +209,7 @@ return function(M)
                 width = width or M.rental_property_default_width,
                 height = height or M.rental_property_default_height,
                 decay_hours = M.rental_property_decay_hours,
+                price = M.rental_property_initial_price,
                 fixed_layout = M.rental_property_fixed_layout,
                 layout_anchor_up = M.rental_property_layout_anchor_up,
             },
@@ -216,10 +217,10 @@ return function(M)
     end
 
     M.property_permanent_defaults_by_planet = {
-        nauvis = permanent_rentals(10, 64, 32),
-        vulcanus = permanent_rentals(3),
-        gleba = permanent_rentals(3),
-        fulgora = permanent_rentals(3),
-        aquilo = permanent_rentals(3),
+        nauvis = permanent_rentals(8, 64, 32),
+        vulcanus = permanent_rentals(4),
+        gleba = permanent_rentals(4),
+        fulgora = permanent_rentals(4),
+        aquilo = permanent_rentals(4),
     }
 end
