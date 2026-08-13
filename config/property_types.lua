@@ -218,9 +218,9 @@ return function(M)
 
     M.property_permanent_defaults_by_planet = {
         nauvis = permanent_rentals(10, 64, 32),
-        vulcanus = {},
-        gleba = {},
-        fulgora = {},
-        aquilo = {},
+        vulcanus = permanent_rentals(3),
+        gleba = permanent_rentals(3),
+        fulgora = permanent_rentals(3),
+        aquilo = permanent_rentals(3),
     }
 end

@@ -261,6 +261,9 @@ end
 local function central_chest_positions(property)
     if property and tonumber(property.entity_layout_version)
             and property.entity_layout_version >= 2 then
+        if property.permanent then
+            return config.permanent_property_linked_chest_positions
+        end
         return config.property_linked_chest_positions
     end
     return {
@@ -333,8 +336,13 @@ local function ensure_linked_chests(property)
 
         if tonumber(property.entity_layout_version)
                 and property.entity_layout_version >= 2 then
-            local offset = property.entity_layout_version >= 3
-                and config.property_linked_loader_offset or {x = 0, y = -2}
+            local offset
+            if property.permanent then
+                offset = config.permanent_property_linked_loader_offset
+            else
+                offset = property.entity_layout_version >= 3
+                    and config.property_linked_loader_offset or {x = 0, y = -2}
+            end
             local loader_position = {
                 x = position.x + offset.x,
                 y = position.y + offset.y,
@@ -378,6 +386,11 @@ local function destroy_managed_property_logistics(property)
         {x = 0.5, y = 0.5},
     }
     for _, position in ipairs(config.property_linked_chest_positions) do
+        chest_positions[#chest_positions + 1] = position
+    end
+    for _, position in ipairs(
+        config.permanent_property_linked_chest_positions
+    ) do
         chest_positions[#chest_positions + 1] = position
     end
     for _, position in ipairs(chest_positions) do
@@ -503,7 +516,9 @@ create = function(spec)
         sample_planet = spec.sample_planet,
         terrain_planet = terrain_planet,
         sample_position = sample_position,
-        linked_chest_positions = config.property_linked_chest_positions,
+        linked_chest_positions = permanent
+            and config.permanent_property_linked_chest_positions
+            or config.property_linked_chest_positions,
         created_tick = game.tick,
         expires_tick = expires_tick,
         lifetime_hours = lifetime_hours,
@@ -1378,12 +1393,16 @@ end
 function M.migrate_permanent_rental_layouts()
     state.ensure()
     local desired = {}
+    local desired_by_planet = {}
     for planet_name, defaults in pairs(
         config.property_permanent_defaults_by_planet or {}
     ) do
+        desired_by_planet[planet_name] = {}
         for tier_index, spec in ipairs(defaults) do
             for slot = 1, spec.count do
-                desired[table.concat({planet_name, tier_index, slot}, ':')] = {
+                local key = table.concat({planet_name, tier_index, slot}, ':')
+                local target = {
+                    key = key,
                     width = spec.width,
                     height = spec.height,
                     fixed_layout = spec.fixed_layout,
@@ -1393,13 +1412,51 @@ function M.migrate_permanent_rental_layouts()
                     layout_base_height = spec.height,
                     terrain_planet = spec.terrain_planet,
                 }
+                desired[key] = target
+                desired_by_planet[planet_name][#desired_by_planet[planet_name] + 1]
+                    = target
+            end
+        end
+    end
+    local unassigned_by_planet = {}
+    local occupied_keys = {}
+    for _, planet_name in ipairs(config.public_planets) do
+        unassigned_by_planet[planet_name] = {}
+    end
+    for _, property in pairs(storage.properties) do
+        if property.status == 'active' and property.permanent then
+            if desired[property.system_key] then
+                occupied_keys[property.system_key] = true
+            elseif build_planets[property.sample_planet] then
+                local candidates = unassigned_by_planet[property.sample_planet]
+                candidates[#candidates + 1] = property
+            end
+        end
+    end
+    for _, candidates in pairs(unassigned_by_planet) do
+        table.sort(candidates, function(a, b)
+            local an = tonumber(a.planet_property_number) or math.huge
+            local bn = tonumber(b.planet_property_number) or math.huge
+            if an ~= bn then return an < bn end
+            return a.id < b.id
+        end)
+    end
+    for _, planet_name in ipairs(config.public_planets) do
+        local candidates = unassigned_by_planet[planet_name]
+        local index = 1
+        for _, target in ipairs(desired_by_planet[planet_name]) do
+            if not occupied_keys[target.key] and candidates[index] then
+                candidates[index].system_key = target.key
+                candidates[index].rental = true
+                occupied_keys[target.key] = true
+                index = index + 1
             end
         end
     end
     local rentals = {}
     for _, property in pairs(storage.properties) do
         if property.status == 'active' and property.permanent
-                and property.rental and desired[property.system_key] then
+                and desired[property.system_key] then
             rentals[#rentals + 1] = property
         end
     end
@@ -1420,7 +1477,9 @@ function M.migrate_permanent_rental_layouts()
             property.layout_base_height = spec.layout_base_height
             property.entity_layout_version = config.property_entity_layout_version
             property.loader_direction_version = nil
-            property.linked_chest_positions = config.property_linked_chest_positions
+            property.rental = true
+            property.linked_chest_positions
+                = config.permanent_property_linked_chest_positions
             property.decay_ticks = config.rental_property_decay_hours
                 * config.ticks_per_hour
             if ensure_linked_chests(property) then
