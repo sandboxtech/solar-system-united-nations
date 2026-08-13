@@ -1,12 +1,11 @@
 return function(M)
     local function property_build_type(spec)
         spec.base_width = spec.base_width or 32
-        spec.width_per_level = spec.width_per_level or 2
+        spec.width_per_level = spec.width_per_level or 0.5
         spec.height = spec.height or 32
-        spec.height_per_level = spec.height_per_level or 1
+        spec.height_per_level = spec.height_per_level or 0.2
         spec.max_width = spec.max_width or 256
         spec.max_height = spec.max_height or 256
-        if spec.exact_dimensions == nil then spec.exact_dimensions = true end
         spec.initial_price_multiplier = spec.initial_price_multiplier or 1
         spec.base_decay_hours = spec.base_decay_hours or 10
         spec.decay_hours_per_level = spec.decay_hours_per_level or 1
@@ -16,20 +15,13 @@ return function(M)
         return spec
     end
 
-    local function lower_band(tile)
+    local function upper_band(tile)
         return {
             {
                 tile = tile,
                 direction = 'full',
-                top = 0,
+                top = -3,
                 thickness = 3,
-            },
-            {
-                tile = 'tutorial-grid',
-                left = -2,
-                top = 1,
-                right = 2,
-                bottom = 4,
             },
         }
     end
@@ -74,19 +66,21 @@ return function(M)
             key = 'shore-cottage',
             initial_price_multiplier = 3,
             terrain_planet = 'nauvis',
+            fixed_layout = {
+                fill_tile = 'grass-1',
+            },
             lower_half_out_of_map = true,
-            special_areas = lower_band('water'),
+            special_areas = upper_band('water'),
         },
         property_build_type{
             pack = 'production-science-pack',
             key = 'rail-estate',
             base_width = 512,
-            width_per_level = 2,
+            width_per_level = 0.5,
             max_width = 1024,
             height = 64,
-            height_per_level = 1,
+            height_per_level = 0.2,
             max_height = 320,
-            exact_dimensions = true,
             initial_price_multiplier = 4,
             fixed_layout = {
                 fill_tile = 'out-of-map',
@@ -99,12 +93,11 @@ return function(M)
             pack = 'utility-science-pack',
             key = 'utility-grid',
             base_width = 128,
-            width_per_level = 2,
+            width_per_level = 0.5,
             height = 128,
-            height_per_level = 1,
+            height_per_level = 0.2,
             max_width = 1024,
             max_height = 1024,
-            exact_dimensions = true,
             initial_price_multiplier = 5,
             fixed_layout = {
                 fill_tile = 'out-of-map',
@@ -120,7 +113,7 @@ return function(M)
             key = 'sky-cottage',
             expandable = false,
             base_width = 96,
-            width_per_level = 2,
+            width_per_level = 0.5,
             height = 96,
             initial_price_multiplier = 3,
             fixed_layout = {
@@ -142,44 +135,46 @@ return function(M)
             key = 'lava-cottage',
             initial_price_multiplier = 6,
             terrain_planet = 'vulcanus',
+            fixed_layout = {
+                fill_tile = 'volcanic-ash-soil',
+            },
             lower_half_out_of_map = true,
-            special_areas = lower_band('lava'),
+            special_areas = upper_band('lava'),
         },
         property_build_type{
             pack = 'electromagnetic-science-pack',
             key = 'oil-cottage',
             initial_price_multiplier = 7,
             terrain_planet = 'fulgora',
+            fixed_layout = {
+                fill_tile = 'fulgoran-dunes',
+            },
             lower_half_out_of_map = true,
-            special_areas = lower_band('oil-ocean-deep'),
+            special_areas = upper_band('oil-ocean-deep'),
         },
         property_build_type{
             pack = 'agricultural-science-pack',
             key = 'garden-cottage',
             initial_price_multiplier = 8,
             terrain_planet = 'gleba',
+            fixed_layout = {
+                fill_tile = 'highland-yellow-rock',
+            },
             lower_half_out_of_map = true,
             special_areas = {
                 {
                     tile = 'natural-yumako-soil',
                     direction = 'left',
                     finish = 0,
-                    top = 0,
+                    top = -3,
                     thickness = 3,
                 },
                 {
                     tile = 'natural-jellynut-soil',
                     direction = 'right',
                     start = 0,
-                    top = 0,
+                    top = -3,
                     thickness = 3,
-                },
-                {
-                    tile = 'tutorial-grid',
-                    left = -2,
-                    top = 1,
-                    right = 2,
-                    bottom = 4,
                 },
             },
         },
@@ -192,6 +187,9 @@ return function(M)
             base_lifetime_hours = 288,
             lifetime_hours_per_level = 24,
             terrain_planet = 'aquilo',
+            fixed_layout = {
+                fill_tile = 'dust-lumpy',
+            },
             crime_chance_multiplier = 10,
         },
     }
@@ -212,6 +210,7 @@ return function(M)
                 height = M.rental_property_default_height,
                 decay_hours = M.rental_property_decay_hours,
                 fixed_layout = M.rental_property_fixed_layout,
+                layout_anchor_up = M.rental_property_layout_anchor_up,
                 entity_layout_version = M.property_entity_layout_version,
             },
         }

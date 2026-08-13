@@ -222,8 +222,7 @@ local function property_bounds(width, height, base_height, anchored_up)
     local top = centered_top
     local bottom = top + height
     if anchored_up then
-        local base_top = -math.floor(base_height / 2)
-        bottom = base_top + base_height
+        bottom = 0
         top = bottom - height
     end
     return {
@@ -232,6 +231,15 @@ local function property_bounds(width, height, base_height, anchored_up)
         right = right,
         bottom = bottom,
         offset_y = top - centered_top,
+    }
+end
+
+local function property_special_bounds(bounds)
+    return {
+        left = bounds.left,
+        top = bounds.top,
+        right = bounds.right,
+        bottom = math.max(bounds.bottom, 4),
     }
 end
 
@@ -452,6 +460,19 @@ local function clear_property_lower_half(surface, spec, active_bounds,
     end
 end
 
+local function apply_property_entrance_tiles(surface)
+    local tiles = {}
+    for y = 1, 3 do
+        for x = -2, 1 do
+            tiles[#tiles + 1] = {
+                name = 'tutorial-grid',
+                position = {x, y},
+            }
+        end
+    end
+    surface.set_tiles(tiles, false, false, true, false)
+end
+
 local function apply_fixed_property_tiles(surface, half_width, half_height, layout,
         exclude_bounds, destination_offset_y)
     destination_offset_y = destination_offset_y or 0
@@ -533,11 +554,11 @@ local function apply_hospice_tiles(surface, planet_name)
     local level = config.hospice_property_level
     local width = math.min(
         spec.max_width,
-        math.floor(spec.base_width + spec.width_per_level * level)
+        math.floor((spec.base_width + spec.width_per_level * level) / 2) * 2
     )
     local height = math.min(
         spec.max_height,
-        math.floor(spec.height + spec.height_per_level * level)
+        math.floor((spec.height + spec.height_per_level * level) / 2) * 2
     )
     local surface_width = math.max(config.hospice_surface_width, width)
     local surface_height = math.max(config.hospice_surface_height, height)
@@ -556,26 +577,41 @@ local function apply_hospice_tiles(surface, planet_name)
         surface_height / 2,
         'out-of-map'
     )
-    local sample_planet = apply_natural_sample(
-        surface,
-        100000 + public_planet_indexes[planet_name],
-        half_width,
-        half_height,
-        spec.terrain_planet or planet_name,
-        half_width,
-        half_height,
-        bounds.offset_y
-    )
+    local sample_planet
+    if spec.fixed_layout then
+        sample_planet = spec.terrain_planet or planet_name
+        apply_fixed_property_tiles(
+            surface,
+            half_width,
+            half_height,
+            spec.fixed_layout,
+            nil,
+            bounds.offset_y
+        )
+    else
+        sample_planet = apply_natural_sample(
+            surface,
+            100000 + public_planet_indexes[planet_name],
+            half_width,
+            half_height,
+            spec.terrain_planet or planet_name,
+            half_width,
+            half_height,
+            bounds.offset_y
+        )
+    end
     if not sample_planet then return false end
-    clear_property_lower_half(surface, spec, bounds, nil)
+    local special_bounds = property_special_bounds(bounds)
+    clear_property_lower_half(surface, spec, special_bounds, nil)
     apply_property_special_tiles(
         surface,
         half_width,
         half_height,
         spec,
         nil,
-        bounds
+        special_bounds
     )
+    apply_property_entrance_tiles(surface)
     return true
 end
 
@@ -779,16 +815,14 @@ function M.create_property_surface(property_id, spec)
         1,
         math.ceil(math.max(width, height) / 64)
     ))
-    if surface_width > width or surface_height > height then
-        fill_tile_area(
-            surface,
-            -surface_half_width,
-            -surface_half_height,
-            surface_half_width,
-            surface_half_height,
-            'out-of-map'
-        )
-    end
+    fill_tile_area(
+        surface,
+        -surface_half_width,
+        -surface_half_height,
+        surface_half_width,
+        surface_half_height,
+        'out-of-map'
+    )
     local sample_planet, sample_position
     if spec.fixed_layout then
         sample_planet = requested_planet
@@ -813,15 +847,17 @@ function M.create_property_surface(property_id, spec)
         )
     end
     if not sample_planet then return nil, nil, nil, nil, nil end
-    clear_property_lower_half(surface, spec, active_bounds, nil)
+    local special_bounds = property_special_bounds(active_bounds)
+    clear_property_lower_half(surface, spec, special_bounds, nil)
     apply_property_special_tiles(
         surface,
         half_width,
         half_height,
         spec,
         nil,
-        active_bounds
+        special_bounds
     )
+    apply_property_entrance_tiles(surface)
     M.sync_property_environment(
         surface,
         nil,
@@ -888,14 +924,15 @@ function M.expand_property_surface(property, new_width, new_height, layout)
         )
     end
     if not ok then return false, 'terrain-copy-failed' end
-    clear_property_lower_half(surface, layout, new_bounds, old_bounds)
+    local special_bounds = property_special_bounds(new_bounds)
+    clear_property_lower_half(surface, layout, special_bounds, old_bounds)
     apply_property_special_tiles(
         surface,
         half_width,
         half_height,
         layout,
         old_bounds,
-        new_bounds
+        special_bounds
     )
     local force = factions.of_planet(property.sample_planet)
     if force and force.valid then

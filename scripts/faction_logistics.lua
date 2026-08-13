@@ -33,33 +33,70 @@ local function move_legacy_chest(surface, planet_name, legacy_positions,
     return nil
 end
 
+local function ensure_station(surface, force)
+    local position = config.faction_logistics_station_position
+    local station = surface.find_entity(config.faction_logistics_station_name, position)
+    if station and station.valid and station.force ~= force then
+        log('[un] faction logistics station position occupied on '
+            .. surface.name)
+        return false
+    end
+    if not (station and station.valid) then
+        local legacy_position = config.faction_logistics_legacy_station_position
+        local legacy = legacy_position and surface.find_entity(
+            config.faction_logistics_station_name,
+            legacy_position
+        )
+        if legacy and legacy.valid and legacy.force == force
+                and legacy.teleport(position, surface, false, false) then
+            station = legacy
+        end
+    end
+    if not (station and station.valid) then
+        station = surface.create_entity{
+            name = config.faction_logistics_station_name,
+            position = position,
+            force = force,
+            raise_built = false,
+        }
+    end
+    if not (station and station.valid) then return false end
+    protect(station)
+    return true
+end
+
+local function ensure_loader(surface, force, chest_position)
+    local offset = config.faction_logistics_loader_offset
+    local position = {
+        x = chest_position.x + offset.x,
+        y = chest_position.y + offset.y,
+    }
+    local loader = surface.find_entity(config.property_linked_loader_name, position)
+    if loader and loader.valid and loader.force ~= force then
+        log('[un] faction logistics loader position occupied on '
+            .. surface.name)
+        return false
+    end
+    if not (loader and loader.valid) then
+        loader = surface.create_entity{
+            name = config.property_linked_loader_name,
+            position = position,
+            direction = defines.direction.north,
+            force = force,
+            raise_built = false,
+        }
+    end
+    if not (loader and loader.valid) then return false end
+    loader.rotatable = true
+    protect(loader)
+    return true
+end
+
 function M.ensure_on_surface(surface, planet_name, with_station, chest_positions,
         legacy_positions)
     local force = factions.of_planet(planet_name)
     if not (surface and surface.valid and force and force.valid) then return false end
     chest_positions = chest_positions or config.faction_logistics_chest_positions
-    local station_position = config.faction_logistics_station_position
-    if with_station then
-        local station = surface.find_entity(
-            config.faction_logistics_station_name,
-            station_position
-        )
-        if station and station.valid and station.force ~= force then
-            log('[un] faction logistics station position occupied on '
-                .. surface.name)
-            return false
-        end
-        if not (station and station.valid) then
-            station = surface.create_entity{
-                name = config.faction_logistics_station_name,
-                position = station_position,
-                force = force,
-                raise_built = false,
-            }
-        end
-        if not (station and station.valid) then return false end
-        protect(station)
-    end
     for index, position in ipairs(chest_positions) do
         local chest = surface.find_entity(config.linked_chest_name, position)
         if not (chest and chest.valid) then
@@ -84,12 +121,22 @@ function M.ensure_on_surface(surface, planet_name, with_station, chest_positions
         chest.link_id = link_id(planet_name)
         chest.operable = false
         protect(chest)
+        if with_station and not ensure_loader(surface, force, position) then
+            return false
+        end
     end
+    if with_station and not ensure_station(surface, force) then return false end
     return true
 end
 
 function M.ensure_planet(planet_name)
-    return M.ensure_on_surface(game.surfaces[planet_name], planet_name, true)
+    return M.ensure_on_surface(
+        game.surfaces[planet_name],
+        planet_name,
+        true,
+        config.faction_logistics_chest_positions,
+        config.faction_logistics_legacy_chest_positions
+    )
 end
 
 function M.ensure_hospice(planet_name)

@@ -529,6 +529,8 @@ local function create_permanent_defaults()
                         height = spec.height,
                         decay_hours = spec.decay_hours,
                         fixed_layout = spec.fixed_layout,
+                        layout_anchor_up = spec.layout_anchor_up,
+                        layout_base_height = spec.height,
                         entity_layout_version = config.property_entity_layout_version,
                         permanent = true,
                         rental = true,
@@ -617,13 +619,11 @@ function M.build_requirements(player, planet_name, build_type_index, selected_le
     end
     local raw_width = build_type.base_width
         + (build_type.width_per_level or 1) * level
-    local width = build_type.exact_dimensions and math.floor(raw_width)
-        or math.floor(raw_width / 2) * 2
+    local width = math.floor(raw_width / 2) * 2
     width = math.min(build_type.max_width, width)
     local raw_height = build_type.height
         + (build_type.height_per_level or 0) * level
-    local height = build_type.exact_dimensions and math.floor(raw_height)
-        or math.floor(raw_height / 2) * 2
+    local height = math.floor(raw_height / 2) * 2
     height = math.min(build_type.max_height, height)
     local experience_cost = config.property_build_experience_base
         + config.property_build_experience_per_level * level
@@ -1281,6 +1281,8 @@ function M.add_rental(planet_name)
         height = settings.get('rental_property_height'),
         decay_hours = config.rental_property_decay_hours,
         fixed_layout = config.rental_property_fixed_layout,
+        layout_anchor_up = config.rental_property_layout_anchor_up,
+        layout_base_height = settings.get('rental_property_height'),
         entity_layout_version = config.property_entity_layout_version,
         permanent = true,
         rental = true,
