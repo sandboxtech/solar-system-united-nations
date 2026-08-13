@@ -18,8 +18,12 @@ local MAX_SAFE_INTEGER = 9007199254740991
 
 local item_specs = {}
 for _, spec in ipairs(config.market_items or {}) do
+    assert(type(spec.base_price) == 'number' and spec.base_price > 0,
+        'market base_price must be greater than zero: ' .. tostring(spec.name))
     item_specs[spec.name] = spec
 end
+assert(config.market_empty_price_multiplier > 1,
+    'market_empty_price_multiplier must be greater than one')
 
 local function valid_number(value)
     return type(value) == 'number' and value == value
@@ -33,15 +37,28 @@ local function box_mode(entity)
     return nil
 end
 
+local function initial_stock(spec)
+    return math.max(1, math.floor(
+        config.market_initial_stock_value / spec.base_price
+    ))
+end
+
 local function initial_market()
     local result = {}
     for _, spec in ipairs(config.market_items or {}) do
-        result[spec.name] = math.max(0, math.floor(spec.base_stock or 0))
+        result[spec.name] = initial_stock(spec)
     end
     return result
 end
 
+local function ensure_curve()
+    if storage.market_curve_version == config.market_curve_version then return end
+    storage.local_markets = {}
+    storage.market_curve_version = config.market_curve_version
+end
+
 local function market_for_force(force_name)
+    ensure_curve()
     local market = storage.local_markets[force_name]
     if type(market) ~= 'table' then
         market = initial_market()
@@ -49,7 +66,7 @@ local function market_for_force(force_name)
     end
     for _, spec in ipairs(config.market_items or {}) do
         if type(market[spec.name]) ~= 'number' or market[spec.name] < 0 then
-            market[spec.name] = math.max(0, math.floor(spec.base_stock or 0))
+            market[spec.name] = initial_stock(spec)
         end
     end
     return market
@@ -72,6 +89,7 @@ end
 
 function M.ensure()
     state.ensure()
+    ensure_curve()
     for _, entry in ipairs(factions.all()) do
         market_for_force(entry.force.name)
     end
@@ -86,32 +104,41 @@ function M.ensure()
     rebuild_order()
 end
 
-local function curve_constant(spec)
-    return spec.base_price * (spec.base_stock + spec.virtual_stock)
+local function curve_exponent(spec, stock)
+    local stock_at_base_price = initial_stock(spec)
+    return (stock_at_base_price - stock) / stock_at_base_price
 end
 
 local function spot_price(spec, stock)
-    local denominator = stock + spec.virtual_stock
-    if denominator <= 0 then return math.huge end
-    return curve_constant(spec) / denominator
+    return spec.base_price * config.market_empty_price_multiplier
+        ^ curve_exponent(spec, stock)
+end
+
+local function integral_scale(spec)
+    return spec.base_price * initial_stock(spec)
+        / math.log(config.market_empty_price_multiplier)
 end
 
 local function buy_cost(spec, stock, count)
     if count <= 0 or count > stock then return nil end
-    local before = stock + spec.virtual_stock
-    local after = stock - count + spec.virtual_stock
-    if before <= 0 or after <= 0 then return nil end
-    local raw = curve_constant(spec) * math.log(before / after)
+    local raw = integral_scale(spec) * (
+        config.market_empty_price_multiplier
+            ^ curve_exponent(spec, stock - count)
+        - config.market_empty_price_multiplier
+            ^ curve_exponent(spec, stock)
+    )
     if not valid_number(raw) or raw > MAX_SAFE_INTEGER then return nil end
     return math.max(1, math.ceil(raw))
 end
 
 local function sell_revenue(spec, stock, count)
     if count <= 0 then return nil end
-    local before = stock + spec.virtual_stock
-    local after = stock + count + spec.virtual_stock
-    if before <= 0 or after <= 0 then return nil end
-    local raw = curve_constant(spec) * math.log(after / before)
+    local raw = integral_scale(spec) * (
+        config.market_empty_price_multiplier
+            ^ curve_exponent(spec, stock)
+        - config.market_empty_price_multiplier
+            ^ curve_exponent(spec, stock + count)
+    )
     if not valid_number(raw) or raw > MAX_SAFE_INTEGER then return nil end
     return math.floor(raw)
 end
