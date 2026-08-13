@@ -158,18 +158,20 @@ local function clear_property_lower_half(surface, spec, active_bounds,
     end
 end
 
-local function apply_property_entrance_tiles(surface, offset_y)
-    offset_y = offset_y or 0
+function M.apply_entrance_tiles(surface, top_y)
+    if not (surface and surface.valid) then return false end
+    top_y = top_y or 1
     local tiles = {}
-    for y = 1, 3 do
+    for y = top_y, top_y + 2 do
         for x = -2, 1 do
             tiles[#tiles + 1] = {
                 name = 'tutorial-grid',
-                position = {x, y + offset_y},
+                position = {x, y},
             }
         end
     end
     surface.set_tiles(tiles, false, false, true, false)
+    return true
 end
 
 local function apply_fixed_property_tiles(surface, half_width, half_height, layout,
@@ -296,28 +298,7 @@ local function apply_hospice_tiles(surface, planet_name)
         nil,
         special_bounds
     )
-    apply_property_entrance_tiles(surface, -3)
-    return true
-end
-
--- Explicit one-shot repair path. Normal travel only resolves an existing
--- surface and never pays the cost of regenerating the fixed terrain.
-function M.rebuild_hospice_layout(planet_name)
-    planet_name = public_planets[planet_name] and planet_name or nil
-    if not planet_name then return false end
-    local surface = game.surfaces[M.hospice_surface_name(planet_name)]
-    if not (surface and surface.valid) then return false end
-    ensure_generated(
-        surface,
-        math.max(1, math.ceil(math.max(
-            config.hospice_surface_width,
-            config.hospice_surface_height
-        ) / 64))
-    )
-    if not apply_hospice_tiles(surface, planet_name) then return false end
-    storage.hospice_grid_versions[planet_name]
-        = config.hospice_tile_layout_version
-    M.sync_property_environment(surface, nil, planet_name, true)
+    M.apply_entrance_tiles(surface, -2)
     return true
 end
 
@@ -351,7 +332,8 @@ function M.ensure_hospice(planet_name)
     planet_name = public_planets[planet_name] and planet_name or 'nauvis'
     local surface_name = M.hospice_surface_name(planet_name)
     local surface = game.surfaces[surface_name]
-    if not (surface and surface.valid) then
+    local created = not (surface and surface.valid)
+    if created then
         surface = game.create_surface(
             surface_name,
             map_gen_settings(
@@ -372,12 +354,7 @@ function M.ensure_hospice(planet_name)
             config.hospice_surface_height
         ) / 64))
     )
-    if storage.hospice_grid_versions[planet_name]
-            ~= config.hospice_tile_layout_version then
-        apply_hospice_tiles(surface, planet_name)
-        storage.hospice_grid_versions[planet_name] =
-            config.hospice_tile_layout_version
-    end
+    if created then apply_hospice_tiles(surface, planet_name) end
     surface.localised_name = {
         'un.hospice-name-planet',
         {'space-location-name.' .. planet_name},
@@ -388,10 +365,9 @@ function M.ensure_hospice(planet_name)
     return surface
 end
 
--- Travel and respawn only need an existing destination.  Re-running
--- ensure_hospice for every click used to rewrite map-gen settings, force
--- chunk generation, and resynchronise every surface property on the main
--- simulation thread.  Creation and repair remain owned by bootstrap.
+-- Travel and respawn only need an existing destination. Re-running
+-- ensure_hospice for every click would rewrite map-gen settings, force chunk
+-- generation, and resynchronise every surface property on the main thread.
 function M.hospice_surface(planet_name)
     planet_name = public_planets[planet_name] and planet_name or 'nauvis'
     local surface = game.surfaces[M.hospice_surface_name(planet_name)]
@@ -548,7 +524,7 @@ function M.create_property_surface(property_id, spec)
         nil,
         special_bounds
     )
-    apply_property_entrance_tiles(surface)
+    M.apply_entrance_tiles(surface, 1)
     M.sync_property_environment(
         surface,
         nil,
@@ -566,89 +542,6 @@ function M.create_property_surface(property_id, spec)
         })
     end
     return surface, half_width, half_height, sample_planet, sample_position
-end
-
--- Rebuild script-owned property terrain in place so existing machines,
--- inventories and circuit connections remain untouched. set_tiles is always
--- called with remove_colliding_entities=false by the helpers above.
-function M.rebuild_property_surface(property, spec)
-    local surface = property and game.surfaces[property.surface_name]
-    if not (surface and surface.valid and type(spec) == 'table') then
-        return false
-    end
-    local width = tonumber(spec.width)
-    local height = tonumber(spec.height)
-    if not width or not height then return false end
-    local anchored_up = spec.layout_anchor_up == true
-    local surface_width = tonumber(spec.surface_width) or width
-    local surface_height = tonumber(spec.surface_height)
-        or (anchored_up and height * 2 or height)
-    local old_settings = surface.map_gen_settings
-    local clear_width = math.max(
-        tonumber(old_settings.width) or 0,
-        surface_width
-    )
-    local clear_height = math.max(
-        tonumber(old_settings.height) or 0,
-        surface_height
-    )
-    old_settings.width = surface_width
-    old_settings.height = surface_height
-    surface.map_gen_settings = old_settings
-    ensure_generated(surface, math.max(
-        1,
-        math.ceil(math.max(surface_width, surface_height) / 64)
-    ))
-    fill_tile_area(
-        surface,
-        -clear_width / 2,
-        -clear_height / 2,
-        clear_width / 2,
-        clear_height / 2,
-        'out-of-map'
-    )
-    local active_bounds = property_bounds(
-        width,
-        height,
-        spec.layout_base_height or height,
-        anchored_up
-    )
-    apply_fixed_property_tiles(
-        surface,
-        width / 2,
-        height / 2,
-        spec.fixed_layout or {fill_tile = TUTORIAL_GRID_NAME},
-        nil,
-        active_bounds.offset_y
-    )
-    local special_bounds = property_special_bounds(active_bounds)
-    clear_property_lower_half(surface, spec, special_bounds, nil)
-    apply_property_special_tiles(
-        surface,
-        width / 2,
-        height / 2,
-        spec,
-        nil,
-        special_bounds
-    )
-    apply_property_entrance_tiles(surface)
-    M.sync_property_environment(
-        surface,
-        nil,
-        spec.terrain_planet or property.terrain_planet
-            or property.sample_planet,
-        nil,
-        spec.construction_type or property.construction_type
-    )
-    local force = factions.of_planet(property.sample_planet)
-    if force and force.valid then
-        force.set_spawn_position({0, 0}, surface)
-        force.chart(surface, {
-            {active_bounds.left, active_bounds.top},
-            {active_bounds.right, active_bounds.bottom},
-        })
-    end
-    return true
 end
 
 function M.expand_property_surface(property, new_width, new_height, layout)
@@ -767,54 +660,41 @@ function M.teleport(player, surface)
     return M.teleport_near(player, surface, {0, 0}, false)
 end
 
-local function recorded_hospice_center(surface, record)
-    if type(record) ~= 'table' or record.surface_index ~= surface.index then
-        return nil
-    end
-    local position = record.position
-    if type(position) ~= 'table'
-            or type(position.x) ~= 'number'
-            or type(position.y) ~= 'number'
-            or position.x ~= position.x
-            or position.y ~= position.y
-            or math.abs(position.x) > config.hospice_surface_width / 2
-            or math.abs(position.y) > config.hospice_surface_height / 2 then
-        return nil
-    end
+function M.is_entrance_position(position, top_y)
     return position
+        and position.x >= -2 and position.x < 2
+        and position.y >= top_y and position.y < top_y + 3
 end
 
-function M.to_hospice(player, planet_name, return_record)
+local function teleport_to_entrance(player, surface, top_y, center)
+    if player.physical_vehicle and player.physical_vehicle.valid then
+        return false, 'in-vehicle'
+    end
+    local position = surface.find_non_colliding_position(
+        'character', center, 1, 0.25
+    )
+    if not position or not M.is_entrance_position(position, top_y) then
+        position = center
+    end
+    storage.entrance_travel_locks[player.index] = {
+        surface_index = surface.index,
+        top_y = top_y,
+    }
+    local ok, err = M.teleport_physical(player, position, surface)
+    if not ok then storage.entrance_travel_locks[player.index] = nil end
+    return ok, err
+end
+
+function M.to_hospice(player, planet_name)
     planet_name = planet_name or M.context_planet(player.physical_surface) or 'nauvis'
     local surface = M.hospice_surface(planet_name)
     if not M.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
     end
-    local center = recorded_hospice_center(surface, return_record) or {0, 0}
-    return M.teleport_near(player, surface, center, false)
+    return teleport_to_entrance(player, surface, -2, {x = -0.5, y = 0.5})
 end
 
-local function recorded_center(surface, planet_name, record)
-    if type(record) ~= 'table' or record.surface_index ~= surface.index then
-        return nil
-    end
-    local reset = storage.public_planet_resets
-        and storage.public_planet_resets[planet_name]
-    if record.round ~= (reset and reset.round or 0) then return nil end
-    local position = record.position
-    if type(position) ~= 'table'
-            or type(position.x) ~= 'number'
-            or type(position.y) ~= 'number' then
-        return nil
-    end
-    return position
-end
-
-local function weighted_arrival_axis(radius)
-    return math.floor((math.random() - math.random()) * radius)
-end
-
-function M.to_planet_origin(player, planet_name, return_record)
+function M.to_planet_origin(player, planet_name)
     local source = player.physical_surface
     if not M.can_start_public_travel(source) then
         return false, 'travel-restricted'
@@ -825,47 +705,7 @@ function M.to_planet_origin(player, planet_name, return_record)
     end
     local surface = game.surfaces[planet_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
-    if player.physical_vehicle and player.physical_vehicle.valid then
-        return false, 'in-vehicle'
-    end
-    local preferred_center = recorded_center(surface, planet_name, return_record)
-    if preferred_center then
-        local position = safe_position(surface, preferred_center)
-        if position then return M.teleport_physical(player, position, surface) end
-    end
-    local radius = config.public_planet_arrival_radius
-    for _ = 1, 32 do
-        local center = {
-            x = weighted_arrival_axis(radius),
-            y = weighted_arrival_axis(radius),
-        }
-        local chunk = {
-            x = math.floor(center.x / 32),
-            y = math.floor(center.y / 32),
-        }
-        if surface.is_chunk_generated(chunk) then
-            local position = surface.find_non_colliding_position(
-                'character',
-                center,
-                8,
-                1
-            )
-            if position and math.abs(position.x) < radius
-                    and math.abs(position.y) < radius then
-                return M.teleport_physical(player, position, surface)
-            end
-        end
-    end
-    local fallback_center = {
-        x = weighted_arrival_axis(radius),
-        y = weighted_arrival_axis(radius),
-    }
-    local fallback_position = safe_position(surface, fallback_center)
-    if fallback_position and math.abs(fallback_position.x) < radius
-            and math.abs(fallback_position.y) < radius then
-        return M.teleport_physical(player, fallback_position, surface)
-    end
-    return M.teleport_near(player, surface, {0, 0}, false)
+    return teleport_to_entrance(player, surface, 0, {x = -0.5, y = 1.5})
 end
 
 function M.suicide(player, planet_name)
@@ -879,7 +719,9 @@ local function respawn_destination(player)
     else
         planet_name = factions.of_player(player) or 'nauvis'
     end
-    return M.hospice_surface(planet_name), {0, 0}
+    -- Respawn away from the entrance so the player's first step does not
+    -- immediately send them back to the public planet.
+    return M.hospice_surface(planet_name), {0, 4}
 end
 
 events.on(defines.events.on_player_created, function(event)

@@ -23,7 +23,6 @@ M.faction_diplomacy_technology = 'space-platform-thruster'
 M.faction_friendly_to_hostile_chance = 0.2
 M.faction_hostile_to_friendly_chance = 0.9
 require('config.technologies')(M)
-M.public_planet_arrival_radius = 128
 M.public_planet_reset_min_hours = 0.5
 M.public_planet_reset_max_hours = 2.5
 M.public_planet_reset_exponent = 2
@@ -100,7 +99,6 @@ M.hospice_surface_prefix = 'un-hospice-'
 M.hospice_surface_width = 128
 M.hospice_surface_height = 128
 M.hospice_property_level = 192
-M.hospice_tile_layout_version = 7
 M.property_surface_prefix = 'un-property-'
 M.surface_hidden_from_foreign_factions = false
 M.surface_hidden_from_home_faction = false
@@ -114,7 +112,6 @@ M.property_daytime_parameters = {
     dawn = 0.75,
 }
 M.property_link_id_unowned = 0
-M.property_entity_layout_version = 3
 M.property_linked_chest_positions = {
     {x = 0, y = 3},
     {x = 1, y = 3},

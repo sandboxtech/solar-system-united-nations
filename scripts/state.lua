@@ -40,7 +40,9 @@ function M.ensure()
     if storage.starter_resources == nil then
         storage.starter_resources = copy_item_list(config.starter_resources)
     end
-    if storage.hospice_grid_versions == nil then storage.hospice_grid_versions = {} end
+    if storage.entrance_travel_locks == nil then
+        storage.entrance_travel_locks = {}
+    end
     if storage.respawn_hospice_planets == nil then
         storage.respawn_hospice_planets = {}
     end

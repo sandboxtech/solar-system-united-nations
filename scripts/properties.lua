@@ -145,17 +145,10 @@ end
 function M.display_name(property)
     if property.custom_name then return property.custom_name end
     if not property.owner_index then
-        if property.sample_planet then
-            return {
-                '',
-                '[img=space-location/' .. property.sample_planet .. '] ',
-                {
-                    'un.property-surface-vacant',
-                    property.planet_property_number or property.id,
-                },
-            }
-        end
-        return {'un.property-surface-vacant', property.id}
+        return {
+            'un.property-surface-vacant',
+            property.planet_property_number or property.id,
+        }
     end
     local owner = game.get_player(property.owner_index)
     local account = storage.players[property.owner_index]
@@ -165,20 +158,11 @@ function M.display_name(property)
     local number = property.owner_property_number
     local suffix = is_nonnegative_integer(number) and number > 0
         and (' ' .. tostring(number)) or ''
-    return {
-        '',
-        '[img=space-location/' .. property.sample_planet .. '] ',
-        {'un.property-surface-owned', owner_name, suffix},
-    }
+    return {'un.property-surface-owned', owner_name, suffix}
 end
 
-local function property_name_position(property)
-    if tonumber(property.entity_layout_version)
-            and property.entity_layout_version >= 2 then
-        return {x = -0.5, y = 7}
-    end
-    local height = property.height or property.size or 0
-    return {x = 0, y = -height / 2 - 4}
+local function property_name_position()
+    return {x = -0.5, y = 7}
 end
 
 local function ensure_property_name_rendering(property, text)
@@ -259,19 +243,10 @@ function M.surface_display_name(property)
 end
 
 local function central_chest_positions(property)
-    if property and tonumber(property.entity_layout_version)
-            and property.entity_layout_version >= 2 then
-        if property.permanent then
-            return config.permanent_property_linked_chest_positions
-        end
-        return config.property_linked_chest_positions
+    if property.permanent then
+        return config.permanent_property_linked_chest_positions
     end
-    return {
-        {x = -0.5, y = -0.5},
-        {x = 0.5, y = -0.5},
-        {x = -0.5, y = 0.5},
-        {x = 0.5, y = 0.5},
-    }
+    return config.property_linked_chest_positions
 end
 
 local function position_key(position)
@@ -313,9 +288,6 @@ local function ensure_linked_chests(property)
     local force = factions.of_planet(property.sample_planet)
     if not (force and force.valid) then return false end
     local link_id = property.owner_index or config.property_link_id_unowned
-    local fix_loader_direction = tonumber(property.entity_layout_version)
-        and property.entity_layout_version >= 2
-        and property.loader_direction_version ~= 1
     for _, position in ipairs(property.linked_chest_positions) do
         local chest = surface.find_entity(config.linked_chest_name, position)
         if not (chest and chest.valid) then
@@ -334,78 +306,34 @@ local function ensure_linked_chests(property)
         -- script flag is available in both 2.0 and 2.1.
         chest.minable_flag = false
 
-        if tonumber(property.entity_layout_version)
-                and property.entity_layout_version >= 2 then
-            local offset
-            if property.permanent then
-                offset = config.permanent_property_linked_loader_offset
-            else
-                offset = property.entity_layout_version >= 3
-                    and config.property_linked_loader_offset or {x = 0, y = -2}
-            end
-            local loader_position = {
-                x = position.x + offset.x,
-                y = position.y + offset.y,
+        local offset = property.permanent
+            and config.permanent_property_linked_loader_offset
+            or config.property_linked_loader_offset
+        local loader_position = {
+            x = position.x + offset.x,
+            y = position.y + offset.y,
+        }
+        local loader = surface.find_entity(
+            config.property_linked_loader_name,
+            loader_position
+        )
+        if not (loader and loader.valid) then
+            loader = surface.create_entity{
+                name = config.property_linked_loader_name,
+                position = loader_position,
+                direction = defines.direction.north,
+                force = force,
+                raise_built = false,
             }
-            local loader = surface.find_entity(
-                config.property_linked_loader_name,
-                loader_position
-            )
-            if not (loader and loader.valid) then
-                loader = surface.create_entity{
-                    name = config.property_linked_loader_name,
-                    position = loader_position,
-                    direction = defines.direction.north,
-                    force = force,
-                    raise_built = false,
-                }
-            end
-            if not (loader and loader.valid) then return false end
-            if fix_loader_direction then
-                loader.direction = defines.direction.north
-                loader.loader_type = 'output'
-            end
-            loader.rotatable = true
-            loader.destructible = false
-            loader.minable_flag = false
         end
-    end
-    if fix_loader_direction then
-        property.loader_direction_version = 1
+        if not (loader and loader.valid) then return false end
+        loader.direction = defines.direction.north
+        loader.loader_type = 'output'
+        loader.rotatable = true
+        loader.destructible = false
+        loader.minable_flag = false
     end
     return true
-end
-
-local function destroy_managed_property_logistics(property)
-    local surface = game.surfaces[property.surface_name]
-    if not (surface and surface.valid) then return end
-    local chest_positions = {
-        {x = -0.5, y = -0.5},
-        {x = 0.5, y = -0.5},
-        {x = -0.5, y = 0.5},
-        {x = 0.5, y = 0.5},
-    }
-    for _, position in ipairs(config.property_linked_chest_positions) do
-        chest_positions[#chest_positions + 1] = position
-    end
-    for _, position in ipairs(
-        config.permanent_property_linked_chest_positions
-    ) do
-        chest_positions[#chest_positions + 1] = position
-    end
-    for _, position in ipairs(chest_positions) do
-        local chest = surface.find_entity(config.linked_chest_name, position)
-        if chest and chest.valid then chest.destroy() end
-    end
-    for x = -2, 1 do
-        for y = 1, 2 do
-            local loader = surface.find_entity(
-                config.property_linked_loader_name,
-                {x = x, y = y}
-            )
-            if loader and loader.valid then loader.destroy() end
-        end
-    end
 end
 
 local function sync_surface_visibility(property)
@@ -467,9 +395,6 @@ create = function(spec)
     end
     local layout_anchor_up = spec.layout_anchor_up == true
     local layout_base_height = tonumber(spec.layout_base_height) or height
-    local entity_layout_version = tonumber(spec.entity_layout_version)
-        or config.property_entity_layout_version
-
     local id = next_available_property_id()
     local min_brightness = config.property_min_brightness
     local surface, half_width, half_height, terrain_planet, sample_position
@@ -510,7 +435,6 @@ create = function(spec)
         max_height = max_height,
         layout_anchor_up = layout_anchor_up,
         layout_base_height = layout_base_height,
-        entity_layout_version = entity_layout_version,
         solar = surface.solar_power_multiplier,
         min_brightness = min_brightness,
         sample_planet = spec.sample_planet,
@@ -574,7 +498,6 @@ local function create_permanent_defaults()
                         fixed_layout = spec.fixed_layout,
                         layout_anchor_up = spec.layout_anchor_up,
                         layout_base_height = spec.height,
-                        entity_layout_version = config.property_entity_layout_version,
                         permanent = true,
                         rental = true,
                         system_key = key,
@@ -753,7 +676,6 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         lower_half_out_of_map = requirement.build_type.lower_half_out_of_map,
         layout_anchor_up = true,
         layout_base_height = requirement.build_type.height,
-        entity_layout_version = config.property_entity_layout_version,
         price = requirement.initial_price,
         lifetime_hours = requirement.lifetime.hours,
         decay_hours = requirement.lifetime.decay_hours,
@@ -857,6 +779,9 @@ local function property_on_surface(surface)
     return nil
 end
 
+function M.on_surface(surface)
+    return property_on_surface(surface)
+end
 
 function M.property_at_player(player)
     return player and property_on_surface(player.physical_surface) or nil
@@ -923,80 +848,10 @@ function M.hospice_travel_availability(player)
     return true, nil, planet_name
 end
 
-local function remember_public_departure(
-        player,
-        planet_name,
-        source_surface,
-        source_position
-    )
-    if not (source_surface and source_surface.valid
-            and source_surface.name == planet_name
-            and source_position) then
-        return
-    end
-    local reset = storage.public_planet_resets
-        and storage.public_planet_resets[planet_name]
-    local account = economy.ensure_account(player.index)
-    account.last_public_position_by_planet
-        = account.last_public_position_by_planet or {}
-    account.last_public_position_by_planet[planet_name] = {
-        position = {x = source_position.x, y = source_position.y},
-        surface_index = source_surface.index,
-        round = reset and reset.round or 0,
-    }
-end
-
-local function remember_hospice_departure(
-        player,
-        planet_name,
-        source_surface,
-        source_position
-    )
-    if not (source_surface and source_surface.valid
-            and surfaces.hospice_planet(source_surface) == planet_name
-            and source_position) then
-        return
-    end
-    local account = economy.ensure_account(player.index)
-    account.last_hospice_position_by_planet
-        = account.last_hospice_position_by_planet or {}
-    account.last_hospice_position_by_planet[planet_name] = {
-        position = {x = source_position.x, y = source_position.y},
-        surface_index = source_surface.index,
-    }
-end
-
-local function travel_to_hospice_recording(player, planet_name)
-    local source_surface = player.physical_surface
-    local source_position = player.physical_position
-    local account = economy.ensure_account(player.index)
-    local positions = account.last_hospice_position_by_planet or {}
-    local ok, err = surfaces.to_hospice(
-        player,
-        planet_name,
-        positions[planet_name]
-    )
-    if ok then
-        remember_public_departure(
-            player,
-            planet_name,
-            source_surface,
-            source_position
-        )
-        remember_hospice_departure(
-            player,
-            planet_name,
-            source_surface,
-            source_position
-        )
-    end
-    return ok, err
-end
-
 function M.travel_to_hospice(player)
     local available, err, planet_name = M.hospice_travel_availability(player)
     if not available then return false, err end
-    return travel_to_hospice_recording(player, planet_name)
+    return surfaces.to_hospice(player, planet_name)
 end
 
 local function release_property(property)
@@ -1150,8 +1005,6 @@ function M.enter(player, property_id)
     if not allowed then return false, availability_error end
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
-    local source = player.physical_surface
-    local source_position = player.physical_position
     local ok, err
     if player.admin and settings.get('admin_property_access') then
         ok, err = surfaces.teleport_near(player, surface, {0, 0}, false)
@@ -1159,18 +1012,6 @@ function M.enter(player, property_id)
         ok, err = surfaces.teleport(player, surface)
     end
     if ok then
-        remember_public_departure(
-            player,
-            property.sample_planet,
-            source,
-            source_position
-        )
-        remember_hospice_departure(
-            player,
-            property.sample_planet,
-            source,
-            source_position
-        )
         if property.owner_index == player.index then
             local account = economy.ensure_account(player.index)
             account.last_property_id = property.id
@@ -1202,26 +1043,9 @@ function M.home_shuttle(player)
         = M.home_shuttle_availability(player)
     if not available then return false, err end
     if context == 'planet' then
-        return travel_to_hospice_recording(player, planet_name)
+        return surfaces.to_hospice(player, planet_name)
     end
-    local account = economy.ensure_account(player.index)
-    local positions = account.last_public_position_by_planet or {}
-    local source_surface = player.physical_surface
-    local source_position = player.physical_position
-    local ok, travel_err = surfaces.to_planet_origin(
-        player,
-        planet_name,
-        positions[planet_name]
-    )
-    if ok then
-        remember_hospice_departure(
-            player,
-            planet_name,
-            source_surface,
-            source_position
-        )
-    end
-    return ok, travel_err
+    return surfaces.to_planet_origin(player, planet_name)
 end
 
 function M.travel_to_owned_property(player)
@@ -1326,7 +1150,6 @@ function M.add_rental(planet_name)
         fixed_layout = config.rental_property_fixed_layout,
         layout_anchor_up = config.rental_property_layout_anchor_up,
         layout_base_height = settings.get('rental_property_height'),
-        entity_layout_version = config.property_entity_layout_version,
         permanent = true,
         rental = true,
     }
@@ -1388,130 +1211,6 @@ function M.reset_permanent_defaults()
         created = created,
         complete = complete and failed == 0,
     }
-end
-
-function M.migrate_permanent_rental_layouts()
-    state.ensure()
-    local desired = {}
-    local desired_by_planet = {}
-    for planet_name, defaults in pairs(
-        config.property_permanent_defaults_by_planet or {}
-    ) do
-        desired_by_planet[planet_name] = {}
-        for tier_index, spec in ipairs(defaults) do
-            for slot = 1, spec.count do
-                local key = table.concat({planet_name, tier_index, slot}, ':')
-                local target = {
-                    key = key,
-                    width = spec.width,
-                    height = spec.height,
-                    fixed_layout = spec.fixed_layout,
-                    special_areas = spec.special_areas,
-                    lower_half_out_of_map = spec.lower_half_out_of_map,
-                    layout_anchor_up = spec.layout_anchor_up == true,
-                    layout_base_height = spec.height,
-                    terrain_planet = spec.terrain_planet,
-                }
-                desired[key] = target
-                desired_by_planet[planet_name][#desired_by_planet[planet_name] + 1]
-                    = target
-            end
-        end
-    end
-    local unassigned_by_planet = {}
-    local occupied_keys = {}
-    for _, planet_name in ipairs(config.public_planets) do
-        unassigned_by_planet[planet_name] = {}
-    end
-    for _, property in pairs(storage.properties) do
-        if property.status == 'active' and property.permanent then
-            if desired[property.system_key] then
-                occupied_keys[property.system_key] = true
-            elseif build_planets[property.sample_planet] then
-                local candidates = unassigned_by_planet[property.sample_planet]
-                candidates[#candidates + 1] = property
-            end
-        end
-    end
-    for _, candidates in pairs(unassigned_by_planet) do
-        table.sort(candidates, function(a, b)
-            local an = tonumber(a.planet_property_number) or math.huge
-            local bn = tonumber(b.planet_property_number) or math.huge
-            if an ~= bn then return an < bn end
-            return a.id < b.id
-        end)
-    end
-    for _, planet_name in ipairs(config.public_planets) do
-        local candidates = unassigned_by_planet[planet_name]
-        local index = 1
-        for _, target in ipairs(desired_by_planet[planet_name]) do
-            if not occupied_keys[target.key] and candidates[index] then
-                candidates[index].system_key = target.key
-                candidates[index].rental = true
-                occupied_keys[target.key] = true
-                index = index + 1
-            end
-        end
-    end
-    local rentals = {}
-    for _, property in pairs(storage.properties) do
-        if property.status == 'active' and property.permanent
-                and desired[property.system_key] then
-            rentals[#rentals + 1] = property
-        end
-    end
-    table.sort(rentals, function(a, b) return a.id < b.id end)
-    local rebuilt = 0
-    local failed = 0
-    local failures = {}
-    for _, property in ipairs(rentals) do
-        local spec = desired[property.system_key]
-        local surface = game.surfaces[property.surface_name]
-        if not (surface and surface.valid) then
-            clear_name_translation_requests(property.id)
-            storage.properties[property.id] = nil
-            rebuilt = rebuilt + 1
-            bump_revision()
-        elseif surfaces.rebuild_property_surface(property, spec) then
-            destroy_managed_property_logistics(property)
-            property.width = spec.width
-            property.height = spec.height
-            property.base_width = spec.width
-            property.base_height = spec.height
-            property.max_width = spec.width
-            property.max_height = spec.height
-            property.layout_anchor_up = spec.layout_anchor_up
-            property.layout_base_height = spec.layout_base_height
-            property.entity_layout_version = config.property_entity_layout_version
-            property.loader_direction_version = nil
-            property.rental = true
-            property.linked_chest_positions
-                = config.permanent_property_linked_chest_positions
-            property.decay_ticks = config.rental_property_decay_hours
-                * config.ticks_per_hour
-            if ensure_linked_chests(property) then
-                ensure_property_name_rendering(
-                    property,
-                    property.rendered_name
-                        or property_rendering_fallback(property)
-                )
-                rebuilt = rebuilt + 1
-            else
-                failed = failed + 1
-                failures[#failures + 1]
-                    = 'public rental entities #' .. property.id
-            end
-        else
-            failed = failed + 1
-            failures[#failures + 1]
-                = 'public rental terrain #' .. property.id
-        end
-    end
-    local created, complete = create_permanent_defaults()
-    rebuilt = rebuilt + created
-    storage.permanent_properties_created = complete and failed == 0
-    if rebuilt > 0 then bump_revision() end
-    return rebuilt, failed, failures
 end
 
 remote.add_interface('un_properties', {
@@ -2025,9 +1724,6 @@ events.on(defines.events.on_player_joined_game, refresh_owned_name_renderings)
 events.on(defines.events.on_player_locale_changed, refresh_owned_name_renderings)
 
 factions.on_switch_cleanup(function(player, source_planet)
-    local account = economy.ensure_account(player.index)
-    account.last_public_position_by_planet = nil
-    account.last_hospice_position_by_planet = nil
     M.release_owner_in_faction(player.index, source_planet)
 end)
 

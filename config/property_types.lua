@@ -211,7 +211,6 @@ return function(M)
                 decay_hours = M.rental_property_decay_hours,
                 fixed_layout = M.rental_property_fixed_layout,
                 layout_anchor_up = M.rental_property_layout_anchor_up,
-                entity_layout_version = M.property_entity_layout_version,
             },
         }
     end
