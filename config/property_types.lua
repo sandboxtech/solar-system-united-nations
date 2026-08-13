@@ -74,6 +74,7 @@ return function(M)
             key = 'shore-cottage',
             initial_price_multiplier = 3,
             terrain_planet = 'nauvis',
+            lower_half_out_of_map = true,
             special_areas = lower_band('water'),
         },
         property_build_type{
@@ -141,6 +142,7 @@ return function(M)
             key = 'lava-cottage',
             initial_price_multiplier = 6,
             terrain_planet = 'vulcanus',
+            lower_half_out_of_map = true,
             special_areas = lower_band('lava'),
         },
         property_build_type{
@@ -148,6 +150,7 @@ return function(M)
             key = 'oil-cottage',
             initial_price_multiplier = 7,
             terrain_planet = 'fulgora',
+            lower_half_out_of_map = true,
             special_areas = lower_band('oil-ocean-deep'),
         },
         property_build_type{
@@ -155,6 +158,7 @@ return function(M)
             key = 'garden-cottage',
             initial_price_multiplier = 8,
             terrain_planet = 'gleba',
+            lower_half_out_of_map = true,
             special_areas = {
                 {
                     tile = 'natural-yumako-soil',

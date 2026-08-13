@@ -427,6 +427,31 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
     end
 end
 
+local function clear_property_lower_half(surface, spec, active_bounds,
+        exclude_bounds)
+    if not spec.lower_half_out_of_map then return end
+    local tiles = {}
+    local top = math.max(0, active_bounds.top)
+    for y = top, active_bounds.bottom - 1 do
+        for x = active_bounds.left, active_bounds.right - 1 do
+            local excluded = exclude_bounds
+                and x >= exclude_bounds.left
+                and x < exclude_bounds.right
+                and y >= exclude_bounds.top
+                and y < exclude_bounds.bottom
+            if not excluded then
+                tiles[#tiles + 1] = {
+                    name = 'out-of-map',
+                    position = {x, y},
+                }
+            end
+        end
+    end
+    if #tiles > 0 then
+        surface.set_tiles(tiles, false, false, true, false)
+    end
+end
+
 local function apply_fixed_property_tiles(surface, half_width, half_height, layout,
         exclude_bounds, destination_offset_y)
     destination_offset_y = destination_offset_y or 0
@@ -542,6 +567,7 @@ local function apply_hospice_tiles(surface, planet_name)
         bounds.offset_y
     )
     if not sample_planet then return false end
+    clear_property_lower_half(surface, spec, bounds, nil)
     apply_property_special_tiles(
         surface,
         half_width,
@@ -787,6 +813,7 @@ function M.create_property_surface(property_id, spec)
         )
     end
     if not sample_planet then return nil, nil, nil, nil, nil end
+    clear_property_lower_half(surface, spec, active_bounds, nil)
     apply_property_special_tiles(
         surface,
         half_width,
@@ -861,6 +888,7 @@ function M.expand_property_surface(property, new_width, new_height, layout)
         )
     end
     if not ok then return false, 'terrain-copy-failed' end
+    clear_property_lower_half(surface, layout, new_bounds, old_bounds)
     apply_property_special_tiles(
         surface,
         half_width,

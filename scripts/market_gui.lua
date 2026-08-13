@@ -119,7 +119,10 @@ function M.render(player, frame, content, selected_amount, selected_group)
                 list.add{type = 'label', caption = format_integer(item.stock)}
                 list.add{
                     type = 'label',
-                    caption = {'un.market-price', string.format('%.2f', item.price)},
+                    caption = {
+                        'un.market-price',
+                        format_integer(math.ceil(item.price)),
+                    },
                 }
                 local sell = list.add{
                     type = 'button',

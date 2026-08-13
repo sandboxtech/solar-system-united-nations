@@ -122,6 +122,7 @@ local function expansion_layout(build_type)
     return {
         fixed_layout = build_type.fixed_layout,
         special_areas = build_type.special_areas,
+        lower_half_out_of_map = build_type.lower_half_out_of_map,
     }
 end
 
@@ -172,6 +173,10 @@ function M.display_name(property)
 end
 
 local function property_name_position(property)
+    if tonumber(property.entity_layout_version)
+            and property.entity_layout_version >= 2 then
+        return {x = -0.5, y = 7}
+    end
     local height = property.height or property.size or 0
     return {x = 0, y = -height / 2 - 4}
 end
@@ -305,6 +310,9 @@ local function ensure_linked_chests(property)
     local force = factions.of_planet(property.sample_planet)
     if not (force and force.valid) then return false end
     local link_id = property.owner_index or config.property_link_id_unowned
+    local fix_loader_direction = tonumber(property.entity_layout_version)
+        and property.entity_layout_version >= 2
+        and property.loader_direction_version ~= 1
     for _, position in ipairs(property.linked_chest_positions) do
         local chest = surface.find_entity(config.linked_chest_name, position)
         if not (chest and chest.valid) then
@@ -339,16 +347,22 @@ local function ensure_linked_chests(property)
                 loader = surface.create_entity{
                     name = config.property_linked_loader_name,
                     position = loader_position,
-                    direction = defines.direction.south,
+                    direction = defines.direction.north,
                     force = force,
                     raise_built = false,
                 }
             end
             if not (loader and loader.valid) then return false end
+            if fix_loader_direction then
+                loader.direction = defines.direction.north
+            end
             loader.rotatable = true
             loader.destructible = false
             loader.minable_flag = false
         end
+    end
+    if fix_loader_direction then
+        property.loader_direction_version = 1
     end
     return true
 end
@@ -428,6 +442,7 @@ create = function(spec)
         terrain_planet = spec.terrain_planet,
         fixed_layout = spec.fixed_layout,
         special_areas = spec.special_areas,
+        lower_half_out_of_map = spec.lower_half_out_of_map,
         layout_anchor_up = layout_anchor_up,
         layout_base_height = layout_base_height,
         construction_type = spec.construction_type,
@@ -692,6 +707,7 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         terrain_planet = requirement.build_type.terrain_planet,
         fixed_layout = requirement.build_type.fixed_layout,
         special_areas = requirement.build_type.special_areas,
+        lower_half_out_of_map = requirement.build_type.lower_half_out_of_map,
         layout_anchor_up = true,
         layout_base_height = requirement.build_type.height,
         entity_layout_version = config.property_entity_layout_version,

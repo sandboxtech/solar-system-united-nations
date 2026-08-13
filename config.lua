@@ -100,7 +100,7 @@ M.hospice_surface_prefix = 'un-hospice-'
 M.hospice_surface_width = 128
 M.hospice_surface_height = 128
 M.hospice_property_level = 48
-M.hospice_tile_layout_version = 4
+M.hospice_tile_layout_version = 5
 M.property_surface_prefix = 'un-property-'
 M.surface_hidden_from_foreign_factions = false
 M.surface_hidden_from_home_faction = false
@@ -127,6 +127,18 @@ M.faction_logistics_link_id_base = 4000000000
 M.faction_logistics_station_name = 'cargo-landing-pad'
 M.faction_logistics_station_position = {x = 0, y = -8}
 M.faction_logistics_chest_positions = {
+    {x = -2, y = 0},
+    {x = -1, y = 0},
+    {x = 0, y = 0},
+    {x = 1, y = 0},
+}
+M.faction_logistics_hospice_chest_positions = {
+    {x = -2, y = 3},
+    {x = -1, y = 3},
+    {x = 0, y = 3},
+    {x = 1, y = 3},
+}
+M.faction_logistics_hospice_legacy_chest_positions = {
     {x = -2, y = 0},
     {x = -1, y = 0},
     {x = 0, y = 0},
