@@ -1463,9 +1463,16 @@ function M.migrate_permanent_rental_layouts()
     table.sort(rentals, function(a, b) return a.id < b.id end)
     local rebuilt = 0
     local failed = 0
+    local failures = {}
     for _, property in ipairs(rentals) do
         local spec = desired[property.system_key]
-        if surfaces.rebuild_property_surface(property, spec) then
+        local surface = game.surfaces[property.surface_name]
+        if not (surface and surface.valid) then
+            clear_name_translation_requests(property.id)
+            storage.properties[property.id] = nil
+            rebuilt = rebuilt + 1
+            bump_revision()
+        elseif surfaces.rebuild_property_surface(property, spec) then
             destroy_managed_property_logistics(property)
             property.width = spec.width
             property.height = spec.height
@@ -1491,16 +1498,20 @@ function M.migrate_permanent_rental_layouts()
                 rebuilt = rebuilt + 1
             else
                 failed = failed + 1
+                failures[#failures + 1]
+                    = 'public rental entities #' .. property.id
             end
         else
             failed = failed + 1
+            failures[#failures + 1]
+                = 'public rental terrain #' .. property.id
         end
     end
     local created, complete = create_permanent_defaults()
     rebuilt = rebuilt + created
     storage.permanent_properties_created = complete and failed == 0
     if rebuilt > 0 then bump_revision() end
-    return rebuilt, failed
+    return rebuilt, failed, failures
 end
 
 remote.add_interface('un_properties', {

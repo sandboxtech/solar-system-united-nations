@@ -140,14 +140,21 @@ function M.ensure_all()
     end
 end
 
-local function migrate_chests(surface, planet_name, old_positions)
+local function migrate_chests(surface, planet_name, old_positions,
+        target_positions)
     local changed = 0
     local expected_link_id = link_id(planet_name)
+    local targets = {}
+    for _, position in ipairs(target_positions or {}) do
+        targets[position.x .. ',' .. position.y] = true
+    end
     for _, old_position in ipairs(old_positions) do
-        local old = surface.find_entity(config.linked_chest_name, old_position)
-        if old and old.valid and old.link_id == expected_link_id then
-            old.destroy()
-            changed = changed + 1
+        if not targets[old_position.x .. ',' .. old_position.y] then
+            local old = surface.find_entity(config.linked_chest_name, old_position)
+            if old and old.valid and old.link_id == expected_link_id then
+                old.destroy()
+                changed = changed + 1
+            end
         end
     end
     return changed
@@ -206,6 +213,12 @@ end
 function M.migrate_layout()
     local changed = 0
     local failed = 0
+    local failures = {}
+    local function fail(message)
+        failed = failed + 1
+        failures[#failures + 1] = message
+        log('[un] logistics layout migration failed: ' .. message)
+    end
     for _, planet_name in ipairs(config.public_planets) do
         local planet_surface = game.surfaces[planet_name]
         if planet_surface and planet_surface.valid then
@@ -222,17 +235,18 @@ function M.migrate_layout()
                     {x = -1, y = 1},
                     {x = 0, y = 1},
                     {x = 1, y = 1},
-                }
+                },
+                config.faction_logistics_chest_positions
             )
             changed = changed + moved
             changed = changed + destroy_managed_loaders(
                 planet_surface,
                 force,
                 {
-                    {x = -2, y = 2},
-                    {x = -1, y = 2},
-                    {x = 0, y = 2},
-                    {x = 1, y = 2},
+                    {x = -2, y = 1},
+                    {x = -1, y = 1},
+                    {x = 0, y = 1},
+                    {x = 1, y = 1},
                 }
             )
             local errors
@@ -240,13 +254,15 @@ function M.migrate_layout()
                 planet_surface, planet_name, {x = 0, y = -4}
             )
             changed = changed + moved
-            failed = failed + errors
+            if errors > 0 then fail('station ' .. planet_name .. ' at 0,-4') end
             moved, errors = migrate_station(
                 planet_surface, planet_name, {x = 0, y = -8}
             )
             changed = changed + moved
-            failed = failed + errors
-            if not M.ensure_planet(planet_name) then failed = failed + 1 end
+            if errors > 0 then fail('station ' .. planet_name .. ' at 0,-8') end
+            if not M.ensure_planet(planet_name) then
+                fail('public planet ' .. planet_name)
+            end
         end
 
         local hospice = game.surfaces[surfaces.hospice_surface_name(planet_name)]
@@ -268,7 +284,8 @@ function M.migrate_layout()
                     {x = -1, y = 0},
                     {x = 0, y = 0},
                     {x = 1, y = 0},
-                }
+                },
+                config.faction_logistics_hospice_chest_positions
             )
             changed = changed + moved
             changed = changed + destroy_managed_loaders(
@@ -292,16 +309,22 @@ function M.migrate_layout()
             if surfaces.rebuild_hospice_layout(planet_name) then
                 changed = changed + 1
             else
-                failed = failed + 1
+                fail('refugee camp terrain ' .. planet_name)
             end
-            if not M.ensure_hospice(planet_name) then failed = failed + 1 end
+            if not M.ensure_hospice(planet_name) then
+                fail('refugee camp logistics ' .. planet_name)
+            end
         end
     end
-    local rebuilt, property_failures
+    local rebuilt, property_failures, property_failure_details
         = properties.migrate_permanent_rental_layouts()
     changed = changed + rebuilt
     failed = failed + property_failures
-    return changed, failed
+    for _, detail in ipairs(property_failure_details or {}) do
+        failures[#failures + 1] = detail
+        log('[un] logistics layout migration failed: ' .. detail)
+    end
+    return changed, failed, failures
 end
 
 local function migration_command(command)
@@ -310,9 +333,15 @@ local function migration_command(command)
         player.print({'un.admin-only'})
         return
     end
-    local changed, failed = M.migrate_layout()
+    local changed, failed, failures = M.migrate_layout()
     local message = {'un.logistics-layout-migration-result', changed, failed}
-    if player then player.print(message) else localised_print(message) end
+    local function output(value)
+        if player then player.print(value) else localised_print(value) end
+    end
+    output(message)
+    for _, detail in ipairs(failures) do
+        output({'un.logistics-layout-migration-failure', detail})
+    end
 end
 
 commands.add_command(
