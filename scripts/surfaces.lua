@@ -216,13 +216,22 @@ local function copy_sample_entities(
 end
 
 local function property_bounds(width, height, base_height, anchored_up)
-    local offset_y = anchored_up and (base_height - height) / 2 or 0
+    local left = -math.floor(width / 2)
+    local right = left + width
+    local centered_top = -math.floor(height / 2)
+    local top = centered_top
+    local bottom = top + height
+    if anchored_up then
+        local base_top = -math.floor(base_height / 2)
+        bottom = base_top + base_height
+        top = bottom - height
+    end
     return {
-        left = -width / 2,
-        top = -height / 2 + offset_y,
-        right = width / 2,
-        bottom = height / 2 + offset_y,
-        offset_y = offset_y,
+        left = left,
+        top = top,
+        right = right,
+        bottom = bottom,
+        offset_y = top - centered_top,
     }
 end
 
@@ -408,7 +417,9 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
             end
         end
     end
-    if #tiles > 0 then surface.set_tiles(tiles, true, false, true, false) end
+    -- Functional bands must remain exact rectangles. Tile correction may
+    -- replace neighbouring liquid or agricultural tiles and bend their edges.
+    if #tiles > 0 then surface.set_tiles(tiles, false, false, true, false) end
 end
 
 local function apply_fixed_property_tiles(surface, half_width, half_height, layout,

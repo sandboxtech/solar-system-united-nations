@@ -43,6 +43,9 @@ return function(M)
             decay_hours_per_level = 0.1,
             base_lifetime_hours = 10,
             lifetime_hours_per_level = 1,
+            fixed_layout = {
+                fill_tile = 'tutorial-grid',
+            },
         },
         property_build_type{
             pack = 'logistic-science-pack',
@@ -52,6 +55,9 @@ return function(M)
             decay_hours_per_level = 0.2,
             base_lifetime_hours = 30,
             lifetime_hours_per_level = 3,
+            fixed_layout = {
+                fill_tile = 'grass-1',
+            },
         },
         property_build_type{
             pack = 'military-science-pack',
