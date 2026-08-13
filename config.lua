@@ -113,20 +113,22 @@ M.property_daytime_parameters = {
 }
 M.property_link_id_unowned = 0
 M.property_linked_chest_positions = {
-    {x = 0, y = 3},
-    {x = 1, y = 3},
-    {x = -1, y = 3},
-    {x = -2, y = 3},
+    {x = 0, y = 0},
+    {x = 1, y = 0},
+    {x = -1, y = 0},
+    {x = -2, y = 0},
 }
 M.property_linked_loader_name = 'turbo-loader'
-M.property_linked_loader_offset = {x = 0, y = -1}
+M.property_linked_loader_offset = {x = 0, y = 1}
+M.property_trade_selector_position = {x = -4, y = -4}
+M.property_trade_chest_position = {x = -6, y = -4}
 M.permanent_property_linked_chest_positions = {
-    {x = 0, y = 2},
-    {x = 1, y = 2},
-    {x = -1, y = 2},
-    {x = -2, y = 2},
+    {x = 0, y = 0},
+    {x = 1, y = 0},
+    {x = -1, y = 0},
+    {x = -2, y = 0},
 }
-M.permanent_property_linked_loader_offset = {x = 0, y = -1}
+M.permanent_property_linked_loader_offset = {x = 0, y = 1}
 M.faction_logistics_link_id_base = 4000000000
 M.faction_logistics_station_name = 'cargo-landing-pad'
 -- Keep the 8x8 landing-pad collision box clear of chests centred on y=0.
@@ -152,6 +154,7 @@ M.property_salvage_percent = 20
 M.property_sample_planets = M.public_planets
 M.property_initial_price_min = 1000
 M.property_initial_price_max = 3000
+M.permanent_property_initial_price_multiplier = 0.01
 M.property_build_stamina_cost = 50000
 M.property_build_price_per_experience = 10
 M.property_build_experience_base = 2000
@@ -162,7 +165,10 @@ M.property_renew_stamina_multiplier = 1
 M.property_expansion_experience_multiplier = 2
 M.property_expansion_stamina_cost = 50000
 M.property_lifecycle_ticks = M.ticks_per_minute
+M.property_auto_trade_ticks = M.ticks_per_minute
+M.property_auto_trade_max_items = 1000
 M.admin_experience_grant = 1000000
+M.admin_credit_grant = 1000000
 M.blueprint_max_entities = 16384
 M.blueprint_max_tiles = 4096
 M.blueprint_max_span = 256
@@ -187,6 +193,9 @@ M.crime_coin_cost = 1000
 M.crime_stamina_cost = 10000
 M.crime_price_scale = 10000
 M.faction_switch_min_online_hours = 1
+M.faction_switch_coin_cost = 1000
+M.faction_switch_cooldown_hours = 1
+M.faction_switch_nauvis_respawn_seconds = 30
 M.crime_min_online_hours = 1
 M.ship_build_min_online_hours = 1
 M.deconstruction_min_online_hours = 1

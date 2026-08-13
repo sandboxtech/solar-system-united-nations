@@ -1,4 +1,5 @@
 local config = require('config')
+local economy = require('scripts.economy')
 local events = require('scripts.events')
 local settings = require('scripts.settings')
 local stamina = require('scripts.stamina')
@@ -56,6 +57,10 @@ end
 
 function M.switch_stamina_cost(target_planet)
     return target_planet == 'nauvis' and 0 or config.suicide_stamina_cost
+end
+
+function M.switch_coin_cost(target_planet)
+    return target_planet == 'nauvis' and 0 or config.faction_switch_coin_cost
 end
 
 function M.all()
@@ -265,7 +270,16 @@ local function character_of(player)
     return nil
 end
 
-function M.switch_by_suicide(player, target_planet)
+local function switch_cooldown_left(player)
+    local account = economy.ensure_account(player.index)
+    local last_tick = tonumber(account.last_faction_switch_tick)
+    if not last_tick then return 0 end
+    local cooldown = config.faction_switch_cooldown_hours
+        * config.ticks_per_hour
+    return math.max(0, last_tick + cooldown - game.tick)
+end
+
+function M.switch_availability(player, target_planet)
     if not (player and player.valid) then return false, 'invalid-player' end
     if not planet_set[target_planet] then return false, 'invalid-planet' end
     local source_planet = M.of_player(player)
@@ -277,15 +291,76 @@ function M.switch_by_suicide(player, target_planet)
         ) then
         return false, 'faction-online-time'
     end
-    local stamina_cost = M.switch_stamina_cost(target_planet)
-    if stamina.get(player.index) < stamina_cost then
+    local cooldown_left = switch_cooldown_left(player)
+    if cooldown_left > 0 then return false, 'faction-cooldown', cooldown_left end
+    if target_planet ~= 'nauvis'
+            and (not player.physical_surface
+                or player.physical_surface.name ~= target_planet) then
+        return false, 'faction-target-location'
+    end
+    if stamina.get(player.index) < M.switch_stamina_cost(target_planet) then
         return false, 'insufficient-stamina'
     end
+    if economy.get_balance(player.index) < M.switch_coin_cost(target_planet) then
+        return false, 'insufficient-credit'
+    end
+    return true
+end
+
+local function apply_switch(player, source_planet, target_planet)
+    local target_force = M.of_planet(target_planet)
+    if not (target_force and target_force.valid) then
+        return false, 'invalid-planet'
+    end
+    for _, handler in ipairs(switch_cleanup_handlers) do
+        local ok, err = pcall(handler, player, source_planet, target_planet)
+        if not ok then
+            log('[un] faction switch cleanup failed: ' .. tostring(err))
+        end
+    end
+    player.force = target_force
+    economy.ensure_account(player.index).last_faction_switch_tick = game.tick
+    game.print({
+        'un.faction-switch-broadcast',
+        player.name,
+        M.display_name(target_planet),
+    })
+    return true
+end
+
+function M.switch_by_suicide(player, target_planet)
+    local available, err, detail = M.switch_availability(player, target_planet)
+    if not available then return false, err, detail end
+    local source_planet = M.of_player(player)
+    local stamina_cost = M.switch_stamina_cost(target_planet)
+    local coin_cost = M.switch_coin_cost(target_planet)
     local character = character_of(player)
     if not character then return false, 'no-character' end
 
+    if coin_cost > 0 and not economy.change(
+            player.index, -coin_cost, 'faction-switch'
+        ) then
+        return false, 'insufficient-credit'
+    end
     if not stamina.spend(player.index, stamina_cost) then
+        if coin_cost > 0 then
+            economy.change(player.index, coin_cost, 'faction-switch-refund')
+        end
         return false, 'insufficient-stamina'
+    end
+
+    if target_planet ~= 'nauvis' then
+        local switched, switch_error = apply_switch(
+            player, source_planet, target_planet
+        )
+        if not switched then
+            stamina.refund(player.index, stamina_cost)
+            if coin_cost > 0 then
+                economy.change(player.index, coin_cost, 'faction-switch-refund')
+            end
+            return false, switch_error
+        end
+        return true
     end
 
     storage.pending_faction_switches[player.index] = {
@@ -293,6 +368,8 @@ function M.switch_by_suicide(player, target_planet)
         target_planet = target_planet,
         requested_tick = game.tick,
         stamina_cost = stamina_cost,
+        coin_cost = coin_cost,
+        respawn_seconds = config.faction_switch_nauvis_respawn_seconds,
     }
     storage.respawn_hospice_planets[player.index] = target_planet
     local died = character.die(game.forces.neutral)
@@ -300,6 +377,9 @@ function M.switch_by_suicide(player, target_planet)
         storage.pending_faction_switches[player.index] = nil
         storage.respawn_hospice_planets[player.index] = nil
         stamina.refund(player.index, stamina_cost)
+        if coin_cost > 0 then
+            economy.change(player.index, coin_cost, 'faction-switch-refund')
+        end
         return false, 'death-failed'
     end
     return true
@@ -309,30 +389,12 @@ local function finish_switch(player)
     local pending = storage.pending_faction_switches[player.index]
     if not pending then return false end
     storage.pending_faction_switches[player.index] = nil
-    local target_force = M.of_planet(pending.target_planet)
-    if not (target_force and target_force.valid) then
+    if not M.of_planet(pending.target_planet) then
         log('[un] faction switch target missing: '
             .. tostring(pending.target_planet))
         return false
     end
-    for _, handler in ipairs(switch_cleanup_handlers) do
-        local ok, err = pcall(
-            handler,
-            player,
-            pending.source_planet,
-            pending.target_planet
-        )
-        if not ok then
-            log('[un] faction switch cleanup failed: ' .. tostring(err))
-        end
-    end
-    player.force = target_force
-    game.print({
-        'un.faction-switch-broadcast',
-        player.name,
-        M.display_name(pending.target_planet),
-    })
-    return true
+    return apply_switch(player, pending.source_planet, pending.target_planet)
 end
 
 events.on(defines.events.on_player_created, function(event)

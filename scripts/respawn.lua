@@ -38,7 +38,8 @@ events.on(defines.events.on_player_died, function(event)
         and storage.pending_faction_switches[player.index]
     if switching then
         player.ticks_to_respawn =
-            config.normal_respawn_seconds * config.ticks_per_second
+            (switching.respawn_seconds or config.normal_respawn_seconds)
+            * config.ticks_per_second
         return
     end
 
