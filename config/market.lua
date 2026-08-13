@@ -1,10 +1,10 @@
 return function(M)
-    M.market_curve_version = 3
-    M.market_initial_stock_value = 1000000
-    M.market_empty_price_multiplier = 1000
-    M.market_trade_stamina_cost = 100
-
-    -- Every item needs only a base price. Initial stock is derived from it.
+    M.market_curve_version = 4
+    -- A net purchase with this base-price value moves the spot price by the
+    -- configured multiplier. Individual items still need only a base price.
+    M.market_depth_value = 1000000
+    M.market_depth_price_multiplier = 1000
+    M.market_sell_fee_rate = 0.01
     M.market_items = {
         {name = 'iron-ore', base_price = 100, group = 'raw'},
         {name = 'copper-ore', base_price = 100, group = 'raw'},
