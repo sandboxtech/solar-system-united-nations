@@ -22,12 +22,10 @@ local M = {}
 M.market_gui = require('scripts.market_gui')
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 15
+local HUD_LAYOUT_VERSION = 16
 local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_RESET_COUNTDOWN_NAME = 'un_hud_reset_countdown'
 local HUD_MENU_NAME = 'un_hud_menu'
-local HUD_HOME_SHUTTLE_NAME = 'un_hud_home_shuttle'
-local HUD_PROPERTY_CYCLE_NAME = 'un_hud_property_cycle'
 local FRAME_NAME = 'un_main_frame'
 local FRAME_WIDTH_FRACTION = 0.72
 local FRAME_MIN_WIDTH = 1050
@@ -43,7 +41,6 @@ local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
 local NAV_PLAYERS_NAME = 'un_nav_players'
-local NAV_FACTIONS_NAME = 'un_nav_factions'
 local NAV_ADMIN_NAME = 'un_nav_admin'
 local HELP_STORY_NAME = 'un_help_story'
 local HELP_BRIEF_NAME = 'un_help_brief'
@@ -73,6 +70,7 @@ local SHIP_SCUTTLE_NAME = 'un_ship_scuttle'
 local SHIP_VISIBILITY_NAME = 'un_ship_visibility'
 local SHIP_SCROLL_NAME = 'un_ship_scroll'
 local SHIP_TABLE_NAME = 'un_ship_table'
+local SHIP_VIEW_PREFIX = 'un_ship_view_'
 local PROPERTY_SCROLL_NAME = 'un_property_scroll'
 local PROPERTY_TABLE_NAME = 'un_property_table'
 local PROPERTY_BUILD_FORM_NAME = 'un_property_build_form'
@@ -103,7 +101,6 @@ local TECH_LEAK_COUNTDOWN_NAME = 'un_tech_leak_countdown'
 local CRIME_ACTIONS_NAME = 'un_crime_actions'
 local CRIME_STATUS_NAME = 'un_crime_status'
 local CRIME_BUTTON_NAME = 'un_crime_button'
-local FACTION_TABLE_NAME = 'un_faction_table'
 local FACTION_SWITCH_PREFIX = 'un_faction_switch_'
 local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
@@ -174,36 +171,6 @@ local function table_in_scroll(content, scroll_name, table_name)
     if scroll and scroll.valid then return scroll[table_name] end
     -- Keep already-open windows from older scenario code safe until rebuilt.
     return content[table_name]
-end
-
-local function travel_button_error(err)
-    if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
-    if err == 'planet-closed' then return {'un.travel-planet-closed'} end
-    if err == 'no-owned-property' then return {'un.hud-property-none-tooltip'} end
-    return {'un.travel-restricted'}
-end
-
-local function update_travel_buttons(player, hud)
-    hud = hud or player.gui.top[HUD_FLOW_NAME]
-    if not (hud and hud.valid) then return end
-    local shuttle = hud[HUD_HOME_SHUTTLE_NAME]
-    if shuttle and shuttle.valid then
-        local available, err, context = properties.home_shuttle_availability(player)
-        shuttle.enabled = available
-        shuttle.tooltip = available and (context == 'planet'
-            and {'un.hud-shuttle-to-hospice-tooltip'}
-            or {'un.hud-shuttle-to-planet-tooltip'})
-            or travel_button_error(err)
-    end
-    local property = hud[HUD_PROPERTY_CYCLE_NAME]
-    if property and property.valid then
-        local available, err, count
-            = properties.owned_property_travel_availability(player)
-        property.enabled = available
-        property.tooltip = available
-            and {'un.hud-property-cycle-tooltip', count}
-            or travel_button_error(err)
-    end
 end
 
 local function update_hud_title(player, hud)
@@ -297,12 +264,9 @@ function M.ensure_button(player)
             and hud[HUD_TITLE_NAME]
             and hud[HUD_RESET_COUNTDOWN_NAME]
             and hud[HUD_MENU_NAME]
-            and hud[HUD_HOME_SHUTTLE_NAME]
-            and hud[HUD_PROPERTY_CYCLE_NAME]
         if complete then
             update_hud_title(player, hud)
             update_hud_reset_countdown(player, hud)
-            update_travel_buttons(player, hud)
             return hud
         end
         hud.destroy()
@@ -341,10 +305,6 @@ function M.ensure_button(player)
     countdown.style.right_margin = 6
     local buttons = {
         {HUD_MENU_NAME, {'un.hud-action-button'}, {'un.hud-menu-tooltip'}},
-        {HUD_HOME_SHUTTLE_NAME, {'un.hud-travel-button'},
-            {'un.hud-shuttle-tooltip'}},
-        {HUD_PROPERTY_CYCLE_NAME, {'un.hud-property-button'},
-            {'un.hud-property-none-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
         local button = hud.add{
@@ -358,7 +318,6 @@ function M.ensure_button(player)
     end
     update_hud_title(player, hud)
     update_hud_reset_countdown(player, hud)
-    update_travel_buttons(player, hud)
     return hud
 end
 
@@ -402,9 +361,6 @@ local function disabled_tooltip(action, err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
-    if err == 'no-owned-property' then
-        return {'un.hud-property-none-tooltip'}
-    end
     if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
     if action == 'enter' and err == 'not-owner' then
         return {'un.property-enter-disabled-private'}
@@ -1200,61 +1156,43 @@ local function render_ubi_section(content)
         config.normal_respawn_seconds,
     }
     local coin_tooltip = {'un.coin-tooltip'}
-    local balance = content.add{
-        type = 'table',
-        name = BALANCE_TABLE_NAME,
-        column_count = 2,
-        style = 'bordered_table',
+    local stamina_card = content.add{
+        type = 'frame', name = 'un_stamina_card', direction = 'vertical',
     }
-    balance.add{
+    stamina_card.style.horizontally_stretchable = true
+    stamina_card.style.padding = 12
+    local stamina_heading = stamina_card.add{type = 'flow', direction = 'horizontal'}
+    stamina_heading.style.horizontally_stretchable = true
+    stamina_heading.style.vertical_align = 'center'
+    stamina_heading.add{
         type = 'label',
-        caption = {'un.credit-label'},
-        tooltip = coin_tooltip,
-    }
-    balance.add{
-        type = 'label',
-        name = BALANCE_NAME,
-        tooltip = coin_tooltip,
-    }
-    balance.add{
-        type = 'label',
-        caption = {'un.stamina-label'},
+        caption = {'un.personal-stamina-section'},
         tooltip = stamina_tooltip,
     }
-    balance.add{
+    local stamina_spacer = stamina_heading.add{type = 'empty-widget'}
+    stamina_spacer.style.horizontally_stretchable = true
+    local stamina_value = stamina_heading.add{
         type = 'label',
         name = STAMINA_NAME,
         tooltip = stamina_tooltip,
     }
-
-    local progress = content.add{
+    stamina_value.style.horizontal_align = 'right'
+    local stamina_progress = stamina_card.add{
         type = 'progressbar',
-        name = UBI_PROGRESS_NAME,
+        name = 'un_stamina_progress',
         value = 0,
-        tooltip = ubi_tooltip,
+        tooltip = stamina_tooltip,
     }
-    progress.style.width = PERSONAL_ACTION_WIDTH * 2 + 8
-    local actions = content.add{
-        type = 'table',
+    stamina_progress.style.horizontally_stretchable = true
+    stamina_progress.style.minimal_width = PERSONAL_ACTION_WIDTH * 2 + 8
+    stamina_progress.style.height = 28
+    local actions = stamina_card.add{
+        type = 'flow',
         name = 'un_personal_actions',
-        column_count = 2,
+        direction = 'horizontal',
     }
-    local claim = actions.add{
-        type = 'button',
-        name = UBI_CLAIM_NAME,
-        caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
-        tooltip = ubi_tooltip,
-    }
-    claim.style.width = PERSONAL_ACTION_WIDTH
-
-    local convert = actions.add{
-        type = 'button',
-        name = 'un_experience_convert',
-        caption = {'un.experience-convert-backpack'},
-        tooltip = {'un.experience-convert-backpack-tooltip'},
-    }
-    convert.style.width = PERSONAL_ACTION_WIDTH
-
+    actions.style.horizontally_stretchable = true
+    actions.style.top_margin = 8
     local kit = actions.add{
         type = 'button',
         name = STARTER_KIT_NAME,
@@ -1268,7 +1206,6 @@ local function render_ubi_section(content)
         tags = {action = 'starter-kit-buy'},
     }
     kit.style.width = PERSONAL_ACTION_WIDTH
-
     local wood = actions.add{
         type = 'button',
         name = WOOD_SUPPLY_NAME,
@@ -1285,6 +1222,47 @@ local function render_ubi_section(content)
         tags = {action = 'wood-supply-buy'},
     }
     wood.style.width = PERSONAL_ACTION_WIDTH
+
+    local coin_card = content.add{
+        type = 'frame', name = 'un_coin_card', direction = 'vertical',
+    }
+    coin_card.style.horizontally_stretchable = true
+    coin_card.style.padding = 12
+    local balance = coin_card.add{
+        type = 'flow',
+        name = BALANCE_TABLE_NAME,
+        direction = 'horizontal',
+    }
+    balance.style.horizontally_stretchable = true
+    balance.style.vertical_align = 'center'
+    balance.add{
+        type = 'label',
+        caption = {'un.personal-coin-section'},
+        tooltip = coin_tooltip,
+    }
+    local coin_spacer = balance.add{type = 'empty-widget'}
+    coin_spacer.style.horizontally_stretchable = true
+    local coin_value = balance.add{
+        type = 'label', name = BALANCE_NAME, tooltip = coin_tooltip,
+    }
+    coin_value.style.horizontal_align = 'right'
+    local progress = coin_card.add{
+        type = 'progressbar',
+        name = UBI_PROGRESS_NAME,
+        value = 0,
+        tooltip = ubi_tooltip,
+    }
+    progress.style.horizontally_stretchable = true
+    progress.style.minimal_width = PERSONAL_ACTION_WIDTH * 2 + 8
+    progress.style.height = 28
+    local claim = coin_card.add{
+        type = 'button',
+        name = UBI_CLAIM_NAME,
+        caption = {'un.ubi-claim', 0, economy.get_ubi_capacity()},
+        tooltip = ubi_tooltip,
+    }
+    claim.style.width = PERSONAL_ACTION_WIDTH
+    claim.style.top_margin = 8
 end
 
 local function render_ship_actions(player, content)
@@ -1324,7 +1302,13 @@ local function render_ship_actions(player, content)
 end
 
 local function render_experience_section(content)
-    local heading = content.add{type = 'flow', direction = 'horizontal'}
+    local card = content.add{
+        type = 'frame', name = 'un_experience_card', direction = 'vertical',
+    }
+    card.style.horizontally_stretchable = true
+    card.style.padding = 12
+    local heading = card.add{type = 'flow', direction = 'horizontal'}
+    heading.style.horizontally_stretchable = true
     heading.style.vertical_align = 'center'
     heading.add{
         type = 'label',
@@ -1332,12 +1316,23 @@ local function render_experience_section(content)
         tooltip = {'un.experience-tooltip'},
     }
     add_info_sprite(heading, {'un.experience-tooltip'})
-    local grid = content.add{
+    local experience_spacer = heading.add{type = 'empty-widget'}
+    experience_spacer.style.horizontally_stretchable = true
+    local convert = heading.add{
+        type = 'button',
+        name = 'un_experience_convert',
+        caption = {'un.experience-convert-backpack'},
+        tooltip = {'un.experience-convert-backpack-tooltip'},
+    }
+    convert.style.width = PERSONAL_ACTION_WIDTH
+    local grid = card.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
         column_count = 3,
         style = 'bordered_table',
     }
+    grid.style.horizontally_stretchable = true
+    grid.style.top_margin = 8
     for index, name in ipairs(config.science_pack_order) do
         grid.add{type = 'sprite', sprite = 'item/' .. name}
         local progress = grid.add{
@@ -1345,15 +1340,18 @@ local function render_experience_section(content)
             name = experience_progress_name(index),
             value = 0,
         }
-        progress.style.width = 120
-        grid.add{type = 'label', name = experience_amount_name(index)}
+        progress.style.horizontally_stretchable = true
+        progress.style.minimal_width = 240
+        local amount = grid.add{
+            type = 'label', name = experience_amount_name(index),
+        }
+        amount.style.minimal_width = 260
     end
-    content.add{type = 'label', name = EXPERIENCE_SUMMARY_NAME}
+    card.add{type = 'label', name = EXPERIENCE_SUMMARY_NAME}
 end
 
 local function render_overview_page(player, frame, content)
     render_ubi_section(content)
-    content.add{type = 'line'}
     render_experience_section(content)
     set_frame_state(frame, 'overview')
     local tags = frame.tags
@@ -1382,15 +1380,17 @@ local function render_ships_page(player, frame, content)
     local list = scroll.add{
         type = 'table',
         name = SHIP_TABLE_NAME,
-        column_count = 4,
+        column_count = 5,
         style = 'bordered_table',
     }
     list.add{type = 'label', caption = {'un.ship-column-owner'}}
     list.add{type = 'label', caption = {'un.ship-column-name'}}
+    list.add{type = 'label', caption = {'un.ship-column-view'}}
     list.add{type = 'label', caption = {'un.ship-column-orbit'}}
     list.add{type = 'label', caption = {'un.ship-column-remaining'}}
     if #list_data == 0 then
         list.add{type = 'label', caption = {'un.ship-list-empty'}}
+        list.add{type = 'label', caption = ''}
         list.add{type = 'label', caption = ''}
         list.add{type = 'label', caption = ''}
         list.add{type = 'label', caption = ''}
@@ -1405,6 +1405,13 @@ local function render_ships_page(player, frame, content)
                     or ('#' .. item.owner_index),
             }
             list.add{type = 'label', caption = item.platform.name}
+            list.add{
+                type = 'button',
+                name = SHIP_VIEW_PREFIX .. tostring(item.index),
+                caption = {'un.ship-view'},
+                tooltip = {'un.ship-view-tooltip'},
+                tags = {action = 'ship-view', platform_index = item.index},
+            }
             list.add{
                 type = 'label',
                 caption = planet_label(item.record.planet_name
@@ -1422,6 +1429,9 @@ local function render_ships_page(player, frame, content)
     frame.tags = tags
 end
 
+local faction_element_name
+local update_factions_page
+
 local function render_planets_page(player, frame, content)
     local leak_left = technology_decay.left_ticks()
     local header = content.add{
@@ -1430,6 +1440,29 @@ local function render_planets_page(player, frame, content)
         direction = 'horizontal',
     }
     header.style.vertical_align = 'center'
+    header.add{
+        type = 'label',
+        caption = {
+            'un.faction-current-summary',
+            factions.display_name(factions.of_player(player) or 'nauvis'),
+        },
+    }
+    add_info_sprite(header, {
+        '',
+        {
+            'un.faction-page-tooltip',
+            settings.get('faction_friendly_to_hostile_percent'),
+            settings.get('faction_hostile_to_friendly_percent'),
+            settings.get('surface_hidden_from_foreign_factions')
+                and {'un.yes'} or {'un.no'},
+            settings.get('surface_hidden_from_home_faction')
+                and {'un.yes'} or {'un.no'},
+        },
+        '\n\n',
+        {'un.faction-aquilo-neutral'},
+    })
+    local header_spacer = header.add{type = 'empty-widget'}
+    header_spacer.style.horizontally_stretchable = true
     header.add{
         type = 'label',
         name = TECH_LEAK_COUNTDOWN_NAME,
@@ -1457,14 +1490,19 @@ local function render_planets_page(player, frame, content)
     local list = content.add{
         type = 'table',
         name = PLANET_TABLE_NAME,
-        column_count = 3,
+        column_count = 8,
         style = 'bordered_table',
     }
-    list.add{type = 'label', caption = {'un.planet-column-name'}}
+    list.add{type = 'label', caption = {'un.faction-column-name'}}
     list.add{type = 'label', caption = {'un.planet-column-countdown'}}
     list.add{type = 'label', caption = {'un.planet-column-traits'}}
+    list.add{type = 'label', caption = {'un.faction-column-relation'}}
+    list.add{type = 'label', caption = {'un.faction-column-population'}}
+    list.add{type = 'label', caption = {'un.faction-column-properties'}}
+    list.add{type = 'label', caption = {'un.faction-column-ships'}}
+    list.add{type = 'label', caption = {'un.faction-column-action'}}
     for _, item in ipairs(disasters.list()) do
-        list.add{type = 'label', caption = planet_label(item.name)}
+        list.add{type = 'label', caption = factions.display_name(item.name)}
         list.add{type = 'label', name = planet_countdown_name(item.name)}
         local traits = list.add{
             type = 'flow',
@@ -1472,11 +1510,22 @@ local function render_planets_page(player, frame, content)
             direction = 'vertical',
         }
         render_planet_traits(traits, item)
+        list.add{type = 'label', name = faction_element_name('status', item.name)}
+        list.add{type = 'label', name = faction_element_name('population', item.name)}
+        list.add{type = 'label', name = faction_element_name('properties', item.name)}
+        list.add{type = 'label', name = faction_element_name('ships', item.name)}
+        list.add{
+            type = 'button',
+            name = FACTION_SWITCH_PREFIX .. item.name,
+            caption = {'un.faction-switch'},
+            tags = {action = 'faction-switch', planet = item.name},
+        }
     end
     set_frame_state(frame, 'planets')
+    update_factions_page(player, content)
 end
 
-local function faction_element_name(kind, planet_name)
+faction_element_name = function(kind, planet_name)
     return 'un_faction_' .. kind .. '_' .. planet_name
 end
 
@@ -1504,8 +1553,8 @@ local function faction_statistics(planet_name, ship_list, property_counts)
     }
 end
 
-local function update_factions_page(player, content)
-    local list = content[FACTION_TABLE_NAME]
+update_factions_page = function(player, content)
+    local list = content[PLANET_TABLE_NAME]
     if not (list and list.valid) then return end
     local current = factions.of_player(player)
     local ship_list = ships.list()
@@ -1522,10 +1571,9 @@ local function update_factions_page(player, content)
         local ship_count = list[faction_element_name('ships', planet_name)]
         local button = list[FACTION_SWITCH_PREFIX .. planet_name]
         local switch_cost = factions.switch_stamina_cost(planet_name)
-        local online_ready = settings.online_requirement_met(
-            player,
-            'faction_switch_min_online_hours'
-        )
+        local switch_coin = factions.switch_coin_cost(planet_name)
+        local can_switch, switch_error, switch_detail
+            = factions.switch_availability(player, planet_name)
         if status and status.valid then
             status.caption = current == planet_name
                 and {'un.faction-current'}
@@ -1541,12 +1589,10 @@ local function update_factions_page(player, content)
             ship_count.caption = tostring(data.ships)
         end
         if button and button.valid then
-            button.enabled = current ~= planet_name
-                and online_ready
-                and stamina.get(player.index) >= switch_cost
+            button.enabled = can_switch
             if current == planet_name then
                 button.tooltip = {'un.faction-already-current'}
-            elseif not online_ready then
+            elseif switch_error == 'faction-online-time' then
                 button.tooltip = {
                     '',
                     online_requirement_caption(
@@ -1555,36 +1601,42 @@ local function update_factions_page(player, content)
                         'un.faction-online-required'
                     ),
                     '\n\n',
-                    switch_cost == 0 and {
+                    planet_name == 'nauvis' and {
                         'un.faction-switch-tooltip-free',
                         planet_label(planet_name),
-                        config.normal_respawn_seconds,
+                        config.faction_switch_nauvis_respawn_seconds,
                     } or {
                         'un.faction-switch-tooltip',
                         planet_label(planet_name),
                         switch_cost,
-                        config.normal_respawn_seconds,
+                        switch_coin,
+                        config.faction_switch_cooldown_hours,
                     },
                 }
             else
-                button.tooltip = switch_cost == 0 and {
+                local base_tooltip = planet_name == 'nauvis' and {
                     'un.faction-switch-tooltip-free',
                     planet_label(planet_name),
-                    config.normal_respawn_seconds,
+                    config.faction_switch_nauvis_respawn_seconds,
                 } or {
-                    '',
-                    {
                     'un.faction-switch-tooltip',
                     planet_label(planet_name),
                     switch_cost,
-                    config.normal_respawn_seconds,
-                    },
-                    button.enabled and '' or {
-                        '',
-                        '\n',
-                        {'un.suicide-stamina-insufficient'},
-                    },
+                    switch_coin,
+                    config.faction_switch_cooldown_hours,
                 }
+                local reason = switch_error == 'faction-target-location'
+                    and {'un.faction-target-location-required',
+                        planet_label(planet_name)}
+                    or switch_error == 'faction-cooldown'
+                    and {'un.faction-switch-cooldown', format_countdown(switch_detail)}
+                    or switch_error == 'insufficient-credit'
+                    and {'un.credit-insufficient'}
+                    or switch_error == 'insufficient-stamina'
+                    and {'un.suicide-stamina-insufficient'}
+                button.tooltip = reason and {
+                    '', reason, '\n\n', base_tooltip,
+                } or base_tooltip
             end
             if button.tags.action ~= 'faction-switch-confirm' then
                 button.caption = current == planet_name
@@ -1596,63 +1648,6 @@ local function update_factions_page(player, content)
             end
         end
     end
-end
-
-local function render_factions_page(player, frame, content)
-    local current_planet = factions.of_player(player) or 'nauvis'
-    local summary = content.add{
-        type = 'flow',
-        direction = 'horizontal',
-    }
-    summary.style.vertical_align = 'center'
-    summary.add{
-        type = 'label',
-        caption = {
-            'un.faction-current-summary',
-            factions.display_name(current_planet),
-        },
-    }
-    add_info_sprite(summary, {
-        '',
-        {
-            'un.faction-page-tooltip',
-            settings.get('faction_friendly_to_hostile_percent'),
-            settings.get('faction_hostile_to_friendly_percent'),
-            settings.get('surface_hidden_from_foreign_factions')
-                and {'un.yes'} or {'un.no'},
-            settings.get('surface_hidden_from_home_faction')
-                and {'un.yes'} or {'un.no'},
-        },
-        '\n\n',
-        {'un.faction-aquilo-neutral'},
-    })
-    local list = content.add{
-        type = 'table',
-        name = FACTION_TABLE_NAME,
-        column_count = 6,
-        style = 'bordered_table',
-    }
-    list.add{type = 'label', caption = {'un.faction-column-name'}}
-    list.add{type = 'label', caption = {'un.faction-column-relation'}}
-    list.add{type = 'label', caption = {'un.faction-column-population'}}
-    list.add{type = 'label', caption = {'un.faction-column-properties'}}
-    list.add{type = 'label', caption = {'un.faction-column-ships'}}
-    list.add{type = 'label', caption = {'un.faction-column-action'}}
-    for _, planet_name in ipairs(config.public_planets) do
-        list.add{type = 'label', caption = factions.display_name(planet_name)}
-        list.add{type = 'label', name = faction_element_name('status', planet_name)}
-        list.add{type = 'label', name = faction_element_name('population', planet_name)}
-        list.add{type = 'label', name = faction_element_name('properties', planet_name)}
-        list.add{type = 'label', name = faction_element_name('ships', planet_name)}
-        list.add{
-            type = 'button',
-            name = FACTION_SWITCH_PREFIX .. planet_name,
-            caption = {'un.faction-switch'},
-            tags = {action = 'faction-switch', planet = planet_name},
-        }
-    end
-    set_frame_state(frame, 'factions')
-    update_factions_page(player, content)
 end
 
 crime_error_caption = function(err)
@@ -1826,6 +1821,12 @@ local function render_admin_page(player, frame, content)
         tooltip = {'un.admin-grant-experience-tooltip',
             config.admin_experience_grant},
         tags = {action = 'admin-grant-experience'},
+    }
+    actions.add{
+        type = 'button',
+        caption = {'un.admin-grant-credit'},
+        tooltip = {'un.admin-grant-credit-tooltip', config.admin_credit_grant},
+        tags = {action = 'admin-grant-credit'},
     }
     actions.add{
         type = 'button',
@@ -2563,8 +2564,6 @@ local function render_page(player, page)
         render_ships_page(player, frame, content)
     elseif page == 'players' then
         render_players_page(player, frame, content)
-    elseif page == 'factions' then
-        render_factions_page(player, frame, content)
     elseif page == 'admin' then
         render_admin_page(player, frame, content)
     else
@@ -2582,7 +2581,6 @@ local function render_page(player, page)
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
-    navigation[NAV_FACTIONS_NAME].enabled = page ~= 'factions'
     local admin = navigation[NAV_ADMIN_NAME]
     if admin and admin.valid then admin.enabled = page ~= 'admin' end
 end
@@ -2597,9 +2595,6 @@ local function property_error(err)
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
-    if err == 'no-owned-property' then
-        return {'un.hud-property-none-tooltip'}
-    end
     if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
     if err == 'ship-invalid-planet' then return {'un.ship-invalid-planet'} end
     if err == 'ship-already-have' then return {'un.ship-already-have'} end
@@ -2704,7 +2699,7 @@ local function update_property_row(player, property_table, property)
 end
 
 local function update_ship_actions(player, content)
-    local platform, record = ships.of(player.index)
+    local platform, record = ships.of(player.index, factions.of_player(player))
     local status = content[SHIP_STATUS_NAME]
     local ship_actions = content[SHIP_ACTIONS_NAME]
     if not (status and status.valid and ship_actions and ship_actions.valid) then
@@ -2754,14 +2749,18 @@ local function update_frame(player)
     end
 
     if page == 'overview' then
-        local balance_table = content[BALANCE_TABLE_NAME]
+        local stamina_card = content['un_stamina_card']
+        local coin_card = content['un_coin_card']
+        local experience_card = content['un_experience_card']
+        local balance_table = coin_card and coin_card.valid
+            and coin_card[BALANCE_TABLE_NAME]
         local balance = balance_table and balance_table.valid
             and balance_table[BALANCE_NAME]
         if balance and balance.valid then
             balance.caption = format_integer(economy.get_balance(player.index))
         end
-        local stamina_label = balance_table and balance_table.valid
-            and balance_table[STAMINA_NAME]
+        local stamina_label = stamina_card and stamina_card.valid
+            and stamina_card[STAMINA_NAME]
         if stamina_label and stamina_label.valid then
             stamina_label.caption = {
                 'un.stamina-amount',
@@ -2769,17 +2768,35 @@ local function update_frame(player)
                 format_integer(config.stamina_max),
             }
         end
+        local stamina_progress = stamina_card and stamina_card.valid
+            and stamina_card['un_stamina_progress']
+        if stamina_progress and stamina_progress.valid then
+            stamina_progress.value = math.max(0, math.min(
+                1, stamina.get(player.index) / config.stamina_max
+            ))
+            stamina_progress.caption = {
+                'un.stamina-progress',
+                format_integer(stamina.get(player.index)),
+                format_integer(config.stamina_max),
+            }
+        end
 
         local claimable = economy.get_claimable_ubi(player.index)
         local capacity = economy.get_ubi_capacity()
-        local progress = content[UBI_PROGRESS_NAME]
+        local progress = coin_card and coin_card.valid
+            and coin_card[UBI_PROGRESS_NAME]
         if progress and progress.valid then
             progress.value = capacity > 0 and claimable / capacity or 0
-            progress.caption = ''
+            progress.caption = {
+                'un.ubi-progress',
+                format_integer(claimable),
+                format_integer(capacity),
+            }
         end
-        local personal_actions = content.un_personal_actions
-        local claim = personal_actions and personal_actions.valid
-            and personal_actions[UBI_CLAIM_NAME]
+        local personal_actions = stamina_card and stamina_card.valid
+            and stamina_card.un_personal_actions
+        local claim = coin_card and coin_card.valid
+            and coin_card[UBI_CLAIM_NAME]
         if claim and claim.valid then
             claim.enabled = claimable > 0
             claim.caption = {
@@ -2788,8 +2805,8 @@ local function update_frame(player)
                 format_integer(capacity),
             }
         end
-        local convert = personal_actions and personal_actions.valid
-            and personal_actions.un_experience_convert
+        local convert = experience_card and experience_card.valid
+            and experience_card.un_experience_convert
         if convert and convert.valid then
             convert.enabled = linked_inventory.backpack_science_count(player) > 0
         end
@@ -2846,7 +2863,8 @@ local function update_frame(player)
         end
         if list_refresh_due(frame, 'experience') then
             local data = experience.get(player.index)
-            local grid = content[EXPERIENCE_TABLE_NAME]
+            local grid = experience_card and experience_card.valid
+                and experience_card[EXPERIENCE_TABLE_NAME]
             for index, name in ipairs(config.science_pack_order) do
                 local amount = data[name] or 0
                 local threshold = experience.next_threshold(amount)
@@ -2864,7 +2882,8 @@ local function update_frame(player)
                     }
                 end
             end
-            local summary = content[EXPERIENCE_SUMMARY_NAME]
+            local summary = experience_card and experience_card.valid
+                and experience_card[EXPERIENCE_SUMMARY_NAME]
             if summary and summary.valid then
                 summary.caption = {
                     'un.experience-summary',
@@ -2915,6 +2934,7 @@ local function update_frame(player)
                     render_planet_traits(traits, item)
                 end
             end
+            update_factions_page(player, content)
         end
     elseif page == 'ships' then
         if list_refresh_due(frame, 'ships') then
@@ -2982,10 +3002,6 @@ local function update_frame(player)
                 or list_refresh_due(frame, 'crime') then
             content.clear()
             M.render_crime_page(player, frame, content)
-        end
-    elseif page == 'factions' then
-        if list_refresh_due(frame, 'factions') then
-            update_factions_page(player, content)
         end
     elseif page == 'players' then
         if list_refresh_due(frame, 'players') then
@@ -3101,11 +3117,6 @@ local function open_frame(player, initial_page)
         caption = {'un.page-crime'},
     }
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
-    navigation.add{
-        type = 'button',
-        name = NAV_FACTIONS_NAME,
-        caption = {'un.page-factions'},
-    }
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
     if player.admin then
@@ -3170,7 +3181,6 @@ events.on(
 events.on(defines.events.on_player_changed_surface, function(event)
     local player = game.get_player(event.player_index)
     if player then
-        update_travel_buttons(player)
         local frame = player.gui.screen[FRAME_NAME]
         if frame and frame.valid
                 and (frame.tags.page == 'property'
@@ -3184,7 +3194,6 @@ events.on(defines.events.on_player_changed_force, function(event)
     if player then
         update_hud_title(player)
         update_hud_reset_countdown(player)
-        update_travel_buttons(player)
         local frame = player.gui.screen[FRAME_NAME]
         if frame and frame.valid and frame.tags.page == 'property' then
             update_frame(player)
@@ -3211,15 +3220,12 @@ events.on(defines.events.on_gui_click, function(event)
     local player = game.get_player(event.player_index)
     if not player then return end
     if element.name == HUD_MENU_NAME then
-        open_frame(player, 'help')
-    elseif element.name == HUD_HOME_SHUTTLE_NAME then
-        local ok, err = properties.home_shuttle(player)
-        if not ok then player.print(property_error(err)) end
-        update_travel_buttons(player)
-    elseif element.name == HUD_PROPERTY_CYCLE_NAME then
-        local ok, err = properties.travel_to_owned_property(player)
-        if not ok then player.print(property_error(err)) end
-        update_travel_buttons(player)
+        local frame = player.gui.screen[FRAME_NAME]
+        if frame and frame.valid then
+            close_frame(player)
+        else
+            open_frame(player, 'help')
+        end
     elseif element.name == CLOSE_NAME then
         close_frame(player)
     elseif element.name == NAV_HELP_NAME then
@@ -3290,9 +3296,6 @@ events.on(defines.events.on_gui_click, function(event)
         update_frame(player)
     elseif element.name == NAV_PLAYERS_NAME then
         render_page(player, 'players')
-        update_frame(player)
-    elseif element.name == NAV_FACTIONS_NAME then
-        render_page(player, 'factions')
         update_frame(player)
     elseif element.name == NAV_ADMIN_NAME then
         if player.admin then
@@ -3369,6 +3372,15 @@ events.on(defines.events.on_gui_click, function(event)
             element.caption = {'un.ship-scuttle-confirm'}
             element.tags = {action = 'ship-scuttle-confirm'}
         end
+    elseif element.tags.action == 'ship-view' then
+        local ok, err = ships.remote_view(player, element.tags.platform_index)
+        if ok then
+            close_frame(player)
+        else
+            player.print(property_error(err))
+            render_page(player, 'ships')
+            update_frame(player)
+        end
     elseif element.name == CRIME_BUTTON_NAME then
         local attempted, result = crime.attempt(player)
         if not attempted then
@@ -3383,8 +3395,9 @@ events.on(defines.events.on_gui_click, function(event)
             == FACTION_SWITCH_PREFIX then
         local planet_name = element.tags.planet
         local switch_cost = factions.switch_stamina_cost(planet_name)
+        local switch_coin = factions.switch_coin_cost(planet_name)
         if element.tags.action == 'faction-switch-confirm' then
-            local ok, err = factions.switch_by_suicide(player, planet_name)
+            local ok, err, detail = factions.switch_by_suicide(player, planet_name)
             if ok then
                 close_frame(player)
             else
@@ -3397,6 +3410,14 @@ events.on(defines.events.on_gui_click, function(event)
                         'un.faction-online-required'
                     )
                     or err == 'same-faction' and {'un.faction-already-current'}
+                    or err == 'insufficient-credit' and {'un.credit-insufficient'}
+                    or err == 'faction-target-location' and {
+                        'un.faction-target-location-required',
+                        planet_label(planet_name),
+                    }
+                    or err == 'faction-cooldown' and {
+                        'un.faction-switch-cooldown', format_countdown(detail),
+                    }
                     or {'un.suicide-unavailable'})
             end
         else
@@ -3407,6 +3428,7 @@ events.on(defines.events.on_gui_click, function(event)
                 'un.faction-switch-confirm',
                 planet_label(planet_name),
                 switch_cost,
+                switch_coin,
             }
             element.tooltip = {
                 '',
@@ -3417,17 +3439,19 @@ events.on(defines.events.on_gui_click, function(event)
                     'un.faction-switch-confirm',
                     planet_label(planet_name),
                     switch_cost,
+                    switch_coin,
                 },
                 '\n',
                 switch_cost == 0 and {
                     'un.faction-switch-tooltip-free',
                     planet_label(planet_name),
-                    config.normal_respawn_seconds,
+                    config.faction_switch_nauvis_respawn_seconds,
                 } or {
                     'un.faction-switch-tooltip',
                     planet_label(planet_name),
                     switch_cost,
-                    config.normal_respawn_seconds,
+                    switch_coin,
+                    config.faction_switch_cooldown_hours,
                 },
             }
             element.tags = {
@@ -3507,6 +3531,15 @@ events.on(defines.events.on_gui_click, function(event)
                 experience.record(player.index, entries)
                 player.print({'un.admin-experience-granted',
                     config.admin_experience_grant})
+            elseif tags.action == 'admin-grant-credit' then
+                local ok = economy.change(
+                    player.index,
+                    config.admin_credit_grant,
+                    'admin-test-credit'
+                )
+                player.print(ok and {
+                    'un.admin-credit-granted', config.admin_credit_grant,
+                } or {'un.admin-invalid-value'})
                 render_page(player, 'admin')
                 update_frame(player)
             elseif tags.action == 'admin-diplomacy-friendly'
@@ -3602,7 +3635,6 @@ events.on(defines.events.on_gui_click, function(event)
                 or property_error(err))
             render_page(player, 'property-build')
             update_frame(player)
-            update_travel_buttons(player)
         elseif tags.action == 'property-salvage' then
             local property = properties.get(tags.property_id)
             local can_salvage, err, requirement
@@ -3736,9 +3768,6 @@ events.on(defines.events.on_gui_click, function(event)
             end
             render_property_table(player, frame, content)
             update_frame(player)
-            for _, connected in pairs(game.connected_players) do
-                update_travel_buttons(connected)
-            end
         elseif tags.action == 'property-confirm-salvage' then
             local ok, err = properties.salvage(
                 player,
@@ -3751,7 +3780,6 @@ events.on(defines.events.on_gui_click, function(event)
             end
             render_property_table(player, frame, content)
             update_frame(player)
-            update_travel_buttons(player)
         elseif tags.action == 'property-confirm-renew' then
             local ok, err = properties.renew(
                 player,
@@ -3816,6 +3844,18 @@ events.on(defines.events.on_gui_value_changed, function(event)
     if not (player and button and button.valid) then return end
     button.tags = {action = 'property-build'}
     update_property_build_page(player, content)
+end)
+
+events.on(defines.events.on_gui_text_changed, function(event)
+    local element = event.element
+    if not (element and element.valid) then return end
+    local player = game.get_player(event.player_index)
+    local frame = player and player.gui.screen[FRAME_NAME]
+    local content = frame and frame.valid and frame[CONTENT_NAME]
+    if not (player and frame and frame.valid and content and content.valid) then
+        return
+    end
+    M.market_gui.handle_text_changed(player, element, frame, content)
 end)
 
 events.on(defines.events.on_gui_switch_state_changed, function(event)
@@ -3914,7 +3954,6 @@ local PERIODIC_LIST_PAGES = {
     ships = true,
     property = true,
     crime = true,
-    factions = true,
     players = true,
     market = true,
 }
@@ -3932,7 +3971,6 @@ end)
 scheduler.every(config.ticks_per_minute, function()
     for _, player in pairs(game.connected_players) do
         update_hud_reset_countdown(player)
-        update_travel_buttons(player)
     end
 end)
 
