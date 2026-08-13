@@ -128,7 +128,7 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
         -- Apply each layer separately so later entrance-platform rectangles
         -- deterministically replace the functional strip beneath them.
         if #tiles > 0 then
-            surface.set_tiles(tiles, false, false, true, false)
+            surface.set_tiles(tiles, true, false, true, false)
         end
     end
 end
@@ -170,7 +170,7 @@ function M.apply_entrance_tiles(surface, top_y)
             }
         end
     end
-    surface.set_tiles(tiles, false, false, true, false)
+    surface.set_tiles(tiles, true, false, true, false)
     return true
 end
 
@@ -196,6 +196,7 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
     for y = top, bottom - 1 do
         for x = left, right - 1 do
             local destination_y = y + destination_offset_y
+            local feature_y = layout.feature_anchor_up and destination_y or y
             local excluded = exclude_bounds
                 and x >= exclude_bounds.left and x < exclude_bounds.right
                 and destination_y >= exclude_bounds.top
@@ -203,15 +204,19 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
             if not excluded then
             local in_core = core_half > 0
                 and x >= -core_half and x < core_half
-                and y >= -core_half and y < core_half
+                and (layout.feature_anchor_up
+                    and feature_y >= -(core_half * 2) and feature_y < 0
+                    or not layout.feature_anchor_up
+                        and feature_y >= -core_half and feature_y < core_half)
             local in_middle = middle_half > 0
                 and x >= -middle_half and x < middle_half
-                and y >= -middle_half and y < middle_half
+                and feature_y >= -middle_half and feature_y < middle_half
             local tile_name = in_core and layout.core_tile or nil
             if not tile_name and layout.rectangles then
                 for _, rectangle in ipairs(layout.rectangles) do
                     if x >= rectangle.left and x < rectangle.right
-                            and y >= rectangle.top and y < rectangle.bottom then
+                            and feature_y >= rectangle.top
+                            and feature_y < rectangle.bottom then
                         tile_name = rectangle.tile
                         break
                     end
@@ -221,15 +226,19 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
                 local corridor_left = -math.floor(railway_corridor_length / 2)
                 local corridor_right = corridor_left + railway_corridor_length
                 local in_room = x < corridor_left or x >= corridor_right
-                local in_corridor = y >= -railway_corridor_half
-                    and y < railway_corridor_half
+                local in_corridor = layout.feature_anchor_up
+                    and feature_y >= -(railway_corridor_half * 2)
+                    and feature_y < 0
+                    or not layout.feature_anchor_up
+                        and feature_y >= -railway_corridor_half
+                        and feature_y < railway_corridor_half
                 if in_room or in_corridor then
                     tile_name = layout.railway_tile
                 end
             end
             if not tile_name and chunk_size > 0 and chunk_inner_size > 0 then
                 local local_x = x % chunk_size
-                local local_y = y % chunk_size
+                local local_y = feature_y % chunk_size
                 if local_x >= chunk_margin
                         and local_x < chunk_size - chunk_margin
                         and local_y >= chunk_margin
@@ -686,6 +695,15 @@ local function teleport_to_entrance(player, surface, top_y, center)
         storage.entrance_travel_locks[player.index] = nil
     end
     return ok, err
+end
+
+function M.to_property(player, surface)
+    if not M.can_start_public_travel(player.physical_surface) then
+        return false, 'travel-restricted'
+    end
+    -- Property terrain ends at y=0. Arrive just inside it, facing the
+    -- linked-chest doorway and any entrance-anchored special layout.
+    return teleport_to_entrance(player, surface, 1, {x = -0.5, y = -1.5})
 end
 
 function M.to_hospice(player, planet_name)
