@@ -202,12 +202,12 @@ return function(M)
         aquilo = 'cryogenic-cottage',
     }
 
-    local function permanent_rentals(count)
+    local function permanent_rentals(count, width, height)
         return {
             {
                 count = count,
-                width = M.rental_property_default_width,
-                height = M.rental_property_default_height,
+                width = width or M.rental_property_default_width,
+                height = height or M.rental_property_default_height,
                 decay_hours = M.rental_property_decay_hours,
                 fixed_layout = M.rental_property_fixed_layout,
                 layout_anchor_up = M.rental_property_layout_anchor_up,
@@ -217,10 +217,10 @@ return function(M)
     end
 
     M.property_permanent_defaults_by_planet = {
-        nauvis = permanent_rentals(10),
-        vulcanus = permanent_rentals(3),
-        gleba = permanent_rentals(3),
-        fulgora = permanent_rentals(3),
-        aquilo = permanent_rentals(3),
+        nauvis = permanent_rentals(10, 64, 32),
+        vulcanus = {},
+        gleba = {},
+        fulgora = {},
+        aquilo = {},
     }
 end
