@@ -3,6 +3,7 @@ local economy = require('scripts.economy')
 local events = require('scripts.events')
 local experience = require('scripts.experience')
 local factions = require('scripts.factions')
+local market = require('scripts.market')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local social = require('scripts.social')
@@ -11,6 +12,7 @@ local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
+local MAX_CIRCUIT_SIGNAL = 2147483647
 
 local build_planets = {}
 for _, name in ipairs(config.public_planets) do build_planets[name] = true end
@@ -327,13 +329,116 @@ local function ensure_linked_chests(property)
             }
         end
         if not (loader and loader.valid) then return false end
-        loader.direction = defines.direction.north
+        loader.direction = defines.direction.south
         loader.loader_type = 'output'
         loader.rotatable = true
         loader.destructible = false
         loader.minable_flag = false
     end
     return true
+end
+
+local function ensure_trade_entities(property, build_type, force, surface)
+    if not build_type or not build_type.automatic_trade then return true end
+    local selector_position = config.property_trade_selector_position
+    local selector = surface.find_entity('constant-combinator', selector_position)
+    if not (selector and selector.valid) then
+        selector = surface.create_entity{
+            name = 'constant-combinator',
+            position = selector_position,
+            force = force,
+            raise_built = false,
+        }
+    end
+    local chest_position = config.property_trade_chest_position
+    local chest = surface.find_entity('steel-chest', chest_position)
+    if not (chest and chest.valid) then
+        chest = surface.create_entity{
+            name = 'steel-chest',
+            position = chest_position,
+            force = force,
+            raise_built = false,
+        }
+    end
+    if not (selector and selector.valid and chest and chest.valid) then
+        return false
+    end
+    selector.destructible = false
+    selector.minable_flag = false
+    chest.destructible = false
+    chest.minable_flag = false
+    property.automatic_trade = build_type.automatic_trade
+    property.trade_selector_position = selector_position
+    property.trade_chest_position = chest_position
+    return true
+end
+
+local function trade_selection(selector)
+    local behavior = selector and selector.valid
+        and selector.get_or_create_control_behavior()
+    if not (behavior and behavior.valid) then return nil end
+    local section = behavior.sections_count > 0 and behavior.get_section(1)
+        or behavior.add_section()
+    if not (section and section.valid and section.is_manual) then return nil end
+    for slot = 1, section.filters_count do
+        local filter = section.get_slot(slot)
+        local value = filter and filter.value
+        local item_name = value and value.name
+        if value.type == 'item' and item_name
+                and market.is_tradable(item_name) then
+            return item_name, section, slot, filter
+        end
+    end
+    return nil, section
+end
+
+local function process_automatic_trade(property)
+    local player = property.owner_index and game.get_player(property.owner_index)
+    if not (player and player.valid and player.connected) then return end
+    local surface = game.surfaces[property.surface_name]
+    if not (surface and surface.valid) then return end
+    local selector = surface.find_entity(
+        'constant-combinator', property.trade_selector_position
+    )
+    local chest = surface.find_entity('steel-chest', property.trade_chest_position)
+    if not (selector and selector.valid and chest and chest.valid) then return end
+    local item_name, section, slot, filter = trade_selection(selector)
+    if not item_name then return end
+    local price = market.price(player.index, item_name)
+    if not price then return end
+    local displayed_price = math.min(MAX_CIRCUIT_SIGNAL, price)
+    if filter.min ~= displayed_price then
+        section.set_slot(slot, {
+            value = {
+                type = 'item',
+                name = item_name,
+                quality = 'normal',
+            },
+            min = displayed_price,
+        })
+    end
+    local inventory = chest.get_inventory(defines.inventory.chest)
+    if property.automatic_trade == 'sell' then
+        market.sell_from_inventory(
+            player.index,
+            item_name,
+            inventory,
+            config.property_auto_trade_max_items
+        )
+    elseif property.automatic_trade == 'buy' then
+        market.buy_into_inventory(
+            player.index,
+            item_name,
+            config.property_auto_trade_max_items,
+            inventory
+        )
+    end
+end
+
+local function process_automatic_trades()
+    for _, property in ipairs(M.list()) do
+        if property.automatic_trade then process_automatic_trade(property) end
+    end
 end
 
 local function sync_surface_visibility(property)
@@ -466,6 +571,10 @@ create = function(spec)
     if translator then request_property_name_translation(property, translator) end
     if not ensure_linked_chests(property) then
         log('[un] failed to create property linked chests for property ' .. id)
+    end
+    local force = factions.of_planet(property.sample_planet)
+    if not ensure_trade_entities(property, build_type, force, surface) then
+        log('[un] failed to create property trade entities for property ' .. id)
     end
     bump_revision()
     return property
@@ -817,51 +926,6 @@ local function home_travel_context(player)
     return nil, planet_name, 'travel-restricted'
 end
 
-local function owned_homes(player_index, planet_name)
-    local result = {}
-    for _, property in ipairs(M.list(planet_name)) do
-        if property.owner_index == player_index then
-            result[#result + 1] = property
-        end
-    end
-    table.sort(result, function(a, b)
-        local a_number = tonumber(a.owner_property_number) or math.huge
-        local b_number = tonumber(b.owner_property_number) or math.huge
-        if a_number ~= b_number then return a_number < b_number end
-        return a.id < b.id
-    end)
-    return result
-end
-
-function M.home_shuttle_availability(player)
-    local context, planet_name, err = home_travel_context(player)
-    if not context then return false, err, context, planet_name end
-    if context ~= 'planet' and not surfaces.is_public_planet_open(planet_name) then
-        return false, 'planet-closed', context, planet_name
-    end
-    return true, nil, context, planet_name
-end
-
-function M.owned_property_travel_availability(player)
-    local context, planet_name, err = home_travel_context(player)
-    if not context then return false, err, 0 end
-    local homes = owned_homes(player.index, planet_name)
-    if #homes == 0 then return false, 'no-owned-property', 0 end
-    return true, nil, #homes
-end
-
-function M.hospice_travel_availability(player)
-    local context, planet_name, err = home_travel_context(player)
-    if not context then return false, err end
-    return true, nil, planet_name
-end
-
-function M.travel_to_hospice(player)
-    local available, err, planet_name = M.hospice_travel_availability(player)
-    if not available then return false, err end
-    return surfaces.to_hospice(player, planet_name)
-end
-
 local function release_property(property)
     assign_owner(property, nil)
     property.planet_property_number = next_planet_property_number(
@@ -1013,66 +1077,7 @@ function M.enter(player, property_id)
     if not allowed then return false, availability_error end
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false, 'surface-missing' end
-    local ok, err
-    if player.admin and settings.get('admin_property_access') then
-        ok, err = surfaces.teleport_near(player, surface, {0, 0}, false)
-    else
-        ok, err = surfaces.teleport(player, surface)
-    end
-    if ok then
-        if property.owner_index == player.index then
-            local account = economy.ensure_account(player.index)
-            account.last_property_id = property.id
-            account.last_property_by_planet
-                = account.last_property_by_planet or {}
-            account.last_property_by_planet[property.sample_planet] = property.id
-        end
-    end
-    return ok, err
-end
-
-local function owned_home(player_index, planet_name)
-    local account = economy.ensure_account(player_index)
-    account.last_property_by_planet = account.last_property_by_planet or {}
-    local property = M.get(account.last_property_by_planet[planet_name])
-    if property and property.owner_index == player_index
-            and property.sample_planet == planet_name then
-        return property
-    end
-    account.last_property_by_planet[planet_name] = nil
-    for _, candidate in ipairs(M.list(planet_name)) do
-        if candidate.owner_index == player_index then return candidate end
-    end
-    return nil
-end
-
-function M.home_shuttle(player)
-    local available, err, context, planet_name
-        = M.home_shuttle_availability(player)
-    if not available then return false, err end
-    if context == 'planet' then
-        return surfaces.to_hospice(player, planet_name)
-    end
-    return surfaces.to_planet_origin(player, planet_name)
-end
-
-function M.travel_to_owned_property(player)
-    local available, err = M.owned_property_travel_availability(player)
-    if not available then return false, err end
-    local context, planet_name, _, current = home_travel_context(player)
-    if not context then return false, 'travel-restricted' end
-    local homes = owned_homes(player.index, planet_name)
-    local target
-    if current and current.owner_index == player.index then
-        for index, property in ipairs(homes) do
-            if property.id == current.id then
-                target = homes[index % #homes + 1]
-                break
-            end
-        end
-    end
-    target = target or owned_home(player.index, planet_name) or homes[1]
-    return M.enter(player, target.id)
+    return surfaces.to_property(player, surface)
 end
 
 local function evacuate_property(property, surface)
@@ -1737,5 +1742,6 @@ factions.on_switch_cleanup(function(player, source_planet)
 end)
 
 scheduler.every(config.property_lifecycle_ticks, expire_due_properties)
+scheduler.every(config.property_auto_trade_ticks, process_automatic_trades)
 
 return M

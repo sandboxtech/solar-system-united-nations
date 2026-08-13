@@ -1,3 +1,4 @@
+local config = require('config')
 local economy = require('scripts.economy')
 local factions = require('scripts.factions')
 local market = require('scripts.market')

@@ -260,7 +260,14 @@ function M.sell_from_inventory(player_index, item_name, inventory, maximum)
     local removed = inventory.remove{
         name = item_name, count = count, quality = 'normal',
     }
-    if removed ~= count then return false, 'inventory-changed' end
+    if removed ~= count then
+        if removed > 0 then
+            inventory.insert{
+                name = item_name, count = removed, quality = 'normal',
+            }
+        end
+        return false, 'inventory-changed'
+    end
     if not economy.change(player_index, revenue, 'market-auto-sell') then
         inventory.insert{name = item_name, count = count, quality = 'normal'}
         return false, 'credit-limit'

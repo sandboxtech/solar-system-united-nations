@@ -30,9 +30,14 @@ return function(M)
         property_build_type{
             pack = 'automation-science-pack',
             key = 'shelter',
+            automatic_trade = 'sell',
+            base_width = 32,
+            width_per_level = 0.5,
+            height = 32,
+            height_per_level = 0.2,
             base_decay_hours = 2,
             decay_hours_per_level = 0.1,
-            base_lifetime_hours = 10,
+            base_lifetime_hours = 100,
             lifetime_hours_per_level = 1,
             fixed_layout = {
                 fill_tile = 'tutorial-grid',
@@ -41,11 +46,16 @@ return function(M)
         property_build_type{
             pack = 'logistic-science-pack',
             key = 'cottage',
+            automatic_trade = 'buy',
+            base_width = 32,
+            width_per_level = 0.5,
+            height = 32,
+            height_per_level = 0.2,
             initial_price_multiplier = 2,
             base_decay_hours = 6,
             decay_hours_per_level = 0.2,
-            base_lifetime_hours = 30,
-            lifetime_hours_per_level = 3,
+            base_lifetime_hours = 100,
+            lifetime_hours_per_level = 1,
             fixed_layout = {
                 fill_tile = 'grass-1',
             },
@@ -87,6 +97,7 @@ return function(M)
                 railway_tile = 'tutorial-grid',
                 railway_corridor_length = 384,
                 railway_corridor_height = 8,
+                feature_anchor_up = true,
             },
         },
         property_build_type{
@@ -106,6 +117,7 @@ return function(M)
                 chunk_inner_size = 30,
                 core_tile = 'tutorial-grid',
                 core_size = 16,
+                feature_anchor_up = true,
             },
         },
         property_build_type{
@@ -230,6 +242,7 @@ return function(M)
                         M.property_build_experience_base
                         * M.property_build_price_per_experience
                         * build_type.initial_price_multiplier
+                        * M.permanent_property_initial_price_multiplier
                     )
                 ),
                 terrain_planet = build_type.terrain_planet,
