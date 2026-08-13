@@ -139,10 +139,10 @@ M.faction_logistics_chest_positions = {
 }
 M.faction_logistics_loader_offset = {x = 0, y = 2}
 M.faction_logistics_hospice_chest_positions = {
-    {x = -2, y = -1},
-    {x = -1, y = -1},
-    {x = 0, y = -1},
-    {x = 1, y = -1},
+    {x = -2, y = 0},
+    {x = -1, y = 0},
+    {x = 0, y = 0},
+    {x = 1, y = 0},
 }
 M.faction_logistics_hospice_loader_offset = {x = 0, y = -1}
 M.property_max_size = 1024

@@ -388,7 +388,7 @@ create = function(spec)
     local max_width = width
     local max_height = height
     local max_layout_height = height
-    if build_type and build_type.expandable then
+    if build_type and build_type.expandable and not permanent then
         max_width = math.min(config.property_max_size, build_type.max_width)
         max_height = math.min(config.property_max_size, build_type.max_height)
         max_layout_height = max_height
@@ -496,11 +496,18 @@ local function create_permanent_defaults()
                         height = spec.height,
                         decay_hours = spec.decay_hours,
                         price = spec.price,
+                        terrain_planet = spec.terrain_planet,
                         fixed_layout = spec.fixed_layout,
+                        special_areas = spec.special_areas,
+                        lower_half_out_of_map = spec.lower_half_out_of_map,
                         layout_anchor_up = spec.layout_anchor_up,
-                        layout_base_height = spec.height,
+                        layout_base_height = spec.layout_base_height
+                            or spec.height,
                         permanent = true,
                         rental = true,
+                        construction_type = spec.construction_type,
+                        construction_level = spec.construction_level,
+                        crime_chance_multiplier = spec.crime_chance_multiplier,
                         system_key = key,
                     }
                     if property then

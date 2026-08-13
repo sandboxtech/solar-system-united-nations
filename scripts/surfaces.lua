@@ -673,15 +673,18 @@ local function teleport_to_entrance(player, surface, top_y, center)
     local position = surface.find_non_colliding_position(
         'character', center, 1, 0.25
     )
-    if not position or not M.is_entrance_position(position, top_y) then
-        position = center
+    if not position then return false, 'no-safe-position' end
+    local in_entrance = M.is_entrance_position(position, top_y)
+    if in_entrance then
+        storage.entrance_travel_locks[player.index] = {
+            surface_index = surface.index,
+            top_y = top_y,
+        }
     end
-    storage.entrance_travel_locks[player.index] = {
-        surface_index = surface.index,
-        top_y = top_y,
-    }
     local ok, err = M.teleport_physical(player, position, surface)
-    if not ok then storage.entrance_travel_locks[player.index] = nil end
+    if not ok and in_entrance then
+        storage.entrance_travel_locks[player.index] = nil
+    end
     return ok, err
 end
 
@@ -691,7 +694,9 @@ function M.to_hospice(player, planet_name)
     if not M.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
     end
-    return teleport_to_entrance(player, surface, -2, {x = -0.5, y = 0.5})
+    -- Arrive one row inside the hospice. Entering the three-tile doorway then
+    -- sends the player back to the public planet without a loader blocking it.
+    return teleport_to_entrance(player, surface, -2, {x = -0.5, y = -3.5})
 end
 
 function M.to_planet_origin(player, planet_name)

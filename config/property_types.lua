@@ -202,25 +202,66 @@ return function(M)
         aquilo = 'cryogenic-cottage',
     }
 
-    local function permanent_rentals(count, width, height)
-        return {
-            {
-                count = count,
-                width = width or M.rental_property_default_width,
-                height = height or M.rental_property_default_height,
-                decay_hours = M.rental_property_decay_hours,
-                price = M.rental_property_initial_price,
-                fixed_layout = M.rental_property_fixed_layout,
-                layout_anchor_up = M.rental_property_layout_anchor_up,
-            },
-        }
+    local build_types_by_key = {}
+    for _, spec in ipairs(M.property_build_types) do
+        build_types_by_key[spec.key] = spec
+    end
+
+    local function permanent_prototypes(keys)
+        local result = {}
+        for _, key in ipairs(keys) do
+            local build_type = assert(build_types_by_key[key])
+            local width = math.min(
+                build_type.max_width,
+                math.floor(build_type.base_width / 2) * 2
+            )
+            local height = math.min(
+                build_type.max_height,
+                math.floor(build_type.height / 2) * 2
+            )
+            result[#result + 1] = {
+                count = 1,
+                width = width,
+                height = height,
+                decay_hours = build_type.base_decay_hours,
+                price = math.min(
+                    M.property_price_cap,
+                    math.ceil(
+                        M.property_build_experience_base
+                        * M.property_build_price_per_experience
+                        * build_type.initial_price_multiplier
+                    )
+                ),
+                terrain_planet = build_type.terrain_planet,
+                fixed_layout = build_type.fixed_layout,
+                special_areas = build_type.special_areas,
+                lower_half_out_of_map = build_type.lower_half_out_of_map,
+                layout_anchor_up = true,
+                layout_base_height = build_type.height,
+                construction_type = build_type.key,
+                construction_level = 0,
+                crime_chance_multiplier = build_type.crime_chance_multiplier,
+            }
+        end
+        return result
     end
 
     M.property_permanent_defaults_by_planet = {
-        nauvis = permanent_rentals(8, 64, 32),
-        vulcanus = permanent_rentals(4),
-        gleba = permanent_rentals(4),
-        fulgora = permanent_rentals(4),
-        aquilo = permanent_rentals(4),
+        nauvis = permanent_prototypes{
+            'secure-cottage',
+            'secure-cottage',
+            'shore-cottage',
+            'rail-estate',
+            'utility-grid',
+            'sky-cottage',
+            'lava-cottage',
+            'oil-cottage',
+            'garden-cottage',
+            'cryogenic-cottage',
+        },
+        vulcanus = {},
+        gleba = {},
+        fulgora = {},
+        aquilo = {},
     }
 end
