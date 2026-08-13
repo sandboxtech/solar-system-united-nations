@@ -5,7 +5,7 @@
   "author": "虚无群友",
   "contact": "Q群293280221",
   "homepage": "https://github.com/sandboxtech/solar-system-united-nations",
-  "description": "五个阵营在不断跃迁的公共星球上发展。生产科技瓶、积累个人经验、建造限时房产，把产业延续到下一颗新星球。\n\n快速入门：\n· 点击左上角传送，前往本国公共星球。\n· 亲手放置木箱，用机械臂投入科技瓶，转换为个人经验。\n· 打开“建造”页建造房产，或领取低保金币购买本国房产。\n· 跃迁前把重要设备和物资搬入难民营或房产。\n\n支持简体中文、繁体中文、English、Deutsch、日本語、Русский、西班牙语、法语、巴西葡萄牙语、한국어、Italiano 和 Polski。\nQQ 群：293280221\nGitHub：https://github.com/sandboxtech/solar-system-united-nations\n\nUnited Nations of Sol is a Space Age multiplayer scenario where five factions develop public planets that periodically shift to new worlds. Convert science packs into experience, build temporary property, and carry your industry forward through trade, diplomacy, and conflict.",
+  "description": "五个阵营在不断跃迁的公共星球上发展。生产科技瓶、积累个人经验、建造限时房产，把产业延续到下一颗新星球。\n\n快速入门：\n· 走进关联箱旁的教学网格门口，前往本国公共星球。\n· 亲手放置木箱，用机械臂投入科技瓶，转换为个人经验。\n· 打开“建造”页建造房产，或领取低保金币购买本国房产。\n· 跃迁前把重要设备和物资搬入难民营或房产。\n· 在本国区域使用独立市场，与本国玩家共同影响货物价格。\n\n支持简体中文、繁体中文、English、Deutsch、日本語、Русский、西班牙语、法语、巴西葡萄牙语、한국어、Italiano 和 Polski。\nQQ 群：293280221\nGitHub：https://github.com/sandboxtech/solar-system-united-nations\n\nUnited Nations of Sol is a Space Age multiplayer scenario where five factions develop public planets that periodically shift to new worlds. Convert science packs into experience, establish temporary property, trade in independent national markets, and carry your industry forward through diplomacy and conflict.",
   "dependencies": [
     "base >= 2.0.0",
     "elevated-rails >= 2.0.0",
