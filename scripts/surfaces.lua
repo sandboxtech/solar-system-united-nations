@@ -375,8 +375,8 @@ end
 local function apply_property_special_tiles(surface, half_width, half_height, spec,
         exclude_bounds, active_bounds)
     if type(spec.special_areas) ~= 'table' then return end
-    local tiles = {}
     for _, area in ipairs(spec.special_areas) do
+        local tiles = {}
         local bounds = active_bounds or {
             left = -half_width,
             top = -half_height,
@@ -385,7 +385,10 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
         }
         local left = tonumber(area.left)
         local right = tonumber(area.right)
-        if area.direction == 'right' then
+        if area.direction == 'full' then
+            left = bounds.left
+            right = bounds.right
+        elseif area.direction == 'right' then
             left = tonumber(area.start) or 0
             right = bounds.right
         elseif area.direction == 'left' then
@@ -416,10 +419,12 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
                 end
             end
         end
+        -- Apply each layer separately so later entrance-platform rectangles
+        -- deterministically replace the functional strip beneath them.
+        if #tiles > 0 then
+            surface.set_tiles(tiles, false, false, true, false)
+        end
     end
-    -- Functional bands must remain exact rectangles. Tile correction may
-    -- replace neighbouring liquid or agricultural tiles and bend their edges.
-    if #tiles > 0 then surface.set_tiles(tiles, false, false, true, false) end
 end
 
 local function apply_fixed_property_tiles(surface, half_width, half_height, layout,

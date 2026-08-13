@@ -254,8 +254,8 @@ function M.surface_display_name(property)
 end
 
 local function central_chest_positions(property)
-    if property and property.entity_layout_version
-            == config.property_entity_layout_version then
+    if property and tonumber(property.entity_layout_version)
+            and property.entity_layout_version >= 2 then
         return config.property_linked_chest_positions
     end
     return {
@@ -323,9 +323,10 @@ local function ensure_linked_chests(property)
         -- script flag is available in both 2.0 and 2.1.
         chest.minable_flag = false
 
-        if property.entity_layout_version
-                == config.property_entity_layout_version then
-            local offset = config.property_linked_loader_offset
+        if tonumber(property.entity_layout_version)
+                and property.entity_layout_version >= 2 then
+            local offset = property.entity_layout_version >= 3
+                and config.property_linked_loader_offset or {x = 0, y = -2}
             local loader_position = {
                 x = position.x + offset.x,
                 y = position.y + offset.y,

@@ -16,21 +16,20 @@ return function(M)
         return spec
     end
 
-    local function side_bands(tile)
+    local function lower_band(tile)
         return {
             {
                 tile = tile,
-                direction = 'right',
-                start = 2,
-                top = 3,
-                thickness = 2,
+                direction = 'full',
+                top = 0,
+                thickness = 3,
             },
             {
-                tile = tile,
-                direction = 'left',
-                finish = 0,
-                top = -3,
-                thickness = 2,
+                tile = 'tutorial-grid',
+                left = -2,
+                top = 1,
+                right = 2,
+                bottom = 4,
             },
         }
     end
@@ -75,7 +74,7 @@ return function(M)
             key = 'shore-cottage',
             initial_price_multiplier = 3,
             terrain_planet = 'nauvis',
-            special_areas = side_bands('water'),
+            special_areas = lower_band('water'),
         },
         property_build_type{
             pack = 'production-science-pack',
@@ -142,14 +141,14 @@ return function(M)
             key = 'lava-cottage',
             initial_price_multiplier = 6,
             terrain_planet = 'vulcanus',
-            special_areas = side_bands('lava'),
+            special_areas = lower_band('lava'),
         },
         property_build_type{
             pack = 'electromagnetic-science-pack',
             key = 'oil-cottage',
             initial_price_multiplier = 7,
             terrain_planet = 'fulgora',
-            special_areas = side_bands('oil-ocean-deep'),
+            special_areas = lower_band('oil-ocean-deep'),
         },
         property_build_type{
             pack = 'agricultural-science-pack',
@@ -159,17 +158,24 @@ return function(M)
             special_areas = {
                 {
                     tile = 'natural-yumako-soil',
-                    direction = 'right',
-                    start = 2,
-                    top = 3,
-                    thickness = 2,
+                    direction = 'left',
+                    finish = 0,
+                    top = 0,
+                    thickness = 3,
                 },
                 {
                     tile = 'natural-jellynut-soil',
-                    direction = 'left',
-                    finish = 0,
-                    top = -3,
-                    thickness = 2,
+                    direction = 'right',
+                    start = 0,
+                    top = 0,
+                    thickness = 3,
+                },
+                {
+                    tile = 'tutorial-grid',
+                    left = -2,
+                    top = 1,
+                    right = 2,
+                    bottom = 4,
                 },
             },
         },

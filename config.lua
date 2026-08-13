@@ -114,7 +114,7 @@ M.property_daytime_parameters = {
     dawn = 0.75,
 }
 M.property_link_id_unowned = 0
-M.property_entity_layout_version = 2
+M.property_entity_layout_version = 3
 M.property_linked_chest_positions = {
     {x = 0, y = 3},
     {x = 1, y = 3},
@@ -122,7 +122,7 @@ M.property_linked_chest_positions = {
     {x = -2, y = 3},
 }
 M.property_linked_loader_name = 'turbo-loader'
-M.property_linked_loader_offset = {x = 0, y = -2}
+M.property_linked_loader_offset = {x = 0, y = -1}
 M.faction_logistics_link_id_base = 4000000000
 M.faction_logistics_station_name = 'cargo-landing-pad'
 M.faction_logistics_station_position = {x = 0, y = -8}
