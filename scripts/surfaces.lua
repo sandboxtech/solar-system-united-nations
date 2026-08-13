@@ -748,9 +748,31 @@ function M.teleport(player, surface)
     return M.teleport_near(player, surface, {0, 0}, false)
 end
 
-function M.to_hospice(player, planet_name)
+local function recorded_hospice_center(surface, record)
+    if type(record) ~= 'table' or record.surface_index ~= surface.index then
+        return nil
+    end
+    local position = record.position
+    if type(position) ~= 'table'
+            or type(position.x) ~= 'number'
+            or type(position.y) ~= 'number'
+            or position.x ~= position.x
+            or position.y ~= position.y
+            or math.abs(position.x) > config.hospice_surface_width / 2
+            or math.abs(position.y) > config.hospice_surface_height / 2 then
+        return nil
+    end
+    return position
+end
+
+function M.to_hospice(player, planet_name, return_record)
     planet_name = planet_name or M.context_planet(player.physical_surface) or 'nauvis'
-    return M.teleport(player, M.hospice_surface(planet_name))
+    local surface = M.hospice_surface(planet_name)
+    if not M.can_start_public_travel(player.physical_surface) then
+        return false, 'travel-restricted'
+    end
+    local center = recorded_hospice_center(surface, return_record) or {0, 0}
+    return M.teleport_near(player, surface, center, false)
 end
 
 local function recorded_center(surface, planet_name, record)

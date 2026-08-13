@@ -837,12 +837,44 @@ local function remember_public_departure(
     }
 end
 
+local function remember_hospice_departure(
+        player,
+        planet_name,
+        source_surface,
+        source_position
+    )
+    if not (source_surface and source_surface.valid
+            and surfaces.hospice_planet(source_surface) == planet_name
+            and source_position) then
+        return
+    end
+    local account = economy.ensure_account(player.index)
+    account.last_hospice_position_by_planet
+        = account.last_hospice_position_by_planet or {}
+    account.last_hospice_position_by_planet[planet_name] = {
+        position = {x = source_position.x, y = source_position.y},
+        surface_index = source_surface.index,
+    }
+end
+
 local function travel_to_hospice_recording(player, planet_name)
     local source_surface = player.physical_surface
     local source_position = player.physical_position
-    local ok, err = surfaces.to_hospice(player, planet_name)
+    local account = economy.ensure_account(player.index)
+    local positions = account.last_hospice_position_by_planet or {}
+    local ok, err = surfaces.to_hospice(
+        player,
+        planet_name,
+        positions[planet_name]
+    )
     if ok then
         remember_public_departure(
+            player,
+            planet_name,
+            source_surface,
+            source_position
+        )
+        remember_hospice_departure(
             player,
             planet_name,
             source_surface,
@@ -1024,6 +1056,12 @@ function M.enter(player, property_id)
             source,
             source_position
         )
+        remember_hospice_departure(
+            player,
+            property.sample_planet,
+            source,
+            source_position
+        )
         if property.owner_index == player.index then
             local account = economy.ensure_account(player.index)
             account.last_property_id = property.id
@@ -1059,7 +1097,22 @@ function M.home_shuttle(player)
     end
     local account = economy.ensure_account(player.index)
     local positions = account.last_public_position_by_planet or {}
-    return surfaces.to_planet_origin(player, planet_name, positions[planet_name])
+    local source_surface = player.physical_surface
+    local source_position = player.physical_position
+    local ok, travel_err = surfaces.to_planet_origin(
+        player,
+        planet_name,
+        positions[planet_name]
+    )
+    if ok then
+        remember_hospice_departure(
+            player,
+            planet_name,
+            source_surface,
+            source_position
+        )
+    end
+    return ok, travel_err
 end
 
 function M.travel_to_owned_property(player)
@@ -1736,6 +1789,9 @@ events.on(defines.events.on_player_joined_game, refresh_owned_name_renderings)
 events.on(defines.events.on_player_locale_changed, refresh_owned_name_renderings)
 
 factions.on_switch_cleanup(function(player, source_planet)
+    local account = economy.ensure_account(player.index)
+    account.last_public_position_by_planet = nil
+    account.last_hospice_position_by_planet = nil
     M.release_owner_in_faction(player.index, source_planet)
 end)
 
