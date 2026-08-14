@@ -24,10 +24,9 @@ assert(config.market_initial_cash > 0
     'market_initial_cash must be a positive integer')
 assert(config.market_depth_value > 0,
     'market_depth_value must be greater than zero')
-assert(config.market_sell_fee_rate >= 0 and config.market_sell_fee_rate < 1,
-    'market_sell_fee_rate must be between zero and one')
-assert(config.market_tax_share >= 0 and config.market_tax_share <= 1,
-    'market_tax_share must be between zero and one')
+assert(config.property_tax_market_share >= 0
+        and config.property_tax_market_share <= 1,
+    'property_tax_market_share must be between zero and one')
 
 local function valid_number(value)
     return type(value) == 'number' and value == value
@@ -64,9 +63,8 @@ local function initial_market()
         liquidity = config.market_initial_cash,
         stock = initial_stock(),
         buy_rounding_remainder = 0,
-        sell_gross_rounding_remainder = 0,
-        sell_fee_rounding_remainder = 0,
-        tax_rounding_remainder = 0,
+        sell_rounding_remainder = 0,
+        property_tax_rounding_remainder = 0,
     }
 end
 
@@ -95,14 +93,11 @@ local function normalize_market(market)
     if not valid_remainder(market.buy_rounding_remainder, -1, 0) then
         market.buy_rounding_remainder = 0
     end
-    if not valid_remainder(market.sell_gross_rounding_remainder, 0, 1) then
-        market.sell_gross_rounding_remainder = 0
+    if not valid_remainder(market.sell_rounding_remainder, 0, 1) then
+        market.sell_rounding_remainder = 0
     end
-    if not valid_remainder(market.sell_fee_rounding_remainder, 0, 1) then
-        market.sell_fee_rounding_remainder = 0
-    end
-    if not valid_remainder(market.tax_rounding_remainder, 0, 1) then
-        market.tax_rounding_remainder = 0
+    if not valid_remainder(market.property_tax_rounding_remainder, 0, 1) then
+        market.property_tax_rounding_remainder = 0
     end
     return market
 end
@@ -180,8 +175,8 @@ local function floor_with_remainder(raw, remainder)
     return amount, next_remainder
 end
 
-local function tax_share()
-    return settings.get('market_tax_share_percent') / 100
+local function property_tax_market_share()
+    return settings.get('property_tax_market_share_percent') / 100
 end
 
 local function buy_settlement(market, spec, count)
@@ -217,50 +212,29 @@ local function sell_settlement(market, spec, count)
     local stock = market.stock[spec.name]
     local curve_value = inventory_curve_value(spec, stock, stock + count)
     if not curve_value then return nil, 'no-value' end
-    local fee_rate = config.market_sell_fee_rate
-    local share = tax_share()
-    local cash_factor = 1 - fee_rate * share
     local next_liquidity = market.liquidity
-        * math.exp(-cash_factor * curve_value / config.market_initial_cash)
+        * math.exp(-curve_value / config.market_initial_cash)
     if not valid_number(next_liquidity) or next_liquidity <= 0 then
         return nil, 'no-value'
     end
-    local raw_gross = (market.liquidity - next_liquidity) / cash_factor
-    if not valid_number(raw_gross) or raw_gross <= 0
-            or raw_gross > MAX_SAFE_INTEGER then
+    local raw_revenue = market.liquidity - next_liquidity
+    if not valid_number(raw_revenue) or raw_revenue <= 0
+            or raw_revenue > MAX_SAFE_INTEGER then
         return nil, 'no-value'
     end
-    local gross, gross_remainder = floor_with_remainder(
-        raw_gross,
-        market.sell_gross_rounding_remainder
+    local revenue, rounding_remainder = floor_with_remainder(
+        raw_revenue,
+        market.sell_rounding_remainder
     )
-    local fee, fee_remainder = floor_with_remainder(
-        raw_gross * fee_rate,
-        market.sell_fee_rounding_remainder
-    )
-    fee = math.min(gross, fee)
-    local retained_tax, tax_remainder = floor_with_remainder(
-        fee * share,
-        market.tax_rounding_remainder
-    )
-    retained_tax = math.min(fee, retained_tax)
-    local revenue = gross - fee
-    local market_cost = gross - retained_tax
     if revenue <= 0 then return nil, 'no-value' end
-    if market_cost > market.cash then
+    if revenue > market.cash then
         return nil, 'insufficient-market-credit'
     end
     return {
         count = count,
         revenue = revenue,
-        fee = fee,
-        gross = gross,
-        retained_tax = retained_tax,
-        market_cost = market_cost,
         next_liquidity = next_liquidity,
-        gross_remainder = gross_remainder,
-        fee_remainder = fee_remainder,
-        tax_remainder = tax_remainder,
+        rounding_remainder = rounding_remainder,
     }
 end
 
@@ -273,11 +247,9 @@ end
 
 local function apply_sell(market, item_name, settlement)
     market.stock[item_name] = market.stock[item_name] + settlement.count
-    market.cash = market.cash - settlement.market_cost
+    market.cash = market.cash - settlement.revenue
     market.liquidity = settlement.next_liquidity
-    market.sell_gross_rounding_remainder = settlement.gross_remainder
-    market.sell_fee_rounding_remainder = settlement.fee_remainder
-    market.tax_rounding_remainder = settlement.tax_remainder
+    market.sell_rounding_remainder = settlement.rounding_remainder
 end
 
 local function copy_market(market)
@@ -442,7 +414,7 @@ function M.sell_from_inventory(player_index, item_name, inventory, maximum)
     end
     apply_sell(market, item_name, settlement)
     bump_revision(force_name)
-    return true, count, settlement.revenue, settlement.fee
+    return true, count, settlement.revenue
 end
 
 function M.buy(player, item_name, requested)
@@ -508,7 +480,7 @@ function M.sell(player, item_name)
     end
     apply_sell(market, item_name, settlement)
     bump_revision(force_name)
-    return true, count, settlement.revenue, settlement.fee
+    return true, count, settlement.revenue
 end
 
 function M.sell_all(player)
@@ -520,7 +492,6 @@ function M.sell_all(player)
     local settlements = {}
     local total_count = 0
     local total_revenue = 0
-    local total_fee = 0
     for _, spec in ipairs(config.market_items or {}) do
         local count = inventory.get_item_count{
             name = spec.name, quality = 'normal',
@@ -535,7 +506,6 @@ function M.sell_all(player)
                 }
                 total_count = total_count + count
                 total_revenue = total_revenue + settlement.revenue
-                total_fee = total_fee + settlement.fee
             elseif err == 'insufficient-market-credit' then
                 return false, err
             end
@@ -578,24 +548,24 @@ function M.sell_all(player)
     end
     storage.local_markets[force_name] = draft
     bump_revision(force_name)
-    return true, total_count, total_revenue, total_fee
+    return true, total_count, total_revenue
 end
 
-function M.deposit_tax(planet_name, amount)
+function M.deposit_property_tax(planet_name, amount)
     if not valid_nonnegative_integer(amount) then return false, 'invalid-amount' end
     if amount == 0 then return true, 0, 0 end
     local force = factions.of_planet(planet_name)
     if not (force and force.valid) then return false, 'no-faction' end
     local market = market_for_force(force.name)
     local retained, remainder = floor_with_remainder(
-        amount * tax_share(),
-        market.tax_rounding_remainder
+        amount * property_tax_market_share(),
+        market.property_tax_rounding_remainder
     )
     if market.cash + retained > MAX_SAFE_INTEGER
             or market.liquidity + retained > MAX_SAFE_INTEGER then
         return false, 'credit-limit'
     end
-    market.tax_rounding_remainder = remainder
+    market.property_tax_rounding_remainder = remainder
     if retained > 0 then
         market.cash = market.cash + retained
         market.liquidity = market.liquidity + retained

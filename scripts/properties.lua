@@ -1041,7 +1041,7 @@ function M.buy(player, property_id, quoted_price)
         'property-purchase'
     )
     if not ok then return false, err end
-    local deposited, deposit_err = market.deposit_tax(
+    local deposited, deposit_err = market.deposit_property_tax(
         property.sample_planet,
         tax
     )

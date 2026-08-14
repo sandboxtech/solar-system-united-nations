@@ -226,21 +226,19 @@ function M.handle_click(player, element, frame, content)
             format_integer(cost),
         } or M.error_caption(count))
     elseif tags.action == 'market-sell-item' then
-        local ok, count, revenue, fee = market.sell(player, tags.item_name)
+        local ok, count, revenue = market.sell(player, tags.item_name)
         player.print(ok and {
             'un.market-sold',
             '[img=item/' .. tags.item_name .. ']',
             format_integer(count),
             format_integer(revenue),
-            format_integer(fee),
         } or M.error_caption(count))
     else
-        local ok, count, revenue, fee = market.sell_all(player)
+        local ok, count, revenue = market.sell_all(player)
         player.print(ok and {
             'un.market-sold-all',
             format_integer(count),
             format_integer(revenue),
-            format_integer(fee),
         } or M.error_caption(count))
     end
     if frame and frame.valid then

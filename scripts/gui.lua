@@ -141,7 +141,8 @@ local ADMIN_NUMBER_SETTINGS = {
     {'property_tax_percent', 'un.admin-setting-property-tax'},
     {'property_self_purchase_tax_multiplier',
         'un.admin-setting-property-self-purchase-tax'},
-    {'market_tax_share_percent', 'un.admin-setting-market-tax-share'},
+    {'property_tax_market_share_percent',
+        'un.admin-setting-property-tax-market-share'},
     {'property_price_factor', 'un.admin-setting-property-factor'},
     {'technology_price_multiplier', 'un.admin-setting-technology-price'},
     {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
@@ -1986,7 +1987,7 @@ local function render_admin_page(player, frame, content)
                 or key == 'faction_hostile_to_friendly_percent'
                 or key == 'property_tax_percent'
                 or key == 'property_self_purchase_tax_multiplier'
-                or key == 'market_tax_share_percent'
+                or key == 'property_tax_market_share_percent'
                 or key == 'property_price_factor'
                 or key == 'technology_price_multiplier'
                 or key == 'spoil_time_modifier'
