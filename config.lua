@@ -112,9 +112,10 @@ M.property_daytime_parameters = {
     dawn = 0.75,
 }
 M.property_link_id_unowned = 0
--- Property and hospice terrain occupies y <= 0. The shared three-row
--- doorway begins immediately below it.
-M.property_entrance_top_y = 1
+-- Property and hospice terrain ends at y=2. The three-row doorway overlaps
+-- its lower edge so the loaders and linked chests stand on the doorway.
+M.property_layout_bottom_y = 2
+M.property_entrance_top_y = 0
 M.property_linked_chest_positions = {
     {x = 0, y = 2},
     {x = 1, y = 2},

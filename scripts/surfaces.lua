@@ -57,7 +57,7 @@ local function property_bounds(width, height, base_height, anchored_up)
     local top = centered_top
     local bottom = top + height
     if anchored_up then
-        bottom = 0
+        bottom = config.property_layout_bottom_y
         top = bottom - height
     end
     return {
@@ -75,6 +75,7 @@ local function property_special_bounds(bounds)
         top = bounds.top,
         right = bounds.right,
         bottom = math.max(bounds.bottom, 4),
+        layout_offset_y = bounds.bottom,
     }
 end
 
@@ -103,10 +104,16 @@ local function apply_property_special_tiles(surface, half_width, half_height, sp
         end
         left = math.max(bounds.left, left or 0)
         right = math.min(bounds.right, right or 0)
-        local top = math.max(bounds.top, tonumber(area.top) or 0)
+        local layout_offset_y = tonumber(bounds.layout_offset_y) or 0
+        local requested_top = (tonumber(area.top) or 0) + layout_offset_y
+        local requested_bottom = tonumber(area.bottom)
+        if requested_bottom then
+            requested_bottom = requested_bottom + layout_offset_y
+        end
+        local top = math.max(bounds.top, requested_top)
         local bottom = math.min(
             bounds.bottom,
-            tonumber(area.bottom) or top + (tonumber(area.thickness) or 0)
+            requested_bottom or top + (tonumber(area.thickness) or 0)
         )
         if type(area.tile) == 'string' then
             for y = top, bottom - 1 do
@@ -192,11 +199,13 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
     local top = -math.floor(height / 2)
     local right = left + width
     local bottom = top + height
+    local destination_bottom = bottom + destination_offset_y
     local tiles = {}
     for y = top, bottom - 1 do
         for x = left, right - 1 do
             local destination_y = y + destination_offset_y
-            local feature_y = layout.feature_anchor_up and destination_y or y
+            local feature_y = layout.feature_anchor_up
+                and destination_y - destination_bottom or y
             local excluded = exclude_bounds
                 and x >= exclude_bounds.left and x < exclude_bounds.right
                 and destination_y >= exclude_bounds.top
@@ -701,8 +710,7 @@ function M.to_property(player, surface)
     if not M.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
     end
-    -- Property terrain ends at y=0. Arrive just inside it, facing the
-    -- linked-chest doorway and any entrance-anchored special layout.
+    -- Arrive inside the property, just above the shared doorway layout.
     return teleport_to_entrance(
         player,
         surface,
@@ -752,8 +760,7 @@ local function respawn_destination(player)
     else
         planet_name = factions.of_player(player) or 'nauvis'
     end
-    -- Spawn on the hospice interior, above the linked chests and outside the
-    -- entrance trigger. Positive Y is outside the anchored hospice terrain.
+    -- Spawn inside the hospice, above its doorway and entrance trigger.
     return M.hospice_surface(planet_name), {0, -4}
 end
 
