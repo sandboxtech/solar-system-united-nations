@@ -721,14 +721,14 @@ function M.ensure()
             property,
             property.rendered_name or property_rendering_fallback(property)
         )
-        if property.owner_index then
-            request_property_name_translation(
-                property,
-                game.get_player(property.owner_index)
-            )
-        else
-            local translator = first_connected_player()
-            if translator then request_property_name_translation(property, translator) end
+        if not property.rendered_name
+                and type(property.custom_name) ~= 'string' then
+            local translator = property.owner_index
+                and game.get_player(property.owner_index)
+                or first_connected_player()
+            if translator then
+                request_property_name_translation(property, translator)
+            end
         end
     end
 end
@@ -1793,7 +1793,8 @@ local function refresh_owned_name_renderings(event)
     local player = game.get_player(event.player_index)
     if not (player and player.connected) then return end
     for _, property in ipairs(M.list()) do
-        if property.owner_index == player.index then
+        if property.owner_index == player.index
+                and not property.rendered_name then
             request_property_name_translation(property, player)
         end
     end

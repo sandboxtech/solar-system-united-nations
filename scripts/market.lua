@@ -42,7 +42,9 @@ local function valid_number(value)
 end
 
 local function valid_nonnegative_integer(value)
-    return valid_number(value) and value >= 0 and value == math.floor(value)
+    return valid_number(value) and value >= 0
+        and value <= MAX_SAFE_INTEGER
+        and value == math.floor(value)
 end
 
 local function valid_count(value)

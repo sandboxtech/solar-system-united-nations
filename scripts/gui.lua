@@ -613,7 +613,9 @@ local function set_frame_state(frame, page, property_revision)
     local tags = frame.tags
     tags.page = page
     tags.property_revision = property_revision or -1
-    tags['list_refresh_' .. page] = nil
+    tags['list_refresh_' .. page] = math.floor(
+        game.tick / config.gui_list_refresh_ticks
+    )
     frame.tags = tags
 end
 
@@ -1500,6 +1502,13 @@ local function render_ships_page(player, frame, content)
             list.add{
                 type = 'label',
                 name = ship_remaining_name(item.index),
+                caption = {
+                    'un.ship-remaining-hours',
+                    math.ceil(
+                        math.max(0, ships.left_ticks(item.record))
+                            / config.ticks_per_hour
+                    ),
+                },
             }
         end
     end
@@ -1582,7 +1591,16 @@ local function render_planets_page(player, frame, content)
     list.add{type = 'label', caption = {'un.faction-column-action'}}
     for _, item in ipairs(disasters.list()) do
         list.add{type = 'label', caption = factions.display_name(item.name)}
-        list.add{type = 'label', name = planet_countdown_name(item.name)}
+        list.add{
+            type = 'label',
+            name = planet_countdown_name(item.name),
+            caption = item.paused
+                and {'un.planet-countdown-paused',
+                    format_countdown(item.left_ticks)}
+                or item.left_ticks
+                and format_countdown(item.left_ticks)
+                or {'un.planet-countdown-clearing'},
+        }
         local traits = list.add{
             type = 'flow',
             name = planet_traits_name(item.name),
@@ -2655,10 +2673,26 @@ local function render_players_page(viewer, frame, content)
             caption = player_faction_icon(player),
             tooltip = factions.display_name(factions.of_player(player)),
         }
-        list.add{type = 'label', name = player_element_name('online', player.index)}
-        list.add{type = 'label', name = player_element_name('locale', player.index)}
-        list.add{type = 'label', name = player_element_name('coins', player.index)}
-        list.add{type = 'label', name = player_element_name('level', player.index)}
+        list.add{
+            type = 'label',
+            name = player_element_name('online', player.index),
+            caption = format_hours(playtime.ticks(player)),
+        }
+        list.add{
+            type = 'label',
+            name = player_element_name('locale', player.index),
+            caption = player.locale,
+        }
+        list.add{
+            type = 'label',
+            name = player_element_name('coins', player.index),
+            caption = format_integer(economy.get_balance(player.index)),
+        }
+        list.add{
+            type = 'label',
+            name = player_element_name('level', player.index),
+            caption = format_integer(experience.total_level(player.index)),
+        }
         if player.index == viewer.index then
             list.add{type = 'label', caption = {'un.player-self'}}
         else
@@ -2842,21 +2876,6 @@ end
 
 local function property_disappeared(err)
     return err == 'missing' or err == 'surface-missing'
-end
-
-local DRAGGABLE_TYPES = {
-    flow = true,
-    frame = true,
-    label = true,
-    table = true,
-    ['empty-widget'] = true,
-}
-
-local function make_frame_draggable(element, frame)
-    for _, child in pairs(element.children) do
-        if DRAGGABLE_TYPES[child.type] then child.drag_target = frame end
-        make_frame_draggable(child, frame)
-    end
 end
 
 local function update_property_row(player, property_table, property)
@@ -3225,12 +3244,6 @@ local function update_frame(player)
             content.clear()
             render_player_profile(player, frame, content)
         end
-    end
-    if not frame.tags.drag_ready then
-        make_frame_draggable(frame, frame)
-        local tags = frame.tags
-        tags.drag_ready = true
-        frame.tags = tags
     end
 end
 
