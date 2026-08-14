@@ -59,7 +59,6 @@ local function check_one()
     if not player then return end
     local index = player.index
     local name = player.name
-    release_assets(index, name)
     local ok, err = pcall(function()
         game.remove_offline_players({index})
     end)
