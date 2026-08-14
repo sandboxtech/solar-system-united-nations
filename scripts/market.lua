@@ -24,8 +24,6 @@ assert(config.market_initial_cash > 0
     'market_initial_cash must be a positive integer')
 assert(config.market_depth_value > 0,
     'market_depth_value must be greater than zero')
-assert(config.market_depth_price_multiplier > 1,
-    'market_depth_price_multiplier must be greater than one')
 assert(config.market_sell_fee_rate >= 0 and config.market_sell_fee_rate < 1,
     'market_sell_fee_rate must be between zero and one')
 assert(config.market_tax_share >= 0 and config.market_tax_share <= 1,
@@ -145,8 +143,7 @@ local function curve_exponent(spec, stock)
 end
 
 local function base_spot_price(spec, stock)
-    return spec.base_price * config.market_depth_price_multiplier
-        ^ curve_exponent(spec, stock)
+    return spec.base_price * math.exp(curve_exponent(spec, stock))
 end
 
 local function spot_price(market, spec, stock)
@@ -156,17 +153,14 @@ end
 
 local function integral_scale(spec)
     return spec.base_price * market_depth(spec)
-        / math.log(config.market_depth_price_multiplier)
 end
 
 -- Integral of the inventory-only price curve over [lower_stock, upper_stock].
 local function inventory_curve_value(spec, lower_stock, upper_stock)
     if lower_stock < 0 or upper_stock <= lower_stock then return nil end
     local raw = integral_scale(spec) * (
-        config.market_depth_price_multiplier
-            ^ curve_exponent(spec, lower_stock)
-        - config.market_depth_price_multiplier
-            ^ curve_exponent(spec, upper_stock)
+        math.exp(curve_exponent(spec, lower_stock))
+        - math.exp(curve_exponent(spec, upper_stock))
     )
     if not valid_number(raw) or raw <= 0 or raw > MAX_SAFE_INTEGER then
         return nil
