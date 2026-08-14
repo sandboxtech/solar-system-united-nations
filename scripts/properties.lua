@@ -59,7 +59,8 @@ function M.normalize_build_name(value)
 end
 
 local function next_available_property_id()
-    local id = 1
+    local id = tonumber(storage.next_property_id)
+    if not is_positive_integer(id) then id = 1 end
     while storage.properties[id]
             or game.surfaces[config.property_surface_prefix .. tostring(id)] do
         id = id + 1
