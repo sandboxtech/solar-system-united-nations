@@ -1651,18 +1651,32 @@ local function faction_statistics(planet_name, ship_list, property_counts)
     }
 end
 
-update_factions_page = function(player, content)
-    local list = content[PLANET_TABLE_NAME]
-    if not (list and list.valid) then return end
-    local current = factions.of_player(player)
+local function collect_faction_statistics()
     local ship_list = ships.list()
     local property_counts = {}
     for _, property in ipairs(properties.list()) do
         local planet_name = property.sample_planet
         property_counts[planet_name] = (property_counts[planet_name] or 0) + 1
     end
+    local result = {}
     for _, planet_name in ipairs(config.public_planets) do
-        local data = faction_statistics(planet_name, ship_list, property_counts)
+        result[planet_name] = faction_statistics(
+            planet_name,
+            ship_list,
+            property_counts
+        )
+    end
+    return result
+end
+
+update_factions_page = function(player, content, statistics_by_planet)
+    local list = content[PLANET_TABLE_NAME]
+    if not (list and list.valid) then return end
+    local current = factions.of_player(player)
+    statistics_by_planet = statistics_by_planet
+        or collect_faction_statistics()
+    for _, planet_name in ipairs(config.public_planets) do
+        local data = statistics_by_planet[planet_name]
         local status = list[faction_element_name('status', planet_name)]
         local population = list[faction_element_name('population', planet_name)]
         local property_count = list[faction_element_name('properties', planet_name)]
@@ -2959,7 +2973,7 @@ local function update_ship_actions(player, content)
     end
 end
 
-local function update_frame(player)
+local function update_frame(player, shared_faction_statistics)
     local frame = player.gui.screen[FRAME_NAME]
     if not (frame and frame.valid) then return end
     local content = frame[CONTENT_NAME]
@@ -3129,7 +3143,7 @@ local function update_frame(player)
                     render_planet_traits(traits, item)
                 end
             end
-            update_factions_page(player, content)
+            update_factions_page(player, content, shared_faction_statistics)
         end
     elseif page == 'ships' then
         if list_refresh_due(frame, 'ships') then
@@ -4233,11 +4247,16 @@ local PERIODIC_LIST_PAGES = {
 }
 
 scheduler.every(config.gui_list_refresh_ticks, function()
+    local shared_faction_statistics = nil
     for _, player in pairs(game.connected_players) do
         local frame = player.gui.screen[FRAME_NAME]
         if frame and frame.valid
                 and PERIODIC_LIST_PAGES[frame.tags.page] then
-            update_frame(player)
+            if frame.tags.page == 'planets'
+                    and not shared_faction_statistics then
+                shared_faction_statistics = collect_faction_statistics()
+            end
+            update_frame(player, shared_faction_statistics)
         end
     end
 end)
