@@ -13,10 +13,6 @@ local function valid_amount(value)
         and value == math.floor(value)
 end
 
-local function bump_player_data_revision()
-    storage.player_data_revision = (storage.player_data_revision or 0) + 1
-end
-
 local function merge_experience(target, source)
     if type(source) ~= 'table' or source == target then return target end
     for name, amount in pairs(source) do
@@ -71,7 +67,6 @@ end
 
 function M.record(player_index, entries)
     local data = account_data(player_index)
-    local changed = false
     for _, entry in ipairs(entries) do
         local count = tonumber(entry.count)
         if type(entry.name) == 'string' and valid_amount(count) and count > 0 then
@@ -80,11 +75,9 @@ function M.record(player_index, entries)
             local next_amount = math.min(MAX_SAFE_INTEGER, current + count)
             if next_amount ~= current then
                 data[entry.name] = next_amount
-                changed = true
             end
         end
     end
-    if changed then bump_player_data_revision() end
 end
 
 function M.get(player_index)
@@ -105,7 +98,6 @@ function M.spend(player_index, name, amount)
     local available = valid_amount(data[name]) and data[name] or 0
     if available < amount then return false end
     data[name] = available - amount
-    if amount ~= 0 then bump_player_data_revision() end
     return true
 end
 

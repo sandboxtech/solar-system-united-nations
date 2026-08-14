@@ -18,7 +18,6 @@ local function is_finite_integer(value)
 end
 
 local function notify_balance_changed(player_index, balance)
-    storage.player_data_revision = (storage.player_data_revision or 0) + 1
     for _, handler in ipairs(balance_handlers) do
         local ok, err = pcall(handler, player_index, balance)
         if not ok then log('[un] balance handler failed: ' .. tostring(err)) end

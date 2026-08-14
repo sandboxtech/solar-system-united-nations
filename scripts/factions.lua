@@ -228,7 +228,6 @@ function M.set_all_diplomacy(friendly)
             end
         end
     end
-    storage.faction_revision = (storage.faction_revision or 0) + 1
     return true
 end
 
