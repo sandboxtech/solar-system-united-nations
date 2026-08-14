@@ -307,7 +307,7 @@ local function apply_hospice_tiles(surface, planet_name)
         nil,
         special_bounds
     )
-    M.apply_entrance_tiles(surface, -2)
+    M.apply_entrance_tiles(surface, config.property_entrance_top_y)
     return true
 end
 
@@ -533,7 +533,7 @@ function M.create_property_surface(property_id, spec)
         nil,
         special_bounds
     )
-    M.apply_entrance_tiles(surface, 1)
+    M.apply_entrance_tiles(surface, config.property_entrance_top_y)
     M.sync_property_environment(
         surface,
         nil,
@@ -703,7 +703,12 @@ function M.to_property(player, surface)
     end
     -- Property terrain ends at y=0. Arrive just inside it, facing the
     -- linked-chest doorway and any entrance-anchored special layout.
-    return teleport_to_entrance(player, surface, 1, {x = -0.5, y = -1.5})
+    return teleport_to_entrance(
+        player,
+        surface,
+        config.property_entrance_top_y,
+        {x = -0.5, y = -1.5}
+    )
 end
 
 function M.to_hospice(player, planet_name)
@@ -714,7 +719,12 @@ function M.to_hospice(player, planet_name)
     end
     -- Arrive one row inside the hospice. Entering the three-tile doorway then
     -- sends the player back to the public planet without a loader blocking it.
-    return teleport_to_entrance(player, surface, -2, {x = -0.5, y = -3.5})
+    return teleport_to_entrance(
+        player,
+        surface,
+        config.property_entrance_top_y,
+        {x = -0.5, y = -1.5}
+    )
 end
 
 function M.to_planet_origin(player, planet_name)

@@ -1,3 +1,4 @@
+local config = require('config')
 local events = require('scripts.events')
 local factions = require('scripts.factions')
 local properties = require('scripts.properties')
@@ -11,11 +12,11 @@ local function entrance_context(player)
         return 'planet', planet_name, 0
     end
     if surfaces.hospice_planet(surface) == planet_name then
-        return 'hospice', planet_name, -2
+        return 'hospice', planet_name, config.property_entrance_top_y
     end
     local property = properties.on_surface(surface)
     if property and property.sample_planet == planet_name then
-        return 'property', planet_name, 1
+        return 'property', planet_name, config.property_entrance_top_y
     end
     return nil
 end

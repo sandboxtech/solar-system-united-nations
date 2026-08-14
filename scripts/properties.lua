@@ -329,7 +329,7 @@ local function ensure_linked_chests(property)
             }
         end
         if not (loader and loader.valid) then return false end
-        loader.direction = defines.direction.south
+        loader.direction = defines.direction.north
         loader.loader_type = 'output'
         loader.rotatable = true
         loader.destructible = false
