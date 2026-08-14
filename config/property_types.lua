@@ -9,8 +9,8 @@ return function(M)
         spec.initial_price_multiplier = spec.initial_price_multiplier or 1
         spec.base_decay_hours = spec.base_decay_hours or 6
         spec.decay_hours_per_level = spec.decay_hours_per_level or 0.01
-        spec.base_lifetime_hours = spec.base_lifetime_hours or 30
-        spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 0.1
+        spec.base_lifetime_hours = spec.base_lifetime_hours or 10
+        spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
         if spec.expandable == nil then spec.expandable = true end
         return spec
     end
@@ -195,8 +195,8 @@ return function(M)
             initial_price_multiplier = 12,
             base_decay_hours = 96,
             decay_hours_per_level = 0.16,
-            base_lifetime_hours = 240,
-            lifetime_hours_per_level = 0.8,
+            base_lifetime_hours = 80,
+            lifetime_hours_per_level = 8,
             terrain_planet = 'aquilo',
             fixed_layout = {
                 fill_tile = 'dust-lumpy',
