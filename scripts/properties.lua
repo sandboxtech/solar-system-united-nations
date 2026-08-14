@@ -386,12 +386,15 @@ local function process_automatic_trade(property)
     if property.automatic_trade ~= 'balance'
             or type(property.trade_target_position) ~= 'table'
             or type(property.trade_stock_position) ~= 'table' then
-        return false
+        return false, 0, 0, 'not-configured'
     end
     local player = property.owner_index and game.get_player(property.owner_index)
-    if not (player and player.valid and player.connected) then return false end
+    if not (player and player.valid) then return false, 0, 0, 'no-owner' end
+    if not player.connected then return false, 0, 0, 'player-offline' end
     local surface = game.surfaces[property.surface_name]
-    if not (surface and surface.valid) then return false end
+    if not (surface and surface.valid) then
+        return false, 0, 0, 'surface-missing'
+    end
     local target = surface.find_entity(
         'iron-chest', property.trade_target_position
     )
@@ -399,13 +402,13 @@ local function process_automatic_trade(property)
         'steel-chest', property.trade_stock_position
     )
     if not (target and target.valid and stock and stock.valid) then
-        return false
+        return false, 0, 0, 'chest-missing'
     end
     local target_inventory = target.get_inventory(defines.inventory.chest)
     local stock_inventory = stock.get_inventory(defines.inventory.chest)
     if not (target_inventory and target_inventory.valid
             and stock_inventory and stock_inventory.valid) then
-        return false
+        return false, 0, 0, 'chest-missing'
     end
     local targets = normal_tradable_contents(target_inventory)
     local stocks = normal_tradable_contents(stock_inventory)
@@ -417,53 +420,72 @@ local function process_automatic_trade(property)
         sorted_names[#sorted_names + 1] = item_name
     end
     table.sort(sorted_names)
+    if #sorted_names == 0 then
+        return false, 0, 0, 'no-tradable-items'
+    end
 
     local trades = 0
     local moved = 0
+    local difference_found = false
+    local first_error = nil
     -- Sell surpluses first so their proceeds can fund purchases in this pass.
     for _, item_name in ipairs(sorted_names) do
         local surplus = (stocks[item_name] or 0) - (targets[item_name] or 0)
         if surplus > 0 then
-            local ok, count = market.sell_from_inventory(
+            difference_found = true
+            local ok, count_or_error = market.sell_from_inventory(
                 player.index, item_name, stock_inventory, surplus
             )
             if ok then
                 trades = trades + 1
-                moved = moved + (count or 0)
-                stocks[item_name] = (stocks[item_name] or 0) - (count or 0)
+                moved = moved + (count_or_error or 0)
+                stocks[item_name]
+                    = (stocks[item_name] or 0) - (count_or_error or 0)
+            elseif not first_error then
+                first_error = count_or_error
             end
         end
     end
     for _, item_name in ipairs(sorted_names) do
         local shortage = (targets[item_name] or 0) - (stocks[item_name] or 0)
         if shortage > 0 then
-            local ok, count = market.buy_into_inventory(
+            difference_found = true
+            local ok, count_or_error = market.buy_into_inventory(
                 player.index, item_name, shortage, stock_inventory
             )
             if ok then
                 trades = trades + 1
-                moved = moved + (count or 0)
+                moved = moved + (count_or_error or 0)
+            elseif not first_error then
+                first_error = count_or_error
             end
         end
     end
-    return trades > 0, moved, trades
+    if trades > 0 then return true, moved, trades end
+    return false, 0, 0,
+        first_error or (difference_found and 'trade-unavailable' or 'balanced')
 end
 
 function M.process_automatic_trades()
     local cottages = 0
     local trades = 0
     local items = 0
+    local skipped = {}
     for _, property in ipairs(M.list()) do
         if property.automatic_trade == 'balance' then
             cottages = cottages + 1
-            local traded, count, trade_count = process_automatic_trade(property)
+            local traded, count, trade_count, reason
+                = process_automatic_trade(property)
             if traded then
                 trades = trades + (trade_count or 1)
                 items = items + (count or 0)
+            else
+                reason = reason or 'trade-unavailable'
+                skipped[reason] = (skipped[reason] or 0) + 1
             end
         end
     end
-    return cottages, trades, items
+    return cottages, trades, items, skipped
 end
 
 local function sync_surface_visibility(property)

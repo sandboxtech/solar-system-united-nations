@@ -3697,7 +3697,7 @@ events.on(defines.events.on_gui_click, function(event)
                 render_page(player, 'admin')
                 update_frame(player)
             elseif tags.action == 'admin-run-automatic-trades' then
-                local cottages, trades, items
+                local cottages, trades, items, skipped
                     = properties.process_automatic_trades()
                 player.print({
                     'un.admin-automatic-trades-ran',
@@ -3705,6 +3705,18 @@ events.on(defines.events.on_gui_click, function(event)
                     trades,
                     format_integer(items),
                 })
+                local reasons = {}
+                for reason in pairs(skipped or {}) do
+                    reasons[#reasons + 1] = reason
+                end
+                table.sort(reasons)
+                for _, reason in ipairs(reasons) do
+                    player.print({
+                        'un.admin-automatic-trades-skipped',
+                        skipped[reason],
+                        {'un.automatic-trade-reason-' .. reason},
+                    })
+                end
             elseif tags.action == 'admin-diplomacy-friendly'
                     or tags.action == 'admin-diplomacy-hostile' then
                 local friendly = tags.action == 'admin-diplomacy-friendly'

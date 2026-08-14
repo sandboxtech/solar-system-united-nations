@@ -118,6 +118,7 @@ events.on(defines.events.on_player_created, function(event)
     for _, item in ipairs(resources) do
         deliver_item(player, item)
     end
+    if equipment_valid() then deliver_kit(player) end
     player.print({'un.starter-resources-granted'})
 end)
 
