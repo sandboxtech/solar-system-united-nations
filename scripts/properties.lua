@@ -337,24 +337,40 @@ local function ensure_linked_chests(property)
     return true
 end
 
+local function find_trade_entity(surface, name, position)
+    if type(position) ~= 'table' then return nil end
+    local entity = surface.find_entity(name, position)
+    if entity and entity.valid then return entity end
+    local nearby = surface.find_entities_filtered{
+        name = name,
+        position = position,
+        radius = 0.75,
+        limit = 1,
+    }
+    entity = nearby[1]
+    return entity and entity.valid and entity or nil
+end
+
 local function ensure_trade_entities(property, build_type, force, surface)
     if not build_type or not build_type.automatic_trade then return true end
-    local target_position = config.property_trade_target_position
-    local target = surface.find_entity('iron-chest', target_position)
+    local target_position = property.trade_target_position
+        or config.property_trade_target_position
+    local target = find_trade_entity(surface, 'iron-chest', target_position)
     if not (target and target.valid) then
         target = surface.create_entity{
             name = 'iron-chest',
-            position = target_position,
+            position = config.property_trade_target_position,
             force = force,
             raise_built = false,
         }
     end
-    local stock_position = config.property_trade_stock_position
-    local stock = surface.find_entity('steel-chest', stock_position)
+    local stock_position = property.trade_stock_position
+        or config.property_trade_stock_position
+    local stock = find_trade_entity(surface, 'steel-chest', stock_position)
     if not (stock and stock.valid) then
         stock = surface.create_entity{
             name = 'steel-chest',
-            position = stock_position,
+            position = config.property_trade_stock_position,
             force = force,
             raise_built = false,
         }
@@ -367,8 +383,14 @@ local function ensure_trade_entities(property, build_type, force, surface)
     stock.destructible = false
     stock.minable_flag = false
     property.automatic_trade = build_type.automatic_trade
-    property.trade_target_position = target_position
-    property.trade_stock_position = stock_position
+    property.trade_target_position = {
+        x = target.position.x,
+        y = target.position.y,
+    }
+    property.trade_stock_position = {
+        x = stock.position.x,
+        y = stock.position.y,
+    }
     return true
 end
 
@@ -383,9 +405,7 @@ local function normal_tradable_contents(inventory)
 end
 
 local function process_automatic_trade(property)
-    if property.automatic_trade ~= 'balance'
-            or type(property.trade_target_position) ~= 'table'
-            or type(property.trade_stock_position) ~= 'table' then
+    if property.automatic_trade ~= 'balance' then
         return false, 0, 0, 'not-configured'
     end
     local player = property.owner_index and game.get_player(property.owner_index)
@@ -395,14 +415,30 @@ local function process_automatic_trade(property)
     if not (surface and surface.valid) then
         return false, 0, 0, 'surface-missing'
     end
-    local target = surface.find_entity(
-        'iron-chest', property.trade_target_position
+    local target = find_trade_entity(
+        surface, 'iron-chest', property.trade_target_position
     )
-    local stock = surface.find_entity(
-        'steel-chest', property.trade_stock_position
+    local stock = find_trade_entity(
+        surface, 'steel-chest', property.trade_stock_position
     )
     if not (target and target.valid and stock and stock.valid) then
-        return false, 0, 0, 'chest-missing'
+        local force = factions.of_planet(property.sample_planet)
+        local build_type = build_type_by_key(property.construction_type)
+        if not (force and force.valid)
+                or not ensure_trade_entities(
+                    property, build_type, force, surface
+                ) then
+            return false, 0, 0, 'chest-missing'
+        end
+        target = find_trade_entity(
+            surface, 'iron-chest', property.trade_target_position
+        )
+        stock = find_trade_entity(
+            surface, 'steel-chest', property.trade_stock_position
+        )
+        if not (target and target.valid and stock and stock.valid) then
+            return false, 0, 0, 'chest-missing'
+        end
     end
     local target_inventory = target.get_inventory(defines.inventory.chest)
     local stock_inventory = stock.get_inventory(defines.inventory.chest)
