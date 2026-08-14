@@ -728,13 +728,17 @@ function M.build_requirements(player, planet_name, build_type_index, selected_le
         + (build_type.height_per_level or 0) * level
     local height = math.floor(raw_height / 2) * 2
     height = math.min(build_type.max_height, height)
-    local experience_cost = config.property_build_experience_base
+    local base_experience_cost = config.property_build_experience_base
         + config.property_build_experience_per_level * level
+    local experience_cost = math.ceil(
+        base_experience_cost * config.property_build_experience_multiplier
+    )
     local initial_price = math.min(
         config.property_price_cap,
-        math.ceil(experience_cost
+        math.ceil(base_experience_cost
             * settings.get('property_build_price_multiplier')
-            * (build_type.initial_price_multiplier or 1))
+            * (build_type.initial_price_multiplier or 1)
+            * config.property_build_initial_price_multiplier)
     )
     return {
         planet_name = planet_name,
@@ -1545,10 +1549,12 @@ function M.expansion_requirements(player, property)
         target_level
     )
     if not target then return nil end
+    local target_build_cost = config.property_build_experience_base
+        + config.property_build_experience_per_level * target_level
     local current_build_cost = config.property_build_experience_base
         + config.property_build_experience_per_level * level
     local experience_cost = math.max(1, math.ceil(
-        (target.experience_cost - current_build_cost)
+        (target_build_cost - current_build_cost)
             * settings.get('property_expansion_cost_multiplier')
     ))
     local old_lifetime_hours = tonumber(property.lifetime_hours)

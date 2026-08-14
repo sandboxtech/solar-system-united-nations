@@ -2430,6 +2430,8 @@ local function render_help_page(player, frame, content, mode)
                 settings.get('property_build_price_multiplier'),
                 settings.get('property_limit_per_planet'),
                 config.property_price_cap,
+                config.property_build_experience_multiplier,
+                config.property_build_initial_price_multiplier,
             },
             '\n\n',
             {
