@@ -177,7 +177,6 @@ end
 function M.ensure_hospice(planet_name)
     local surface = surfaces.hospice_surface(planet_name)
     if not (surface and surface.valid) then return false end
-    surfaces.apply_entrance_tiles(surface, config.property_entrance_top_y)
     return M.ensure_on_surface(
         surface,
         planet_name,

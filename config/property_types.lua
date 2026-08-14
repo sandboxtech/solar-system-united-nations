@@ -213,14 +213,6 @@ return function(M)
         },
     }
 
-    M.hospice_property_types_by_planet = {
-        nauvis = 'shore-cottage',
-        vulcanus = 'lava-cottage',
-        gleba = 'garden-cottage',
-        fulgora = 'oil-cottage',
-        aquilo = 'cryogenic-cottage',
-    }
-
     local build_types_by_key = {}
     for _, spec in ipairs(M.property_build_types) do
         build_types_by_key[spec.key] = spec

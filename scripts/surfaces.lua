@@ -8,12 +8,6 @@ local public_planets = {}
 for _, name in ipairs(config.public_planets) do
     public_planets[name] = true
 end
-local function property_build_type(key)
-    for _, spec in ipairs(config.property_build_types or {}) do
-        if spec.key == key then return spec end
-    end
-    return nil
-end
 local function map_gen_settings(width, height)
     return {
         width = width,
@@ -32,6 +26,38 @@ end
 local function ensure_generated(surface, radius)
     surface.request_to_generate_chunks({0, 0}, radius or 1)
     surface.force_generate_chunk_requests()
+end
+
+local function ensure_planet_surface(planet_name)
+    local surface = game.surfaces[planet_name]
+    if surface and surface.valid then return surface end
+    local planet = game.planets[planet_name]
+    if not (planet and planet.valid) then return nil end
+    return planet.create_surface()
+end
+
+local function clone_planet_tiles(destination, planet_name, width, height)
+    local source = ensure_planet_surface(planet_name)
+    if not (source and source.valid) then return false end
+    local left = -math.floor(width / 2)
+    local top = -math.floor(height / 2)
+    local right = left + width
+    local bottom = top + height
+    local radius = math.max(1, math.ceil(math.max(width, height) / 64) + 1)
+    source.request_to_generate_chunks({0, 0}, radius)
+    source.force_generate_chunk_requests()
+    source.clone_area{
+        source_area = {{left, top}, {right, bottom}},
+        destination_area = {{left, top}, {right, bottom}},
+        destination_surface = destination,
+        clone_tiles = true,
+        clone_entities = false,
+        clone_decoratives = false,
+        clear_destination_entities = false,
+        clear_destination_decoratives = true,
+        expand_map = false,
+    }
+    return true
 end
 
 local function fill_tile_area(surface, left, top, right, bottom, tile_name)
@@ -267,57 +293,12 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
 end
 
 local function apply_hospice_tiles(surface, planet_name)
-    local key = config.hospice_property_types_by_planet[planet_name]
-    local spec = property_build_type(key)
-    if not spec then return false end
-    local level = config.hospice_property_level
-    local width = math.min(
-        spec.max_width,
-        math.floor((spec.base_width + spec.width_per_level * level) / 2) * 2
-    )
-    local height = math.min(
-        spec.max_height,
-        math.floor((spec.height + spec.height_per_level * level) / 2) * 2
-    )
-    local surface_width = math.max(config.hospice_surface_width, width)
-    local surface_height = math.max(config.hospice_surface_height, height)
-    local map_settings = surface.map_gen_settings
-    map_settings.width = surface_width
-    map_settings.height = surface_height
-    surface.map_gen_settings = map_settings
-    local half_width = width / 2
-    local half_height = height / 2
-    local bounds = property_bounds(width, height, spec.height, true)
-    fill_tile_area(
+    return clone_planet_tiles(
         surface,
-        -surface_width / 2,
-        -surface_height / 2,
-        surface_width / 2,
-        surface_height / 2,
-        'out-of-map'
+        planet_name,
+        config.hospice_surface_width,
+        config.hospice_surface_height
     )
-    local sample_planet = spec.terrain_planet or planet_name
-    apply_fixed_property_tiles(
-        surface,
-        half_width,
-        half_height,
-        spec.fixed_layout or {fill_tile = TUTORIAL_GRID_NAME},
-        nil,
-        bounds.offset_y
-    )
-    if not sample_planet then return false end
-    local special_bounds = property_special_bounds(bounds)
-    clear_property_lower_half(surface, spec, special_bounds, nil)
-    apply_property_special_tiles(
-        surface,
-        half_width,
-        half_height,
-        spec,
-        nil,
-        special_bounds
-    )
-    M.apply_entrance_tiles(surface, config.property_entrance_top_y)
-    return true
 end
 
 function M.hospice_surface_name(planet_name)
@@ -375,7 +356,10 @@ function M.ensure_hospice(planet_name)
             config.hospice_surface_height
         ) / 64))
     )
-    if created then apply_hospice_tiles(surface, planet_name) end
+    if created and not apply_hospice_tiles(surface, planet_name) then
+        log('[un] failed to copy home-planet tiles into refugee camp '
+            .. planet_name)
+    end
     surface.localised_name = {
         'un.hospice-name-planet',
         {'space-location-name.' .. planet_name},

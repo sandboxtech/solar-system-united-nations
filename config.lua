@@ -97,7 +97,6 @@ M.logistic_network_logistic_robot_limit = 512
 M.hospice_surface_prefix = 'un-hospice-'
 M.hospice_surface_width = 128
 M.hospice_surface_height = 128
-M.hospice_property_level = 192
 M.property_surface_prefix = 'un-property-'
 M.surface_hidden_from_foreign_factions = false
 M.surface_hidden_from_home_faction = false
@@ -111,7 +110,7 @@ M.property_daytime_parameters = {
     dawn = 0.75,
 }
 M.property_link_id_unowned = 0
--- Property and hospice terrain ends at y=2. The three-row doorway overlaps
+-- Property terrain ends at y=2. The three-row doorway overlaps
 -- its lower edge so the loaders and linked chests stand on the doorway.
 M.property_layout_bottom_y = 2
 M.property_entrance_top_y = 0
