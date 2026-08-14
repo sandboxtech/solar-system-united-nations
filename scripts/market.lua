@@ -22,8 +22,12 @@ end
 assert(config.market_initial_cash > 0
         and config.market_initial_cash == math.floor(config.market_initial_cash),
     'market_initial_cash must be a positive integer')
-assert(config.market_depth_value > 0,
-    'market_depth_value must be greater than zero')
+assert(config.market_coin_depth_start > 0,
+    'market_coin_depth_start must be greater than zero')
+assert(config.market_item_depth_start > 0,
+    'market_item_depth_start must be greater than zero')
+assert(config.market_depth_growth_hours > 0,
+    'market_depth_growth_hours must be greater than zero')
 assert(config.property_tax_market_share >= 0
         and config.property_tax_market_share <= 1,
     'property_tax_market_share must be between zero and one')
@@ -45,10 +49,6 @@ local function valid_remainder(value, minimum, maximum)
     return valid_number(value) and value >= minimum and value <= maximum
 end
 
-local function market_depth(spec)
-    return config.market_depth_value / spec.base_price
-end
-
 local function initial_stock()
     local result = {}
     for _, spec in ipairs(config.market_items or {}) do
@@ -57,11 +57,35 @@ local function initial_stock()
     return result
 end
 
+local function initial_virtual_stock(item_depth)
+    local result = {}
+    for _, spec in ipairs(config.market_items or {}) do
+        result[spec.name] = item_depth / spec.base_price
+    end
+    return result
+end
+
+local function depth_multiplier_now()
+    local started = storage.market_depth_started_tick or game.tick
+    local elapsed = math.max(0, game.tick - started)
+    local quantum = config.ticks_per_minute
+    elapsed = math.floor(elapsed / quantum) * quantum
+    return 1 + elapsed
+        / (config.market_depth_growth_hours * config.ticks_per_hour)
+end
+
 local function initial_market()
+    local depth_multiplier = depth_multiplier_now()
+    local item_depth = config.market_item_depth_start * depth_multiplier
+    local coin_depth = config.market_coin_depth_start * depth_multiplier
     return {
         cash = config.market_initial_cash,
-        liquidity = config.market_initial_cash,
+        liquidity = coin_depth,
+        item_depth = item_depth,
+        coin_depth = coin_depth,
+        depth_multiplier = depth_multiplier,
         stock = initial_stock(),
+        virtual_stock = initial_virtual_stock(item_depth),
         buy_rounding_remainder = 0,
         sell_rounding_remainder = 0,
         property_tax_rounding_remainder = 0,
@@ -69,10 +93,54 @@ local function initial_market()
 end
 
 local function ensure_curve()
-    if storage.market_curve_version == config.market_curve_version then return end
-    storage.local_markets = {}
+    if storage.market_curve_version == config.market_curve_version then
+        if not valid_nonnegative_integer(storage.market_depth_started_tick)
+                or storage.market_depth_started_tick > game.tick then
+            storage.market_depth_started_tick = game.tick
+        end
+        return
+    end
+    local previous_version = storage.market_curve_version
+    storage.market_depth_started_tick = game.tick
+    if previous_version == 8 and type(storage.local_markets) == 'table' then
+        -- Version 8 used V=1,000,000 and tied the coin depth to its
+        -- 20,000,000 starting cash. Preserve stock, cash and current prices.
+        local old_item_depth = 1000000
+        local old_coin_depth = 20000000
+        for _, market in pairs(storage.local_markets) do
+            if type(market) == 'table' then
+                local old_liquidity = valid_number(market.liquidity)
+                    and market.liquidity > 0 and market.liquidity
+                    or old_coin_depth
+                market.item_depth = config.market_item_depth_start
+                market.coin_depth = config.market_coin_depth_start
+                market.depth_multiplier = 1
+                market.liquidity = old_liquidity
+                    * config.market_coin_depth_start / old_coin_depth
+                if type(market.stock) ~= 'table' then
+                    market.stock = initial_stock()
+                end
+                market.virtual_stock = {}
+                for _, spec in ipairs(config.market_items or {}) do
+                    local stock = valid_nonnegative_integer(
+                        market.stock[spec.name]
+                    ) and market.stock[spec.name] or 0
+                    market.stock[spec.name] = stock
+                    local old_effective = old_item_depth / spec.base_price
+                        + stock
+                    market.virtual_stock[spec.name]
+                        = config.market_item_depth_start / old_item_depth
+                            * old_effective - stock
+                end
+            end
+        end
+    else
+        storage.local_markets = {}
+    end
     storage.market_curve_version = config.market_curve_version
-    storage.market_revisions = {}
+    if type(storage.market_revisions) ~= 'table' then
+        storage.market_revisions = {}
+    end
 end
 
 local function normalize_market(market)
@@ -82,12 +150,35 @@ local function normalize_market(market)
     end
     if not valid_number(market.liquidity) or market.liquidity <= 0
             or market.liquidity > MAX_SAFE_INTEGER then
-        market.liquidity = math.max(market.cash, 0.000000001)
+        market.liquidity = config.market_coin_depth_start
+    end
+    if not valid_number(market.depth_multiplier)
+            or market.depth_multiplier <= 0 then
+        market.depth_multiplier = 1
+    end
+    if not valid_number(market.item_depth) or market.item_depth <= 0
+            or market.item_depth > MAX_SAFE_INTEGER then
+        market.item_depth = config.market_item_depth_start
+            * market.depth_multiplier
+    end
+    if not valid_number(market.coin_depth) or market.coin_depth <= 0
+            or market.coin_depth > MAX_SAFE_INTEGER then
+        market.coin_depth = config.market_coin_depth_start
+            * market.depth_multiplier
     end
     if type(market.stock) ~= 'table' then market.stock = initial_stock() end
+    if type(market.virtual_stock) ~= 'table' then
+        market.virtual_stock = initial_virtual_stock(market.item_depth)
+    end
     for _, spec in ipairs(config.market_items or {}) do
         if not valid_nonnegative_integer(market.stock[spec.name]) then
             market.stock[spec.name] = 0
+        end
+        local virtual = market.virtual_stock[spec.name]
+        if not valid_number(virtual) or virtual <= 0
+                or virtual > MAX_SAFE_INTEGER then
+            market.virtual_stock[spec.name]
+                = market.item_depth / spec.base_price
         end
     end
     if not valid_remainder(market.buy_rounding_remainder, -1, 0) then
@@ -102,6 +193,39 @@ local function normalize_market(market)
     return market
 end
 
+local function apply_depth_growth(market, force_name)
+    local target = depth_multiplier_now()
+    if target <= market.depth_multiplier then return false end
+    local factor = target / market.depth_multiplier
+    local next_liquidity = market.liquidity * factor
+    local next_item_depth = config.market_item_depth_start * target
+    local next_coin_depth = config.market_coin_depth_start * target
+    if next_liquidity > MAX_SAFE_INTEGER
+            or next_item_depth > MAX_SAFE_INTEGER
+            or next_coin_depth > MAX_SAFE_INTEGER then
+        return false
+    end
+    local next_virtual_stock = {}
+    for _, spec in ipairs(config.market_items or {}) do
+        local stock = market.stock[spec.name]
+        local virtual = factor
+            * (market.virtual_stock[spec.name] + stock) - stock
+        if not valid_number(virtual) or virtual <= 0
+                or virtual > MAX_SAFE_INTEGER then
+            return false
+        end
+        next_virtual_stock[spec.name] = virtual
+    end
+    market.depth_multiplier = target
+    market.item_depth = next_item_depth
+    market.coin_depth = next_coin_depth
+    market.liquidity = next_liquidity
+    market.virtual_stock = next_virtual_stock
+    storage.market_revisions[force_name]
+        = (storage.market_revisions[force_name] or 0) + 1
+    return true
+end
+
 local function market_for_force(force_name)
     ensure_curve()
     local market = storage.local_markets[force_name]
@@ -109,7 +233,9 @@ local function market_for_force(force_name)
         market = initial_market()
         storage.local_markets[force_name] = market
     end
-    return normalize_market(market)
+    normalize_market(market)
+    apply_depth_growth(market, force_name)
+    return market
 end
 
 local function market_for_player(player)
@@ -133,25 +259,18 @@ local function market_for_player_index(player_index)
     return market_for_player(player)
 end
 
-local function inventory_price_factor(spec, stock)
-    return 1 / (1 + stock / market_depth(spec))
-end
-
-local function base_spot_price(spec, stock)
-    return spec.base_price * inventory_price_factor(spec, stock)
-end
-
 local function spot_price(market, spec, stock)
-    return base_spot_price(spec, stock)
-        * market.liquidity / config.market_initial_cash
+    return market.item_depth
+        / (market.virtual_stock[spec.name] + stock)
+        * market.liquidity / market.coin_depth
 end
 
 -- Integral of the inventory-only price curve over [lower_stock, upper_stock].
-local function inventory_curve_value(spec, lower_stock, upper_stock)
+local function inventory_curve_value(market, spec, lower_stock, upper_stock)
     if lower_stock < 0 or upper_stock <= lower_stock then return nil end
-    local depth = market_depth(spec)
-    local raw = config.market_depth_value * math.log(
-        (1 + upper_stock / depth) / (1 + lower_stock / depth)
+    local virtual = market.virtual_stock[spec.name]
+    local raw = market.item_depth * math.log(
+        (virtual + upper_stock) / (virtual + lower_stock)
     )
     if not valid_number(raw) or raw <= 0 or raw > MAX_SAFE_INTEGER then
         return nil
@@ -182,9 +301,11 @@ end
 local function buy_settlement(market, spec, count)
     local stock = market.stock[spec.name]
     if count > stock then return nil, 'out-of-stock' end
-    local curve_value = inventory_curve_value(spec, stock - count, stock)
+    local curve_value = inventory_curve_value(
+        market, spec, stock - count, stock
+    )
     if not curve_value then return nil, 'no-value' end
-    local multiplier = math.exp(curve_value / config.market_initial_cash)
+    local multiplier = math.exp(curve_value / market.coin_depth)
     local next_liquidity = market.liquidity * multiplier
     local raw_cost = next_liquidity - market.liquidity
     if not valid_number(next_liquidity) or not valid_number(raw_cost)
@@ -210,10 +331,12 @@ end
 
 local function sell_settlement(market, spec, count)
     local stock = market.stock[spec.name]
-    local curve_value = inventory_curve_value(spec, stock, stock + count)
+    local curve_value = inventory_curve_value(
+        market, spec, stock, stock + count
+    )
     if not curve_value then return nil, 'no-value' end
     local next_liquidity = market.liquidity
-        * math.exp(-curve_value / config.market_initial_cash)
+        * math.exp(-curve_value / market.coin_depth)
     if not valid_number(next_liquidity) or next_liquidity <= 0 then
         return nil, 'no-value'
     end
@@ -255,10 +378,14 @@ end
 local function copy_market(market)
     local result = {}
     for key, value in pairs(market) do
-        if key ~= 'stock' then result[key] = value end
+        if key ~= 'stock' and key ~= 'virtual_stock' then result[key] = value end
     end
     result.stock = {}
     for name, count in pairs(market.stock) do result.stock[name] = count end
+    result.virtual_stock = {}
+    for name, count in pairs(market.virtual_stock) do
+        result.virtual_stock[name] = count
+    end
     return result
 end
 

@@ -1,10 +1,12 @@
 return function(M)
-    M.market_curve_version = 8
-    M.market_initial_cash = 20000000
+    M.market_curve_version = 9
+    M.market_initial_cash = 10000000
     M.property_tax_market_share = 0.50
-    -- Net sales with this much base-price value halve an item's
-    -- inventory-only price. Individual items still need only a base price.
-    M.market_depth_value = 1000000
+    -- All goods and the coin reserve grow with the same linear multiplier:
+    -- S(t) = 1 + elapsed_hours / market_depth_growth_hours.
+    M.market_coin_depth_start = 100000000
+    M.market_item_depth_start = 1000000
+    M.market_depth_growth_hours = 100
     M.market_items = {
         {name = 'iron-ore', base_price = 100, group = 'raw'},
         {name = 'copper-ore', base_price = 100, group = 'raw'},
