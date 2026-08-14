@@ -1120,6 +1120,7 @@ local function render_property_build_page(player, frame, content)
         name = PROPERTY_BUILD_TYPE_NAME,
         items = build_type_items,
         selected_index = 1,
+        tooltip = {'un.property-build-type-tooltip'},
     }
     form.add{type = 'label', caption = {'un.property-build-level'}}
     local level_flow = form.add{
