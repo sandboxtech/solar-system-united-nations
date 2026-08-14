@@ -551,7 +551,6 @@ local function automatic_trade_tooltip(construction_type)
         math.max(1, math.floor(
             config.property_auto_trade_ticks / config.ticks_per_minute
         )),
-        config.property_auto_trade_max_items,
     }
 end
 

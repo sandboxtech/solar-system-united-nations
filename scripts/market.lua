@@ -513,7 +513,7 @@ function M.buy_into_inventory(player_index, item_name, count, inventory)
     return true, count, settlement.cost
 end
 
-function M.sell_from_inventory(player_index, item_name, inventory, maximum)
+function M.sell_from_inventory(player_index, item_name, inventory)
     if not (inventory and inventory.valid) then return false, 'no-inventory' end
     local spec = item_specs[item_name]
     if not spec then return false, 'invalid-item' end
@@ -522,7 +522,7 @@ function M.sell_from_inventory(player_index, item_name, inventory, maximum)
     local carried = inventory.get_item_count{
         name = item_name, quality = 'normal',
     }
-    local count = math.min(carried, math.max(1, math.floor(maximum or carried)))
+    local count = carried
     if count <= 0 then return false, 'nothing-to-sell' end
     local settlement, err = sell_settlement(market, spec, count)
     if not settlement then return false, err end

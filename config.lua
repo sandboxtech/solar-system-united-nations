@@ -169,7 +169,6 @@ M.property_expansion_experience_multiplier = 2
 M.property_expansion_stamina_cost = 50000
 M.property_lifecycle_ticks = M.ticks_per_minute
 M.property_auto_trade_ticks = M.ticks_per_minute
-M.property_auto_trade_max_items = 1000
 M.admin_experience_grant = 1000000
 M.admin_credit_grant = 1000000
 M.blueprint_max_entities = 16384

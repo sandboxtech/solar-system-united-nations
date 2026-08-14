@@ -383,9 +383,9 @@ local function trade_selection(selector)
     for slot = 1, section.filters_count do
         local filter = section.get_slot(slot)
         local value = filter and filter.value
-        local item_name = value and value.name
-        if value and value.type == 'item' and item_name
-                and market.is_tradable(item_name) then
+        local item_name = type(value) == 'table' and value.name
+            or type(value) == 'string' and value or nil
+        if item_name and market.is_tradable(item_name) then
             return item_name, section, slot, filter
         end
     end
@@ -424,15 +424,19 @@ local function process_automatic_trade(property)
         local ok, count = market.sell_from_inventory(
             player.index,
             item_name,
-            inventory,
-            config.property_auto_trade_max_items
+            inventory
         )
         return ok, ok and count or 0
     elseif property.automatic_trade == 'buy' then
+        local requested = inventory.get_insertable_count{
+            name = item_name,
+            quality = 'normal',
+        }
+        if requested <= 0 then return false end
         local ok, count = market.buy_into_inventory(
             player.index,
             item_name,
-            config.property_auto_trade_max_items,
+            requested,
             inventory
         )
         return ok, ok and count or 0
