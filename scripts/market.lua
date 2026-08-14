@@ -138,12 +138,12 @@ local function market_for_player_index(player_index)
     return market_for_player(player)
 end
 
-local function curve_exponent(spec, stock)
-    return -stock / market_depth(spec)
+local function inventory_price_factor(spec, stock)
+    return 1 / (1 + stock / market_depth(spec))
 end
 
 local function base_spot_price(spec, stock)
-    return spec.base_price * math.exp(curve_exponent(spec, stock))
+    return spec.base_price * inventory_price_factor(spec, stock)
 end
 
 local function spot_price(market, spec, stock)
@@ -151,16 +151,12 @@ local function spot_price(market, spec, stock)
         * market.liquidity / config.market_initial_cash
 end
 
-local function integral_scale(spec)
-    return spec.base_price * market_depth(spec)
-end
-
 -- Integral of the inventory-only price curve over [lower_stock, upper_stock].
 local function inventory_curve_value(spec, lower_stock, upper_stock)
     if lower_stock < 0 or upper_stock <= lower_stock then return nil end
-    local raw = integral_scale(spec) * (
-        math.exp(curve_exponent(spec, lower_stock))
-        - math.exp(curve_exponent(spec, upper_stock))
+    local depth = market_depth(spec)
+    local raw = config.market_depth_value * math.log(
+        (1 + upper_stock / depth) / (1 + lower_stock / depth)
     )
     if not valid_number(raw) or raw <= 0 or raw > MAX_SAFE_INTEGER then
         return nil

@@ -1,11 +1,10 @@
 return function(M)
-    M.market_curve_version = 6
+    M.market_curve_version = 7
     M.market_initial_cash = 20000000
     M.market_tax_share = 0.50
-    -- Net sales with this much base-price value multiply an item's
-    -- inventory-only price by 1/e. The half-price point is about 0.693 times
-    -- this value. Individual items still need only a base price.
-    M.market_depth_value = 1500000
+    -- Net sales with this much base-price value halve an item's
+    -- inventory-only price. Individual items still need only a base price.
+    M.market_depth_value = 1000000
     M.market_sell_fee_rate = 0.01
     M.market_items = {
         {name = 'iron-ore', base_price = 100, group = 'raw'},
