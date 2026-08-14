@@ -64,7 +64,8 @@ local function reconcile()
                     force_name = entry.force.name,
                     planet_name = entry.planet_name,
                     built_tick = is_ready(platform) and game.tick or nil,
-                    life_ticks = config.ship_life_hours * config.ticks_per_hour,
+                    life_ticks = settings.get('ship_life_hours')
+                        * config.ticks_per_hour,
                 }
             end
         end
@@ -85,7 +86,9 @@ local function apply_bounds(platform, owner_index)
 end
 
 function M.life_ticks(record)
-    return record.life_ticks
+    local value = record and tonumber(record.life_ticks)
+    if value and value > 0 then return value end
+    return settings.get('ship_life_hours') * config.ticks_per_hour
 end
 
 function M.left_ticks(record)
@@ -310,6 +313,8 @@ local function on_platform_surface(surface)
             owner_index = nil,
             force_name = platform.force.name,
             planet_name = factions.planet_of_force(platform.force),
+            life_ticks = settings.get('ship_life_hours')
+                * config.ticks_per_hour,
         }
         records()[platform.index] = record
     end
