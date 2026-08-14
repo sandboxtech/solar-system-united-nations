@@ -159,7 +159,9 @@ M.faction_logistics_hospice_chest_positions = {
     {x = 0, y = 66},
     {x = 1, y = 66},
 }
-M.faction_logistics_hospice_loader_offset = {x = 0, y = -1}
+-- Turbo loaders are two tiles long. Their centres sit two coordinates inside
+-- the camp, at y=64. Tile-row reflection uses y -> -y-1, not y -> -y.
+M.faction_logistics_hospice_loader_offset = {x = 0, y = -2}
 -- Link slots 5-8 connect the upper doors of the first and second floors.
 M.faction_logistics_hospice_upper_chest_positions = {
     {x = -2, y = -67},
@@ -167,7 +169,8 @@ M.faction_logistics_hospice_upper_chest_positions = {
     {x = 0, y = -67},
     {x = 1, y = -67},
 }
-M.faction_logistics_hospice_upper_loader_offset = {x = 0, y = 1}
+-- Both first-floor and second-floor upper doors use loader centres at y=-65.
+M.faction_logistics_hospice_upper_loader_offset = {x = 0, y = 2}
 M.property_max_size = 1024
 M.property_name_max_characters = 64
 M.property_name_max_bytes = 256

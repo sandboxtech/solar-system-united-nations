@@ -7,10 +7,10 @@ return function(M)
         spec.max_width = spec.max_width or 256
         spec.max_height = spec.max_height or 256
         spec.initial_price_multiplier = spec.initial_price_multiplier or 1
-        spec.base_decay_hours = spec.base_decay_hours or 10
-        spec.decay_hours_per_level = spec.decay_hours_per_level or 1
-        spec.base_lifetime_hours = spec.base_lifetime_hours or 100
-        spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 1
+        spec.base_decay_hours = spec.base_decay_hours or 6
+        spec.decay_hours_per_level = spec.decay_hours_per_level or 0.01
+        spec.base_lifetime_hours = spec.base_lifetime_hours or 30
+        spec.lifetime_hours_per_level = spec.lifetime_hours_per_level or 0.1
         if spec.expandable == nil then spec.expandable = true end
         return spec
     end
@@ -34,10 +34,6 @@ return function(M)
             width_per_level = 0.5,
             height = 32,
             height_per_level = 0.2,
-            base_decay_hours = 2,
-            decay_hours_per_level = 0.1,
-            base_lifetime_hours = 100,
-            lifetime_hours_per_level = 1,
             fixed_layout = {
                 fill_tile = 'tutorial-grid',
             },
@@ -51,10 +47,6 @@ return function(M)
             height = 32,
             height_per_level = 0.2,
             initial_price_multiplier = 2,
-            base_decay_hours = 6,
-            decay_hours_per_level = 0.2,
-            base_lifetime_hours = 100,
-            lifetime_hours_per_level = 1,
             fixed_layout = {
                 fill_tile = 'grass-1',
             },
@@ -63,8 +55,8 @@ return function(M)
             pack = 'military-science-pack',
             key = 'secure-cottage',
             initial_price_multiplier = 10,
-            base_decay_hours = 100,
-            decay_hours_per_level = 10,
+            base_decay_hours = 108,
+            decay_hours_per_level = 0.02,
             crime_chance_multiplier = 0.1,
             fixed_layout = {
                 fill_tile = 'tutorial-grid',
@@ -201,10 +193,10 @@ return function(M)
             pack = 'cryogenic-science-pack',
             key = 'cryogenic-cottage',
             initial_price_multiplier = 12,
-            base_decay_hours = 192,
-            decay_hours_per_level = 2,
-            base_lifetime_hours = 288,
-            lifetime_hours_per_level = 24,
+            base_decay_hours = 96,
+            decay_hours_per_level = 0.16,
+            base_lifetime_hours = 240,
+            lifetime_hours_per_level = 0.8,
             terrain_planet = 'aquilo',
             fixed_layout = {
                 fill_tile = 'dust-lumpy',

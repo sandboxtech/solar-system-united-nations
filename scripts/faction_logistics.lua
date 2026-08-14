@@ -104,6 +104,22 @@ local function ensure_loader(surface, force, chest_position, offset,
         x = chest_position.x + offset.x,
         y = chest_position.y + offset.y,
     }
+    local chest = surface.find_entity(config.linked_chest_name, chest_position)
+    if chest and chest.valid then
+        -- A loader is two tiles long. Remove an obsolete loader whose body
+        -- overlaps the chest before placing the correctly spaced one.
+        for _, candidate in pairs(surface.find_entities_filtered{
+            area = chest.bounding_box,
+            name = config.property_linked_loader_name,
+            force = force,
+        }) do
+            if candidate.valid
+                    and (candidate.position.x ~= position.x
+                        or candidate.position.y ~= position.y) then
+                candidate.destroy{raise_destroy = false}
+            end
+        end
+    end
     local loader = surface.find_entity(config.property_linked_loader_name, position)
     if loader and loader.valid and loader.force ~= force then
         log('[un] faction logistics loader position occupied on '
