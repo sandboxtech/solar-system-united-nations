@@ -73,7 +73,8 @@ local function initial_virtual_stock(item_depth)
 end
 
 local function configured_price_multiplier()
-    return settings.get('market_price_percent') / 100
+    return settings.get('market_base_price_multiplier')
+        / base_price_multiplier
 end
 
 local function configured_item_depth_multiplier()

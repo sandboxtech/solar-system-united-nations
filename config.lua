@@ -20,10 +20,10 @@ M.faction_chat_colors = {
 M.public_planets = {'nauvis', 'vulcanus', 'gleba', 'fulgora', 'aquilo'}
 M.faction_force_prefix = 'un-faction-'
 M.faction_diplomacy_technology = 'space-platform-thruster'
-M.faction_friendly_to_hostile_chance = 0.2
-M.faction_hostile_to_friendly_chance = 0.9
+M.faction_friendly_to_hostile_chance = 0.01
+M.faction_hostile_to_friendly_chance = 0.99
 require('config.technologies')(M)
-M.public_planet_reset_min_hours = 0.5
+M.public_planet_reset_min_hours = 1.5
 M.public_planet_reset_max_hours = 2.5
 M.public_planet_reset_exponent = 2
 M.public_planet_foreign_warning_early_minutes = 5
@@ -37,10 +37,10 @@ M.public_planet_terrain_spread = 1
 M.public_planet_cliff_spread = 1
 M.public_planet_enemy_spread = 2
 M.public_planet_starting_area_spread = 0.5
-M.public_planet_peaceful_chance = 0.01
+M.public_planet_peaceful_chance = 0.1
 M.planet_reset_acceleration_stamina_cost = 1000
 M.planet_reset_acceleration_fraction = 0.1
-M.planet_reset_acceleration_min_remaining_minutes = 8
+M.planet_reset_acceleration_min_remaining_minutes = 10
 M.technology_price_multiplier = 2
 M.spoil_time_modifier = 1
 M.asteroid_spawning_rate = 1
@@ -51,11 +51,11 @@ M.player_cleanup_admins = false
 
 M.property_price_cap = 1000000000
 M.property_price_factor = 2
-M.property_self_purchase_tax_multiplier = 0.5
+M.property_self_purchase_tax_multiplier = 0.6
 
-M.initial_credit = 10000
+M.initial_credit = 1000
 M.ubi_credit_per_second = 1
-M.ubi_max_seconds = 108000
+M.ubi_max_seconds = 100000
 M.transfer_min_amount = 1000
 M.transfer_fee_rate = 0.001
 M.transfer_min_fee = 100
@@ -67,8 +67,8 @@ M.gui_list_refresh_ticks = M.ticks_per_minute
 M.friend_limit = 10
 
 M.starter_resources = {
-    {name = 'iron-plate', count = 500},
-    {name = 'copper-plate', count = 200},
+    {name = 'iron-plate', count = 200},
+    {name = 'copper-plate', count = 100},
     {name = 'stone', count = 100},
     {name = 'wood', count = 100},
     -- {name = 'automation-science-pack', count = 2000},
@@ -207,7 +207,7 @@ M.stamina_per_second = 1
 M.suicide_stamina_cost = 10000
 M.fast_respawn_stamina_cost = 1000
 M.fast_respawn_seconds = 10
-M.normal_respawn_seconds = 60
+M.normal_respawn_seconds = 30
 
 M.ship_life_hours = 12
 M.ship_stamina_cost = 10000
@@ -216,11 +216,11 @@ M.crime_stamina_cost = 10000
 M.crime_price_scale = 10000
 M.faction_switch_min_online_hours = 1
 M.faction_switch_coin_cost = 1000
-M.faction_switch_cooldown_hours = 1
+M.faction_switch_cooldown_hours = 0.125
 M.faction_switch_nauvis_respawn_seconds = 30
 M.crime_min_online_hours = 1
 M.ship_build_min_online_hours = 1
-M.deconstruction_min_online_hours = 1
+M.deconstruction_min_online_hours = 0.125
 M.ship_width_per_level = 2
 M.ship_base_width = 16
 M.ship_height = 512

@@ -83,7 +83,11 @@ local DEFINITIONS = {
         min = 0,
         max = 100,
     },
-    market_price_percent = {default = 100, min = 1, max = 1000},
+    market_base_price_multiplier = {
+        default = config.market_base_price_multiplier,
+        min = 0.0001,
+        max = 1000,
+    },
     market_item_depth_multiplier = {default = 1, min = 0.1, max = 100},
     market_coin_depth_multiplier = {default = 1, min = 0.1, max = 100},
     property_price_factor = {

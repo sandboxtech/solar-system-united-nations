@@ -146,8 +146,9 @@ local ADMIN_NUMBER_SETTINGS = {
         'un.admin-setting-property-self-purchase-tax'},
     {'property_tax_market_share_percent',
         'un.admin-setting-property-tax-market-share'},
-    {'market_price_percent', 'un.admin-setting-market-price',
-        'un.admin-setting-market-price-tooltip'},
+    {'market_base_price_multiplier',
+        'un.admin-setting-market-base-price-multiplier',
+        'un.admin-setting-market-base-price-multiplier-tooltip'},
     {'market_item_depth_multiplier', 'un.admin-setting-market-item-depth',
         'un.admin-setting-market-item-depth-tooltip'},
     {'market_coin_depth_multiplier', 'un.admin-setting-market-coin-depth',
@@ -2069,7 +2070,7 @@ local function render_admin_page(player, frame, content)
                 or key == 'property_tax_percent'
                 or key == 'property_self_purchase_tax_multiplier'
                 or key == 'property_tax_market_share_percent'
-                or key == 'market_price_percent'
+                or key == 'market_base_price_multiplier'
                 or key == 'market_item_depth_multiplier'
                 or key == 'market_coin_depth_multiplier'
                 or key == 'property_price_factor'
@@ -3759,7 +3760,7 @@ events.on(defines.events.on_gui_click, function(event)
                 if ok and tags.setting == 'personal_linked_chest_limit' then
                     linked_inventory.enforce_limit()
                 end
-                if ok and (tags.setting == 'market_price_percent'
+                if ok and (tags.setting == 'market_base_price_multiplier'
                         or tags.setting == 'market_item_depth_multiplier'
                         or tags.setting == 'market_coin_depth_multiplier') then
                     if not market.apply_admin_settings() then
