@@ -5,6 +5,11 @@ local state = require('scripts.state')
 local M = {}
 
 local DEFINITIONS = {
+    hud_title_override = {
+        default = nil,
+        string = true,
+        max_length = 128,
+    },
     personal_linked_chest_limit = {
         default = config.personal_linked_chest_limit,
         min = 0,
@@ -204,7 +209,12 @@ end
 function M.set(key, value)
     local definition = DEFINITIONS[key]
     if not definition then return false, 'unknown-setting' end
-    if definition.boolean then
+    if definition.string then
+        if type(value) ~= 'string' or value == ''
+                or value:find('[%c]') or #value > definition.max_length then
+            return false, 'invalid-value'
+        end
+    elseif definition.boolean then
         if type(value) ~= 'boolean' then return false, 'invalid-value' end
     else
         value = tonumber(value)
@@ -231,6 +241,12 @@ function M.set(key, value)
     end
     values()[key] = value
     return true, value
+end
+
+function M.reset(key)
+    if not DEFINITIONS[key] then return false, 'unknown-setting' end
+    values()[key] = nil
+    return true
 end
 
 function M.definition(key)

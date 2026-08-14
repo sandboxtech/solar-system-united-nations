@@ -24,7 +24,7 @@ M.market_gui = require('scripts.market_gui')
 M.hud_travel = require('scripts.hud_travel')
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 17
+local HUD_LAYOUT_VERSION = 18
 local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_RESET_COUNTDOWN_NAME = 'un_hud_reset_countdown'
 local HUD_MENU_NAME = 'un_hud_menu'
@@ -199,12 +199,14 @@ local function update_hud_title(player, hud)
     local title = hud and hud.valid and hud[HUD_TITLE_NAME]
     if not (title and title.valid) then return end
     local planet_name = factions.of_player(player)
+    local configured_title = settings.get('hud_title_override')
+        or {'un.hud-title'}
     title.caption = planet_name and {
         '',
-        {'un.hud-title'},
+        configured_title,
         '　',
         factions.display_name(planet_name),
-    } or {'un.hud-title'}
+    } or configured_title
 end
 
 local function update_hud_reset_countdown(player, hud)
@@ -342,7 +344,10 @@ function M.ensure_button(player)
             tooltip = spec[3],
         }
         button.style.height = 40
-        button.style.minimal_width = 88
+        button.style.minimal_width = spec[1] == M.hud_travel.name and 240 or 120
+        if spec[1] == M.hud_travel.name then
+            button.style.maximal_width = 360
+        end
     end
     update_hud_title(player, hud)
     update_hud_reset_countdown(player, hud)
@@ -2037,6 +2042,35 @@ local function render_admin_page(player, frame, content)
 
     scroll.add{type = 'line'}
     scroll.add{type = 'label', caption = {'un.admin-settings-title'}, style = 'heading_2_label'}
+    local hud_title_flow = scroll.add{
+        type = 'flow',
+        direction = 'horizontal',
+    }
+    hud_title_flow.style.vertical_align = 'center'
+    hud_title_flow.add{
+        type = 'label',
+        caption = {'un.admin-setting-hud-title'},
+        tooltip = {'un.admin-setting-hud-title-tooltip'},
+    }
+    local hud_title_input = hud_title_flow.add{
+        type = 'textfield',
+        name = 'un_admin_hud_title_input',
+        text = settings.get('hud_title_override') or '',
+        lose_focus_on_confirm = true,
+        tooltip = {'un.admin-setting-hud-title-tooltip'},
+    }
+    hud_title_input.style.width = 300
+    hud_title_flow.add{
+        type = 'button',
+        caption = {'un.admin-apply'},
+        tags = {action = 'admin-hud-title-apply'},
+    }
+    hud_title_flow.add{
+        type = 'button',
+        caption = {'un.admin-restore-default'},
+        tooltip = {'un.admin-hud-title-reset-tooltip'},
+        tags = {action = 'admin-hud-title-reset'},
+    }
     local setting_table = scroll.add{
         type = 'table',
         name = ADMIN_SETTINGS_TABLE_NAME,
@@ -3733,7 +3767,31 @@ events.on(defines.events.on_gui_click, function(event)
                     and frame.tags.admin_dangerous_actions ~= true then
                 return
             end
-            if tags.action == 'admin-setting-apply' then
+            if tags.action == 'admin-hud-title-apply' then
+                local input = element.parent.un_admin_hud_title_input
+                local ok = input and input.valid
+                    and settings.set('hud_title_override', input.text)
+                if ok then
+                    for _, connected in pairs(game.connected_players) do
+                        update_hud_title(connected)
+                    end
+                end
+                player.print(ok and {'un.admin-setting-saved'}
+                    or {'un.admin-invalid-value'})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-hud-title-reset' then
+                local ok = settings.reset('hud_title_override')
+                if ok then
+                    for _, connected in pairs(game.connected_players) do
+                        update_hud_title(connected)
+                    end
+                end
+                player.print(ok and {'un.admin-hud-title-reset'}
+                    or {'un.admin-invalid-value'})
+                render_page(player, 'admin')
+                update_frame(player)
+            elseif tags.action == 'admin-setting-apply' then
                 local input = element.parent[admin_setting_input_name(tags.setting)]
                 local previous_value = settings.get(tags.setting)
                 local ok = input and input.valid
