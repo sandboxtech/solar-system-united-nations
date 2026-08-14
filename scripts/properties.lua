@@ -991,28 +991,6 @@ function M.property_at_player(player)
     return player and property_on_surface(player.physical_surface) or nil
 end
 
-local function home_travel_context(player)
-    if not (player and player.valid) then return nil, nil, 'invalid-player' end
-    if player.physical_vehicle and player.physical_vehicle.valid then
-        return nil, nil, 'in-vehicle'
-    end
-    local planet_name = factions.of_player(player)
-    if not planet_name then return nil, nil, 'wrong-faction' end
-    local surface = player.physical_surface
-    if not (surface and surface.valid) then
-        return nil, nil, 'travel-restricted'
-    end
-    if surface.name == planet_name then return 'planet', planet_name end
-    if surfaces.hospice_planet(surface) == planet_name then
-        return 'hospice', planet_name
-    end
-    local property = property_on_surface(surface)
-    if property and property.sample_planet == planet_name then
-        return 'property', planet_name, nil, property
-    end
-    return nil, planet_name, 'travel-restricted'
-end
-
 local function release_property(property)
     assign_owner(property, nil)
     property.planet_property_number = next_planet_property_number(
@@ -1075,12 +1053,18 @@ end
 function M.enter_availability(player, property)
     if not property then return false, 'missing' end
     if not valid_surface(property) then return false, 'surface-missing' end
-    local context, planet_name, travel_err = home_travel_context(player)
-    if not context then return false, travel_err end
-    if factions.of_player(player) ~= property.sample_planet then
+    local planet_name = factions.of_player(player)
+    if planet_name ~= property.sample_planet then
         return false, 'wrong-faction'
     end
-    if planet_name ~= property.sample_planet then return false, 'wrong-faction' end
+    if player.physical_vehicle and player.physical_vehicle.valid then
+        return false, 'in-vehicle'
+    end
+    local surface = player.physical_surface
+    if not (surface and surface.valid)
+            or surfaces.hospice_planet(surface) ~= planet_name then
+        return false, 'property-entry-hospice'
+    end
     if player.admin and settings.get('admin_property_access') then return true end
     if property.owner_index == player.index then return true end
     if M.all_open(property.owner_index) then return true end

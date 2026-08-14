@@ -120,7 +120,9 @@ function M.render(player, frame, content, selected_amount, selected_group)
                 list.add{
                     type = 'label',
                     caption = {'', '[img=item/' .. item.name .. '] ',
-                        {'item-name.' .. item.name}},
+                        prototypes.item[item.name]
+                            and prototypes.item[item.name].localised_name
+                            or item.name},
                 }
                 list.add{type = 'label', caption = format_integer(item.carried)}
                 list.add{type = 'label', caption = format_integer(item.stock)}
@@ -209,7 +211,8 @@ function M.handle_click(player, element, frame, content)
     end
     if tags.action ~= 'market-buy-item'
             and tags.action ~= 'market-sell-item'
-            and tags.action ~= 'market-sell-all' then
+            and tags.action ~= 'market-sell-all'
+            and tags.action ~= 'market-confirm-sell-all' then
         return false
     end
     local amount = M.amount(content) or 1
@@ -233,8 +236,28 @@ function M.handle_click(player, element, frame, content)
             format_integer(count),
             format_integer(revenue),
         } or M.error_caption(count))
+    elseif tags.action == 'market-sell-all' then
+        local ok, count, revenue = market.sell_all_quote(player)
+        if not ok then
+            player.print(M.error_caption(count))
+            return true
+        end
+        element.caption = {
+            'un.market-sell-all-confirm',
+            format_integer(count),
+            format_integer(revenue),
+        }
+        element.tooltip = {'un.market-sell-all-confirm-tooltip'}
+        element.tags = {
+            action = 'market-confirm-sell-all',
+            quoted_count = count,
+            quoted_revenue = revenue,
+        }
+        return true
     else
-        local ok, count, revenue = market.sell_all(player)
+        local ok, count, revenue = market.sell_all(
+            player, tags.quoted_count, tags.quoted_revenue
+        )
         player.print(ok and {
             'un.market-sold-all',
             format_integer(count),

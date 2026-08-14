@@ -9,6 +9,7 @@ local linked_inventory = require('scripts.linked_inventory')
 local permissions = require('scripts.permissions')
 local playtime = require('scripts.playtime')
 local properties = require('scripts.properties')
+local market = require('scripts.market')
 local scheduler = require('scripts.scheduler')
 local settings = require('scripts.settings')
 local ships = require('scripts.ships')
@@ -59,6 +60,7 @@ local BALANCE_TABLE_NAME = 'un_ubi_balance_table'
 local BALANCE_NAME = 'un_ubi_balance'
 local STAMINA_NAME = 'un_stamina'
 local UBI_PROGRESS_NAME = 'un_ubi_progress'
+local UBI_PROGRESS_LABEL_NAME = 'un_ubi_progress_label'
 local UBI_CLAIM_NAME = 'un_ubi_claim'
 local STARTER_KIT_NAME = 'un_starter_kit'
 local WOOD_SUPPLY_NAME = 'un_wood_supply'
@@ -143,6 +145,12 @@ local ADMIN_NUMBER_SETTINGS = {
         'un.admin-setting-property-self-purchase-tax'},
     {'property_tax_market_share_percent',
         'un.admin-setting-property-tax-market-share'},
+    {'market_price_percent', 'un.admin-setting-market-price',
+        'un.admin-setting-market-price-tooltip'},
+    {'market_item_depth_multiplier', 'un.admin-setting-market-item-depth',
+        'un.admin-setting-market-item-depth-tooltip'},
+    {'market_coin_depth_multiplier', 'un.admin-setting-market-coin-depth',
+        'un.admin-setting-market-coin-depth-tooltip'},
     {'property_price_factor', 'un.admin-setting-property-factor'},
     {'technology_price_multiplier', 'un.admin-setting-technology-price'},
     {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
@@ -371,6 +379,9 @@ local function disabled_tooltip(action, err)
     if err == 'insufficient-stamina' then return {'un.stamina-insufficient'} end
     if err == 'feature-disabled' then return {'un.feature-disabled'} end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
+    if err == 'property-entry-hospice' then
+        return {'un.property-enter-disabled-hospice'}
+    end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
     if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
@@ -1200,7 +1211,7 @@ local function render_ubi_section(content)
         caption = {'un.personal-stamina-section'},
         tooltip = stamina_tooltip,
     }
-    stamina_heading.add{
+    stamina_card.add{
         type = 'label',
         name = STAMINA_NAME,
         tooltip = stamina_tooltip,
@@ -1270,6 +1281,11 @@ local function render_ubi_section(content)
     }
     balance.add{
         type = 'label', name = BALANCE_NAME, tooltip = coin_tooltip,
+    }
+    coin_card.add{
+        type = 'label',
+        name = UBI_PROGRESS_LABEL_NAME,
+        tooltip = ubi_tooltip,
     }
     local progress = coin_card.add{
         type = 'progressbar',
@@ -1987,7 +2003,11 @@ local function render_admin_page(player, frame, content)
     }
     for _, spec in ipairs(ADMIN_NUMBER_SETTINGS) do
         local key = spec[1]
-        setting_table.add{type = 'label', caption = {spec[2]}}
+        setting_table.add{
+            type = 'label',
+            caption = {spec[2]},
+            tooltip = spec[3] and {spec[3]} or nil,
+        }
         local input = setting_table.add{
             type = 'textfield',
             name = admin_setting_input_name(key),
@@ -2007,6 +2027,9 @@ local function render_admin_page(player, frame, content)
                 or key == 'property_tax_percent'
                 or key == 'property_self_purchase_tax_multiplier'
                 or key == 'property_tax_market_share_percent'
+                or key == 'market_price_percent'
+                or key == 'market_item_depth_multiplier'
+                or key == 'market_coin_depth_multiplier'
                 or key == 'property_price_factor'
                 or key == 'technology_price_multiplier'
                 or key == 'spoil_time_modifier'
@@ -2747,6 +2770,9 @@ local function property_error(err)
         return {'un.property-error-ownership'}
     end
     if err == 'in-vehicle' then return {'un.travel-in-vehicle'} end
+    if err == 'property-entry-hospice' then
+        return {'un.property-enter-disabled-hospice'}
+    end
     if err == 'travel-restricted' then return {'un.travel-restricted'} end
     if err == 'planet-closed' then return {'un.travel-planet-closed'} end
     if err == 'wrong-faction' then return {'un.property-error-wrong-faction'} end
@@ -2917,7 +2943,7 @@ local function update_frame(player)
             and stamina_card[STAMINA_NAME]
         if stamina_label and stamina_label.valid then
             stamina_label.caption = {
-                'un.stamina-amount',
+                'un.stamina-progress',
                 format_integer(stamina.get(player.index)),
                 format_integer(config.stamina_max),
             }
@@ -2928,11 +2954,6 @@ local function update_frame(player)
             stamina_progress.value = math.max(0, math.min(
                 1, stamina.get(player.index) / config.stamina_max
             ))
-            stamina_progress.caption = {
-                'un.stamina-progress',
-                format_integer(stamina.get(player.index)),
-                format_integer(config.stamina_max),
-            }
         end
 
         local claimable = economy.get_claimable_ubi(player.index)
@@ -2941,7 +2962,11 @@ local function update_frame(player)
             and coin_card[UBI_PROGRESS_NAME]
         if progress and progress.valid then
             progress.value = capacity > 0 and claimable / capacity or 0
-            progress.caption = {
+        end
+        local progress_label = coin_card and coin_card.valid
+            and coin_card[UBI_PROGRESS_LABEL_NAME]
+        if progress_label and progress_label.valid then
+            progress_label.caption = {
                 'un.ubi-progress',
                 format_integer(claimable),
                 format_integer(capacity),
@@ -3646,6 +3671,7 @@ events.on(defines.events.on_gui_click, function(event)
             end
             if tags.action == 'admin-setting-apply' then
                 local input = element.parent[admin_setting_input_name(tags.setting)]
+                local previous_value = settings.get(tags.setting)
                 local ok = input and input.valid
                     and settings.set(tags.setting, input.text)
                 if ok and tags.setting == 'property_tax_percent' then
@@ -3664,6 +3690,14 @@ events.on(defines.events.on_gui_click, function(event)
                 end
                 if ok and tags.setting == 'personal_linked_chest_limit' then
                     linked_inventory.enforce_limit()
+                end
+                if ok and (tags.setting == 'market_price_percent'
+                        or tags.setting == 'market_item_depth_multiplier'
+                        or tags.setting == 'market_coin_depth_multiplier') then
+                    if not market.apply_admin_settings() then
+                        settings.set(tags.setting, previous_value)
+                        ok = false
+                    end
                 end
                 player.print(ok and {'un.admin-setting-saved'}
                     or {'un.admin-invalid-value'})

@@ -10,6 +10,10 @@ local M = {}
 local MAX_SAFE_INTEGER = 9007199254740991
 local ROUNDING_EPSILON = 0.000000001
 local item_specs = {}
+local base_price_multiplier = config.market_base_price_multiplier or 1
+
+assert(type(base_price_multiplier) == 'number' and base_price_multiplier > 0,
+    'market_base_price_multiplier must be greater than zero')
 
 for _, spec in ipairs(config.market_items or {}) do
     assert(type(spec.name) == 'string' and spec.name ~= '',
@@ -60,9 +64,22 @@ end
 local function initial_virtual_stock(item_depth)
     local result = {}
     for _, spec in ipairs(config.market_items or {}) do
-        result[spec.name] = item_depth / spec.base_price
+        result[spec.name] = item_depth
+            / (spec.base_price * base_price_multiplier)
     end
     return result
+end
+
+local function configured_price_multiplier()
+    return settings.get('market_price_percent') / 100
+end
+
+local function configured_item_depth_multiplier()
+    return settings.get('market_item_depth_multiplier')
+end
+
+local function configured_coin_depth_multiplier()
+    return settings.get('market_coin_depth_multiplier')
 end
 
 local function depth_multiplier_now()
@@ -76,14 +93,22 @@ end
 
 local function initial_market()
     local depth_multiplier = depth_multiplier_now()
-    local item_depth = config.market_item_depth_start * depth_multiplier
-    local coin_depth = config.market_coin_depth_start * depth_multiplier
+    local item_depth_multiplier = configured_item_depth_multiplier()
+    local coin_depth_multiplier = configured_coin_depth_multiplier()
+    local price_multiplier = configured_price_multiplier()
+    local item_depth = config.market_item_depth_start
+        * item_depth_multiplier * depth_multiplier
+    local coin_depth = config.market_coin_depth_start
+        * coin_depth_multiplier * depth_multiplier
     return {
         cash = config.market_initial_cash,
-        liquidity = coin_depth,
+        liquidity = coin_depth * price_multiplier,
         item_depth = item_depth,
         coin_depth = coin_depth,
         depth_multiplier = depth_multiplier,
+        price_multiplier = price_multiplier,
+        item_depth_multiplier = item_depth_multiplier,
+        coin_depth_multiplier = coin_depth_multiplier,
         stock = initial_stock(),
         virtual_stock = initial_virtual_stock(item_depth),
         buy_rounding_remainder = 0,
@@ -102,7 +127,26 @@ local function ensure_curve()
     end
     local previous_version = storage.market_curve_version
     storage.market_depth_started_tick = game.tick
-    if previous_version == 8 and type(storage.local_markets) == 'table' then
+    if previous_version == 9 and type(storage.local_markets) == 'table' then
+        -- Keep national cash and actual stock while lowering every current
+        -- unit price by the same factor as the new initial prices.
+        for _, market in pairs(storage.local_markets) do
+            if type(market) == 'table'
+                    and type(market.stock) == 'table'
+                    and type(market.virtual_stock) == 'table' then
+                for _, spec in ipairs(config.market_items or {}) do
+                    local stock = valid_nonnegative_integer(
+                        market.stock[spec.name]
+                    ) and market.stock[spec.name] or 0
+                    local virtual = market.virtual_stock[spec.name]
+                    if valid_number(virtual) and virtual > 0 then
+                        market.virtual_stock[spec.name]
+                            = (virtual + stock) / base_price_multiplier - stock
+                    end
+                end
+            end
+        end
+    elseif previous_version == 8 and type(storage.local_markets) == 'table' then
         -- Version 8 used V=1,000,000 and tied the coin depth to its
         -- 20,000,000 starting cash. Preserve stock, cash and current prices.
         local old_item_depth = 1000000
@@ -130,7 +174,7 @@ local function ensure_curve()
                         + stock
                     market.virtual_stock[spec.name]
                         = config.market_item_depth_start / old_item_depth
-                            * old_effective - stock
+                            * old_effective / base_price_multiplier - stock
                 end
             end
         end
@@ -156,15 +200,27 @@ local function normalize_market(market)
             or market.depth_multiplier <= 0 then
         market.depth_multiplier = 1
     end
+    if not valid_number(market.price_multiplier)
+            or market.price_multiplier <= 0 then
+        market.price_multiplier = 1
+    end
+    if not valid_number(market.item_depth_multiplier)
+            or market.item_depth_multiplier <= 0 then
+        market.item_depth_multiplier = 1
+    end
+    if not valid_number(market.coin_depth_multiplier)
+            or market.coin_depth_multiplier <= 0 then
+        market.coin_depth_multiplier = 1
+    end
     if not valid_number(market.item_depth) or market.item_depth <= 0
             or market.item_depth > MAX_SAFE_INTEGER then
         market.item_depth = config.market_item_depth_start
-            * market.depth_multiplier
+            * market.item_depth_multiplier * market.depth_multiplier
     end
     if not valid_number(market.coin_depth) or market.coin_depth <= 0
             or market.coin_depth > MAX_SAFE_INTEGER then
         market.coin_depth = config.market_coin_depth_start
-            * market.depth_multiplier
+            * market.coin_depth_multiplier * market.depth_multiplier
     end
     if type(market.stock) ~= 'table' then market.stock = initial_stock() end
     if type(market.virtual_stock) ~= 'table' then
@@ -178,7 +234,8 @@ local function normalize_market(market)
         if not valid_number(virtual) or virtual <= 0
                 or virtual > MAX_SAFE_INTEGER then
             market.virtual_stock[spec.name]
-                = market.item_depth / spec.base_price
+                = market.item_depth
+                    / (spec.base_price * base_price_multiplier)
         end
     end
     if not valid_remainder(market.buy_rounding_remainder, -1, 0) then
@@ -198,8 +255,10 @@ local function apply_depth_growth(market, force_name)
     if target <= market.depth_multiplier then return false end
     local factor = target / market.depth_multiplier
     local next_liquidity = market.liquidity * factor
-    local next_item_depth = config.market_item_depth_start * target
-    local next_coin_depth = config.market_coin_depth_start * target
+    local next_item_depth = config.market_item_depth_start
+        * market.item_depth_multiplier * target
+    local next_coin_depth = config.market_coin_depth_start
+        * market.coin_depth_multiplier * target
     if next_liquidity > MAX_SAFE_INTEGER
             or next_item_depth > MAX_SAFE_INTEGER
             or next_coin_depth > MAX_SAFE_INTEGER then
@@ -389,6 +448,46 @@ local function copy_market(market)
     return result
 end
 
+local function reconfigured_market(market)
+    local draft = copy_market(market)
+    local price_multiplier = configured_price_multiplier()
+    local item_depth_multiplier = configured_item_depth_multiplier()
+    local coin_depth_multiplier = configured_coin_depth_multiplier()
+    local item_factor = item_depth_multiplier / market.item_depth_multiplier
+    local coin_factor = coin_depth_multiplier / market.coin_depth_multiplier
+    local price_factor = price_multiplier / market.price_multiplier
+
+    draft.item_depth = market.item_depth * item_factor
+    draft.coin_depth = market.coin_depth * coin_factor
+    draft.liquidity = market.liquidity * coin_factor * price_factor
+    if not valid_number(draft.item_depth) or draft.item_depth <= 0
+            or draft.item_depth > MAX_SAFE_INTEGER
+            or not valid_number(draft.coin_depth) or draft.coin_depth <= 0
+            or draft.coin_depth > MAX_SAFE_INTEGER
+            or not valid_number(draft.liquidity) or draft.liquidity <= 0
+            or draft.liquidity > MAX_SAFE_INTEGER then
+        return nil
+    end
+
+    for _, spec in ipairs(config.market_items or {}) do
+        local stock = market.stock[spec.name]
+        local effective_stock = item_factor
+            * (market.virtual_stock[spec.name] + stock)
+        local virtual = effective_stock - stock
+        -- A very shallow setting can put the curve singularity inside the
+        -- actual inventory. Keep a positive virtual reserve in that case.
+        if virtual <= ROUNDING_EPSILON then virtual = ROUNDING_EPSILON end
+        if not valid_number(virtual) or virtual > MAX_SAFE_INTEGER then
+            return nil
+        end
+        draft.virtual_stock[spec.name] = virtual
+    end
+    draft.price_multiplier = price_multiplier
+    draft.item_depth_multiplier = item_depth_multiplier
+    draft.coin_depth_multiplier = coin_depth_multiplier
+    return draft
+end
+
 local function bump_revision(force_name)
     storage.market_revisions[force_name]
         = (storage.market_revisions[force_name] or 0) + 1
@@ -405,6 +504,25 @@ function M.ensure()
     for _, entry in ipairs(factions.all()) do
         market_for_force(entry.force.name)
     end
+end
+
+function M.apply_admin_settings()
+    state.ensure()
+    ensure_curve()
+    local replacements = {}
+    for force_name, market in pairs(storage.local_markets) do
+        if type(market) == 'table' then
+            normalize_market(market)
+            local draft = reconfigured_market(market)
+            if not draft then return false end
+            replacements[force_name] = draft
+        end
+    end
+    for force_name, market in pairs(replacements) do
+        storage.local_markets[force_name] = market
+        bump_revision(force_name)
+    end
+    return true
 end
 
 function M.revision(player)
@@ -606,11 +724,11 @@ function M.sell(player, item_name)
     return true, count, settlement.revenue
 end
 
-function M.sell_all(player)
+local function prepare_sell_all(player)
     local market, force_name = market_for_player(player)
-    if not market then return false, force_name end
+    if not market then return nil, force_name end
     local inventory = main_inventory(player)
-    if not inventory then return false, 'no-inventory' end
+    if not inventory then return nil, 'no-inventory' end
     local draft = copy_market(market)
     local settlements = {}
     local total_count = 0
@@ -630,28 +748,51 @@ function M.sell_all(player)
                 total_count = total_count + count
                 total_revenue = total_revenue + settlement.revenue
             elseif err == 'insufficient-market-credit' then
-                return false, err
+                return nil, err
             end
         end
     end
-    if total_count <= 0 then return false, 'nothing-to-sell' end
+    if total_count <= 0 then return nil, 'nothing-to-sell' end
+    return {
+        draft = draft,
+        force_name = force_name,
+        inventory = inventory,
+        settlements = settlements,
+        total_count = total_count,
+        total_revenue = total_revenue,
+    }
+end
+
+function M.sell_all_quote(player)
+    local prepared, err = prepare_sell_all(player)
+    if not prepared then return false, err end
+    return true, prepared.total_count, prepared.total_revenue
+end
+
+function M.sell_all(player, quoted_count, quoted_revenue)
+    local prepared, err = prepare_sell_all(player)
+    if not prepared then return false, err end
+    if quoted_count ~= nil and (prepared.total_count ~= quoted_count
+            or prepared.total_revenue ~= quoted_revenue) then
+        return false, 'quote-changed'
+    end
     local removed = {}
-    for _, entry in ipairs(settlements) do
-        local actual = inventory.remove{
+    for _, entry in ipairs(prepared.settlements) do
+        local actual = prepared.inventory.remove{
             name = entry.name,
             count = entry.count,
             quality = 'normal',
         }
         if actual ~= entry.count then
             for _, previous in ipairs(removed) do
-                inventory.insert{
+                prepared.inventory.insert{
                     name = previous.name,
                     count = previous.count,
                     quality = 'normal',
                 }
             end
             if actual > 0 then
-                inventory.insert{
+                prepared.inventory.insert{
                     name = entry.name, count = actual, quality = 'normal',
                 }
             end
@@ -659,9 +800,10 @@ function M.sell_all(player)
         end
         removed[#removed + 1] = entry
     end
-    if not economy.change(player.index, total_revenue, 'market-sell-all') then
+    if not economy.change(
+            player.index, prepared.total_revenue, 'market-sell-all') then
         for _, entry in ipairs(removed) do
-            inventory.insert{
+            prepared.inventory.insert{
                 name = entry.name,
                 count = entry.count,
                 quality = 'normal',
@@ -669,9 +811,9 @@ function M.sell_all(player)
         end
         return false, 'credit-limit'
     end
-    storage.local_markets[force_name] = draft
-    bump_revision(force_name)
-    return true, total_count, total_revenue
+    storage.local_markets[prepared.force_name] = prepared.draft
+    bump_revision(prepared.force_name)
+    return true, prepared.total_count, prepared.total_revenue
 end
 
 function M.deposit_property_tax(planet_name, amount)

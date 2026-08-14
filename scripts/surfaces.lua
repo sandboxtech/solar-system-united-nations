@@ -334,10 +334,13 @@ end
 
 function M.property_planet(surface)
     if not (surface and surface.valid) then return nil end
-    for _, property in pairs(storage.properties or {}) do
-        if property.surface_index == surface.index then return property.sample_planet end
-    end
-    return nil
+    local prefix = config.property_surface_prefix
+    if surface.name:sub(1, #prefix) ~= prefix then return nil end
+    local property_id = tonumber(surface.name:sub(#prefix + 1))
+    local property = property_id and storage.properties
+        and storage.properties[property_id] or nil
+    if not property or property.surface_index ~= surface.index then return nil end
+    return property.sample_planet
 end
 
 function M.context_planet(surface)

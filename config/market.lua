@@ -1,5 +1,6 @@
 return function(M)
-    M.market_curve_version = 9
+    M.market_curve_version = 10
+    M.market_base_price_multiplier = 0.02
     M.market_initial_cash = 10000000
     M.property_tax_market_share = 0.50
     -- All goods and the coin reserve grow with the same linear multiplier:

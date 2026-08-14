@@ -117,12 +117,15 @@ local function surface_home_planet(surface)
         local planet_name = surface.name:sub(#hospice_prefix + 1)
         if planet_set[planet_name] then return planet_name end
     end
-    for _, property in pairs(storage.properties or {}) do
-        if property.status == 'active'
-                and property.surface_index == surface.index
-                and planet_set[property.sample_planet] then
-            return property.sample_planet
-        end
+    local property_prefix = config.property_surface_prefix
+    if surface.name:sub(1, #property_prefix) ~= property_prefix then return nil end
+    local property_id = tonumber(surface.name:sub(#property_prefix + 1))
+    local property = property_id and storage.properties
+        and storage.properties[property_id] or nil
+    if property and property.status == 'active'
+            and property.surface_index == surface.index
+            and planet_set[property.sample_planet] then
+        return property.sample_planet
     end
     return nil
 end
