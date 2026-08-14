@@ -23,8 +23,8 @@ end
 
 local function success_chance(property)
     local price = properties.current_price(property)
-    return math.min(1, (1 / (1 + price / config.crime_price_scale))
-        * (tonumber(property.crime_chance_multiplier) or 1))
+    local property_factor = tonumber(property.crime_chance_multiplier) or 1
+    return 1 / (1 + property_factor * price / config.crime_price_scale)
 end
 
 local function context(player)

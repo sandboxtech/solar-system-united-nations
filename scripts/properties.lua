@@ -146,13 +146,13 @@ end
 
 function M.display_name(property)
     if property.custom_name then return property.custom_name end
+    if property.permanent and type(property.construction_type) == 'string' then
+        return {
+            'un.property-model-home',
+            {'un.property-type-name-' .. property.construction_type},
+        }
+    end
     if not property.owner_index then
-        if property.permanent and type(property.construction_type) == 'string' then
-            return {
-                'un.property-model-home',
-                {'un.property-type-name-' .. property.construction_type},
-            }
-        end
         return {
             'un.property-surface-vacant',
             property.planet_property_number or property.id,
@@ -163,10 +163,10 @@ function M.display_name(property)
     local owner_name = owner and owner.name
         or account and account.name
         or ('#' .. property.owner_index)
-    local number = property.owner_property_number
-    local suffix = is_nonnegative_integer(number) and number > 0
-        and (' ' .. tostring(number)) or ''
-    return {'un.property-surface-owned', owner_name, suffix}
+    local type_name = type(property.construction_type) == 'string'
+        and {'un.property-type-name-' .. property.construction_type}
+        or {'un.property-column-name'}
+    return {'un.property-surface-owned', owner_name, type_name}
 end
 
 local function property_name_position()
@@ -242,7 +242,7 @@ function M.feature_description(property)
         '',
         dimensions,
         '\n',
-        {'un.property-feature-crime-multiplier', multiplier * 100},
+        {'un.property-feature-crime-multiplier', multiplier},
     }
 end
 

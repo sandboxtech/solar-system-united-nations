@@ -60,6 +60,21 @@ local PLANET_TRAITS = {
             group = 'nauvis-day', weight = 1, factor = 10},
         {id = 'nauvis-rapid-day', kind = 'day',
             group = 'nauvis-day', weight = 1, factor = 0.1},
+        {id = 'peaceful-world', kind = 'peaceful', weight = 4},
+        {id = 'young-wildlife', kind = 'evolution',
+            group = 'nauvis-evolution', weight = 4, factor = 0.05},
+        {id = 'apex-wildlife', kind = 'evolution',
+            group = 'nauvis-evolution', weight = 4, factor = 0.95},
+        {id = 'mineral-boom', kind = 'category', category = 'resource',
+            group = 'nauvis-all-resources', weight = 6,
+            frequency = 2, size = 2, richness = 4},
+        {id = 'mineral-drought', kind = 'category', category = 'resource',
+            group = 'nauvis-all-resources', weight = 6,
+            frequency = 0.5, size = 0.5, richness = 0.5},
+        {id = 'dark-night', kind = 'brightness',
+            group = 'nauvis-brightness', weight = 2, value = 0},
+        {id = 'luminous-night', kind = 'brightness',
+            group = 'nauvis-brightness', weight = 2, value = 0.35},
     },
     vulcanus = {
         {id = 'vulcanus-tungsten-rich', kind = 'control',
@@ -105,6 +120,23 @@ local PLANET_TRAITS = {
             group = 'vulcanus-day', weight = 1, factor = 10},
         {id = 'vulcanus-rapid-day', kind = 'day',
             group = 'vulcanus-day', weight = 1, factor = 0.1},
+        {id = 'mineral-boom', kind = 'category', category = 'resource',
+            group = 'vulcanus-all-resources', weight = 6,
+            frequency = 2, size = 2, richness = 4},
+        {id = 'mineral-drought', kind = 'category', category = 'resource',
+            group = 'vulcanus-all-resources', weight = 6,
+            frequency = 0.5, size = 0.5, richness = 0.5},
+        {id = 'vulcanus-dormant-territories', kind = 'territory',
+            group = 'vulcanus-demolishers', weight = 5, tiers = 0},
+        {id = 'vulcanus-young-territories', kind = 'territory',
+            group = 'vulcanus-demolishers', weight = 5, tiers = 1},
+        {id = 'vulcanus-crowded-territories', kind = 'territory',
+            group = 'vulcanus-demolishers', weight = 5,
+            tiers = 3, territory_size = 0.25},
+        {id = 'dark-night', kind = 'brightness',
+            group = 'vulcanus-brightness', weight = 2, value = 0},
+        {id = 'luminous-night', kind = 'brightness',
+            group = 'vulcanus-brightness', weight = 2, value = 0.35},
     },
     gleba = {
         {id = 'gleba-lush', kind = 'category', category = 'terrain',
@@ -146,6 +178,27 @@ local PLANET_TRAITS = {
             group = 'gleba-biomes', weight = 1, moisture_frequency = 0.1},
         {id = 'gleba-patchwork-biomes', kind = 'climate-frequency',
             group = 'gleba-biomes', weight = 1, moisture_frequency = 10},
+        {id = 'peaceful-world', kind = 'peaceful', weight = 4},
+        {id = 'young-wildlife', kind = 'evolution',
+            group = 'gleba-evolution', weight = 4, factor = 0.05},
+        {id = 'apex-wildlife', kind = 'evolution',
+            group = 'gleba-evolution', weight = 4, factor = 0.95},
+        {id = 'gleba-close-nests', kind = 'starting-area',
+            group = 'gleba-starting-area', weight = 3, factor = 0.25},
+        {id = 'gleba-wide-frontier', kind = 'starting-area',
+            group = 'gleba-starting-area', weight = 3, factor = 4},
+        {id = 'gleba-bright-sun', kind = 'solar',
+            group = 'gleba-solar', weight = 4, factor = 10},
+        {id = 'gleba-dim-sun', kind = 'solar',
+            group = 'gleba-solar', weight = 4, factor = 0.1},
+        {id = 'gleba-long-day', kind = 'day',
+            group = 'gleba-day', weight = 1, factor = 10},
+        {id = 'gleba-rapid-day', kind = 'day',
+            group = 'gleba-day', weight = 1, factor = 0.1},
+        {id = 'dark-night', kind = 'brightness',
+            group = 'gleba-brightness', weight = 2, value = 0},
+        {id = 'luminous-night', kind = 'brightness',
+            group = 'gleba-brightness', weight = 2, value = 0.35},
     },
     fulgora = {
         {id = 'fulgora-scrap-rich', kind = 'control', controls = {'scrap'},
@@ -184,6 +237,13 @@ local PLANET_TRAITS = {
             group = 'fulgora-day', weight = 2, factor = 10},
         {id = 'fulgora-rapid-storms', kind = 'day',
             group = 'fulgora-day', weight = 2, factor = 0.1},
+        {id = 'mineral-drought', kind = 'category', category = 'resource',
+            group = 'fulgora-scrap', weight = 6,
+            frequency = 0.5, size = 0.5, richness = 0.5},
+        {id = 'fulgora-eternal-day', kind = 'frozen-daytime',
+            group = 'fulgora-day', weight = 4, daytime = 0},
+        {id = 'fulgora-eternal-storm', kind = 'frozen-daytime',
+            group = 'fulgora-day', weight = 4, daytime = 0.5},
     },
     aquilo = {
         {id = 'aquilo-lithium-rich', kind = 'control',
@@ -225,6 +285,13 @@ local PLANET_TRAITS = {
             group = 'aquilo-day', weight = 1, factor = 10},
         {id = 'aquilo-rapid-day', kind = 'day',
             group = 'aquilo-day', weight = 1, factor = 0.1},
+        {id = 'mineral-drought', kind = 'category', category = 'resource',
+            group = 'aquilo-all-resources', weight = 6,
+            frequency = 0.5, size = 0.5, richness = 0.5},
+        {id = 'dark-night', kind = 'brightness',
+            group = 'aquilo-brightness', weight = 2, value = 0},
+        {id = 'luminous-night', kind = 'brightness',
+            group = 'aquilo-brightness', weight = 2, value = 0.35},
     },
 }
 
@@ -495,7 +562,7 @@ local function randomize_climate(name, map_settings, record)
     map_settings.property_expression_names = expressions
 end
 
-local function randomize_demolishers(map_settings, record)
+local function randomize_territories(map_settings)
     local territory = map_settings.territory_settings
     if not (territory and territory.units and #territory.units > 0) then return end
     territory.minimum_territory_size = math.max(
@@ -503,19 +570,6 @@ local function randomize_demolishers(map_settings, record)
         math.floor((territory.minimum_territory_size or 10)
             * power_of_two(2) + 0.5)
     )
-    local roll = math.random()
-    if roll < 0.05 then
-        territory.minimum_territory_size = 4294967295
-        record.demolisher_tiers = 0
-    elseif roll < 0.25 then
-        territory.units = {'small-demolisher'}
-        record.demolisher_tiers = 1
-    elseif roll < 0.55 then
-        territory.units = {'small-demolisher', 'medium-demolisher'}
-        record.demolisher_tiers = 2
-    else
-        record.demolisher_tiers = #territory.units
-    end
 end
 
 local function multiply_control(control, trait)
@@ -533,7 +587,6 @@ local function apply_trait(map_settings, record, trait)
             if control then
                 multiply_control(control, trait)
                 applied = true
-                break
             end
         end
     elseif trait.kind == 'category' then
@@ -592,6 +645,38 @@ local function apply_trait(map_settings, record, trait)
             (map_settings.starting_area or 1) * trait.factor
         )
         applied = true
+    elseif trait.kind == 'peaceful' then
+        record.peaceful = true
+        applied = true
+    elseif trait.kind == 'evolution' then
+        record.evolution = trait.factor
+        applied = true
+    elseif trait.kind == 'brightness' then
+        record.min_brightness = trait.value
+        applied = true
+    elseif trait.kind == 'frozen-daytime' then
+        record.freeze_daytime = true
+        record.daytime = trait.daytime
+        applied = true
+    elseif trait.kind == 'territory' then
+        local territory = map_settings.territory_settings
+        if territory and territory.units and #territory.units > 0 then
+            if trait.tiers == 0 then
+                territory.minimum_territory_size = 4294967295
+            else
+                local units = {}
+                for index = 1, math.min(trait.tiers, #territory.units) do
+                    units[index] = territory.units[index]
+                end
+                territory.units = units
+                territory.minimum_territory_size = math.max(
+                    1,
+                    math.floor((territory.minimum_territory_size or 10)
+                        * (trait.territory_size or 1) + 0.5)
+                )
+            end
+            applied = true
+        end
     end
     return applied
 end
@@ -631,18 +716,21 @@ local function prepare_new_round(name, surface, record)
     map_settings.seed = math.random(1, 2147483647)
     record.solar_factor = choose(config.public_planet_solar_factors)
     record.day_factor = choose(config.public_planet_day_factors)
+    record.evolution = (name == 'nauvis' or name == 'gleba')
+        and math.random() ^ 2 or nil
+    record.min_brightness = math.random() * 0.2
+    record.peaceful = false
+    record.freeze_daytime = false
+    record.daytime = nil
+    record.demolisher_tiers = nil
     randomize_autoplace(map_settings, record)
     randomize_climate(name, map_settings, record)
-    randomize_demolishers(map_settings, record)
+    randomize_territories(map_settings)
     roll_traits(name, map_settings, record)
     surface.map_gen_settings = map_settings
 
     record.round = record.round + 1
     record.seed = map_settings.seed
-    record.evolution = (name == 'nauvis' or name == 'gleba')
-        and math.random() ^ 2 or nil
-    record.min_brightness = math.random() * 0.2
-    record.peaceful = math.random() < config.public_planet_peaceful_chance
     local half_day = 0.1 + math.random() * 0.3
     local evening = half_day + (0.5 - half_day)
         * (0.4 + math.random() * 0.5)
@@ -670,6 +758,8 @@ local function apply_round_environment(name, surface, record)
         surface.daytime_parameters = record.daytime_parameters
         surface.min_brightness = record.min_brightness
         surface.peaceful_mode = record.peaceful == true
+        surface.freeze_daytime = record.freeze_daytime == true
+        if record.freeze_daytime then surface.daytime = record.daytime end
     end)
     if (name == 'nauvis' or name == 'gleba') and record.evolution then
         game.forces.enemy.set_evolution_factor(record.evolution, surface)

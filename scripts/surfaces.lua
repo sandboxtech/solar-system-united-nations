@@ -742,6 +742,7 @@ function M.expand_property_surface(property, new_width, new_height, layout)
         old_bounds,
         special_bounds
     )
+    M.apply_entrance_tiles(surface, config.property_entrance_top_y)
     local force = factions.of_planet(property.sample_planet)
     if force and force.valid then
         force.chart(surface, {

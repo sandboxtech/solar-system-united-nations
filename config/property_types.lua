@@ -201,6 +201,7 @@ return function(M)
             fixed_layout = {
                 fill_tile = 'dust-lumpy',
             },
+            special_areas = upper_band('ammoniacal-ocean'),
             crime_chance_multiplier = 10,
         },
     }

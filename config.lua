@@ -37,7 +37,6 @@ M.public_planet_terrain_spread = 1
 M.public_planet_cliff_spread = 1
 M.public_planet_enemy_spread = 2
 M.public_planet_starting_area_spread = 0.5
-M.public_planet_peaceful_chance = 0.1
 M.planet_reset_acceleration_stamina_cost = 1000
 M.planet_reset_acceleration_fraction = 0.1
 M.planet_reset_acceleration_min_remaining_minutes = 10

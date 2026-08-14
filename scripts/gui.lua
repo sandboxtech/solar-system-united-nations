@@ -1121,7 +1121,7 @@ local function render_property_build_page(player, frame, content)
     for _, option in ipairs(config.property_build_types) do
         build_type_items[#build_type_items + 1] = {
             'un.property-build-type-' .. option.key,
-            (option.crime_chance_multiplier or 1) * 100,
+            option.crime_chance_multiplier or 1,
         }
     end
     form.add{
@@ -2450,7 +2450,6 @@ local function render_help_page(player, frame, content, mode)
                     config.public_planet_terrain_spread,
                     config.public_planet_cliff_spread,
                     config.public_planet_enemy_spread,
-                    config.public_planet_peaceful_chance * 100,
                     settings.get('technology_price_multiplier'),
                     settings.get('spoil_time_modifier'),
                     settings.get('asteroid_spawning_rate'),
