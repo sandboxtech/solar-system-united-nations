@@ -276,15 +276,13 @@ local function ensure_linked_chests(property)
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
     surface.localised_name = M.surface_display_name(property)
-    property.min_brightness = config.property_min_brightness
     surfaces.sync_property_environment(
         surface,
-        property.min_brightness,
+        config.property_min_brightness,
         property.terrain_planet or property.sample_planet,
         nil,
         property.construction_type
     )
-    property.solar = surface.solar_power_multiplier
     normalize_linked_chest_positions(property, surface)
     local force = factions.of_planet(property.sample_planet)
     if not (force and force.valid) then return false end
@@ -584,9 +582,7 @@ create = function(spec)
     local layout_anchor_up = spec.layout_anchor_up == true
     local layout_base_height = tonumber(spec.layout_base_height) or height
     local id = next_available_property_id()
-    local min_brightness = config.property_min_brightness
-    local surface, half_width, half_height, terrain_planet, sample_position
-        = surfaces.create_property_surface(id, {
+    local surface, terrain_planet = surfaces.create_property_surface(id, {
         width = width,
         height = height,
         surface_width = max_width,
@@ -623,11 +619,8 @@ create = function(spec)
         max_height = max_height,
         layout_anchor_up = layout_anchor_up,
         layout_base_height = layout_base_height,
-        solar = surface.solar_power_multiplier,
-        min_brightness = min_brightness,
         sample_planet = spec.sample_planet,
         terrain_planet = terrain_planet,
-        sample_position = sample_position,
         linked_chest_positions = permanent
             and config.permanent_property_linked_chest_positions
             or config.property_linked_chest_positions,
@@ -636,7 +629,6 @@ create = function(spec)
         lifetime_hours = lifetime_hours,
         permanent = permanent,
         rental = spec.rental == true,
-        construction_value = tonumber(spec.construction_value),
         construction_type = type(spec.construction_type) == 'string'
             and spec.construction_type or nil,
         construction_level = tonumber(spec.construction_level),
@@ -886,7 +878,6 @@ function M.build(player, planet_name, build_type_index, custom_name, expected_le
         width = requirement.size.width,
         height = requirement.size.height,
         custom_name = normalized_name,
-        construction_value = requirement.initial_price,
         construction_type = requirement.build_type.key,
         construction_level = requirement.total_level,
         crime_chance_multiplier = requirement.build_type.crime_chance_multiplier,
@@ -997,7 +988,6 @@ local function release_property(property)
         property.sample_planet,
         property.id
     )
-    property.owner_cleanup_tick = game.tick
     ensure_linked_chests(property)
     sync_surface_visibility(property)
     local translator = first_connected_player()
@@ -1108,8 +1098,6 @@ function M.buy(player, property_id, quoted_price)
     sync_surface_visibility(property)
     property.base_price = price
     property.price_at_tick = game.tick + property.decay_ticks
-    property.purchased_tick = game.tick
-    property.purchase_price = price
     request_property_name_translation(property, player)
     if not ensure_linked_chests(property) then
         log('[un] property relink failed for property ' .. property.id)
@@ -1565,7 +1553,6 @@ function M.renew(
         return false, 'insufficient-stamina', requirement
     end
     property.expires_tick = game.tick + requirement.lifetime_ticks
-    property.renewal_count = (property.renewal_count or 0) + 1
     bump_revision()
     game.print({
         'un.property-renewed-broadcast',
@@ -1799,8 +1786,6 @@ events.on(defines.events.on_string_translated, function(event)
     local player_index = request.player_index or request.owner_index
     if event.player_index ~= player_index or not event.translated then return end
     property.rendered_name = event.result
-    local player = game.get_player(event.player_index)
-    property.rendered_name_locale = player and player.locale or nil
     ensure_property_name_rendering(property, event.result)
 end)
 

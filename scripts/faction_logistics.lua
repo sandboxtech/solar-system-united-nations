@@ -39,6 +39,36 @@ local function destroy_snapshots(snapshots)
     end
 end
 
+local function has_legacy_layout()
+    for _, planet_name in ipairs(config.public_planets) do
+        local old_id = legacy_link_id(planet_name)
+        local checks = {
+            {
+                surface = surfaces.hospice_surface(planet_name),
+                positions = config.faction_logistics_hospice_chest_positions,
+            },
+            {
+                surface = game.surfaces[planet_name],
+                positions = config.faction_logistics_chest_positions,
+            },
+        }
+        for _, check in ipairs(checks) do
+            if check.surface and check.surface.valid then
+                for _, position in ipairs(check.positions) do
+                    local chest = check.surface.find_entity(
+                        config.linked_chest_name,
+                        position
+                    )
+                    if chest and chest.valid and chest.link_id == old_id then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function protect(entity)
     entity.destructible = false
     entity.minable_flag = false
@@ -160,7 +190,7 @@ function M.ensure_hospice(planet_name)
 end
 
 function M.ensure_all()
-    local migrate = storage.faction_logistics_split_link_ids ~= true
+    local migrate = has_legacy_layout()
     local snapshots = {}
     if migrate then
         for _, planet_name in ipairs(config.public_planets) do
@@ -221,7 +251,6 @@ function M.ensure_all()
                 old_inventory.clear()
             end
         end
-        storage.faction_logistics_split_link_ids = true
     end
     destroy_snapshots(snapshots)
 end

@@ -502,7 +502,7 @@ function M.create_property_surface(property_id, spec)
     local reset = storage.public_planet_resets
         and storage.public_planet_resets[requested_planet]
     if reset and reset.state ~= 'open' then
-        return nil, nil, nil, nil, nil
+        return nil
     end
     local name = config.property_surface_prefix .. tostring(property_id)
     local surface = game.surfaces[name]
@@ -525,7 +525,6 @@ function M.create_property_surface(property_id, spec)
         'out-of-map'
     )
     local sample_planet = requested_planet
-    local sample_position = nil
     apply_fixed_property_tiles(
         surface,
         half_width,
@@ -534,7 +533,7 @@ function M.create_property_surface(property_id, spec)
         nil,
         active_bounds.offset_y
     )
-    if not sample_planet then return nil, nil, nil, nil, nil end
+    if not sample_planet then return nil end
     local special_bounds = property_special_bounds(active_bounds)
     clear_property_lower_half(surface, spec, special_bounds, nil)
     apply_property_special_tiles(
@@ -562,7 +561,7 @@ function M.create_property_surface(property_id, spec)
             {active_bounds.right, active_bounds.bottom},
         })
     end
-    return surface, half_width, half_height, sample_planet, sample_position
+    return surface, sample_planet
 end
 
 function M.expand_property_surface(property, new_width, new_height, layout)

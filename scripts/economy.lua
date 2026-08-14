@@ -5,6 +5,7 @@ local state = require('scripts.state')
 
 local M = {}
 
+local MAX_SAFE_INTEGER = 9007199254740991
 local balance_handlers = {}
 
 local function is_finite_integer(value)
@@ -12,6 +13,7 @@ local function is_finite_integer(value)
         and value == value
         and value ~= math.huge
         and value ~= -math.huge
+        and math.abs(value) <= MAX_SAFE_INTEGER
         and value == math.floor(value)
 end
 
