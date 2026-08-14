@@ -10,15 +10,6 @@ local stamina = require('scripts.stamina')
 local M = {}
 local STARTER_PACK = 'space-platform-starter-pack'
 
-local function bump_revision()
-    storage.ship_revision = (storage.ship_revision or 0) + 1
-end
-
-function M.revision()
-    state.ensure()
-    return storage.ship_revision
-end
-
 local function records()
     state.ensure()
     return storage.ships
@@ -65,7 +56,6 @@ end
 
 local function reconcile()
     local registered = records()
-    local changed = false
     for _, entry in ipairs(factions.all()) do
         for index, platform in pairs(entry.force.platforms) do
             if platform and platform.valid and not registered[index] then
@@ -73,15 +63,12 @@ local function reconcile()
                     owner_index = nil,
                     force_name = entry.force.name,
                     planet_name = entry.planet_name,
-                    created_tick = game.tick,
                     built_tick = is_ready(platform) and game.tick or nil,
                     life_ticks = config.ship_life_hours * config.ticks_per_hour,
                 }
-                changed = true
             end
         end
     end
-    if changed then bump_revision() end
 end
 
 local function apply_bounds(platform, owner_index)
@@ -117,7 +104,6 @@ function M.of(player_index, planet_name)
             local platform = platform_of(index, record)
             if not platform then
                 records()[index] = nil
-                bump_revision()
             elseif (not planet_name or record.planet_name == planet_name)
                     and not (record.scuttled_tick or is_scheduled(platform))
                     and (not best_index or index < best_index) then
@@ -137,7 +123,6 @@ function M.list(viewer_index)
         local platform = platform_of(index, record)
         if not platform then
             records()[index] = nil
-            bump_revision()
         elseif record.owner_index
                 and not (record.scuttled_tick or is_scheduled(platform)) then
             if not viewer_index or M.is_public(record.owner_index) then
@@ -174,7 +159,6 @@ function M.set_public(player_index, public)
             if platform then apply_visibility(platform, player_index) end
         end
     end
-    bump_revision()
     return true
 end
 
@@ -228,19 +212,16 @@ function M.create(player, planet_name)
         owner_index = player.index,
         force_name = player.force.name,
         planet_name = planet_name,
-        created_tick = game.tick,
         life_ticks = (settings.get('ship_life_hours')
             + experience.total_level(player.index)) * config.ticks_per_hour,
     }
     records()[platform.index] = record
-    bump_revision()
     local applied, apply_err = pcall(function() platform.apply_starter_pack() end)
     if not applied then
         record.scuttled_tick = game.tick
         platform.destroy(1)
         stamina.refund(player.index, config.ship_stamina_cost)
         log('[un] failed to apply ship starter pack: ' .. tostring(apply_err))
-        bump_revision()
         return nil, 'ship-create-failed'
     end
 
@@ -288,7 +269,6 @@ function M.scuttle(player)
     if not platform then return false, 'ship-missing' end
     record.scuttled_tick = game.tick
     platform.destroy(1)
-    bump_revision()
     return true
 end
 
@@ -305,7 +285,6 @@ function M.remove_owner(player_index)
             removed = removed + 1
         end
     end
-    if removed > 0 then bump_revision() end
     return removed
 end
 
@@ -331,14 +310,11 @@ local function on_platform_surface(surface)
             owner_index = nil,
             force_name = platform.force.name,
             planet_name = factions.planet_of_force(platform.force),
-            created_tick = game.tick,
         }
         records()[platform.index] = record
-        bump_revision()
     end
     if not record.built_tick then
         record.built_tick = game.tick
-        bump_revision()
     end
     apply_bounds(platform, record.owner_index)
     apply_visibility(platform, record.owner_index)
@@ -355,22 +331,18 @@ end)
 scheduler.every(config.ship_lifecycle_ticks, function()
     reconcile()
     M.enforce_lock()
-    local changed = false
     for index, record in pairs(records()) do
         local platform = platform_of(index, record)
         if not platform then
             records()[index] = nil
-            changed = true
         elseif record.built_tick and M.left_ticks(record) <= 0
                 and not (record.scuttled_tick or is_scheduled(platform)) then
             record.scuttled_tick = game.tick
             platform.destroy(1)
-            changed = true
             local owner = record.owner_index and game.get_player(record.owner_index)
             game.print({'un.ship-expired', owner and owner.name or platform.name})
         end
     end
-    if changed then bump_revision() end
 end)
 
 return M
