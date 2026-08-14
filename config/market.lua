@@ -60,16 +60,16 @@ return function(M)
         {name = 'fusion-power-cell', base_price = 50000, group = 'component'},
 
         {name = 'automation-science-pack', base_price = 1000, group = 'science'},
-        {name = 'logistic-science-pack', base_price = 2000, group = 'science'},
-        {name = 'military-science-pack', base_price = 3000, group = 'science'},
-        {name = 'chemical-science-pack', base_price = 5000, group = 'science'},
-        {name = 'production-science-pack', base_price = 10000, group = 'science'},
-        {name = 'utility-science-pack', base_price = 10000, group = 'science'},
-        {name = 'space-science-pack', base_price = 20000, group = 'science'},
+        {name = 'logistic-science-pack', base_price = 3000, group = 'science'},
+        {name = 'military-science-pack', base_price = 5000, group = 'science'},
+        {name = 'chemical-science-pack', base_price = 7000, group = 'science'},
+        {name = 'production-science-pack', base_price = 90000, group = 'science'},
+        {name = 'utility-science-pack', base_price = 90000, group = 'science'},
+        {name = 'space-science-pack', base_price = 90000, group = 'science'},
         {name = 'metallurgic-science-pack', base_price = 20000, group = 'science'},
         {name = 'agricultural-science-pack', base_price = 20000, group = 'science'},
         {name = 'electromagnetic-science-pack', base_price = 20000, group = 'science'},
-        {name = 'cryogenic-science-pack', base_price = 50000, group = 'science'},
+        {name = 'cryogenic-science-pack', base_price = 30000, group = 'science'},
         {name = 'promethium-science-pack', base_price = 100000, group = 'science'},
     }
 end
