@@ -2139,6 +2139,20 @@ local function render_admin_page(player, frame, content)
     }
     switches.add{
         type = 'switch',
+        left_label_caption = {'un.admin-setting-reset-messages-home'},
+        right_label_caption = {'un.admin-setting-reset-messages-all'},
+        left_label_tooltip = {'un.admin-setting-reset-messages-tooltip'},
+        right_label_tooltip = {'un.admin-setting-reset-messages-tooltip'},
+        switch_state = settings.get('planet_reset_messages_global')
+            and 'right' or 'left',
+        allow_none_state = false,
+        tags = {
+            action = 'admin-setting-switch',
+            setting = 'planet_reset_messages_global',
+        },
+    }
+    switches.add{
+        type = 'switch',
         left_label_caption = {'un.admin-disabled'},
         right_label_caption = {'un.admin-setting-tech-leak-enabled'},
         switch_state = settings.get('tech_leak_enabled') and 'right' or 'left',

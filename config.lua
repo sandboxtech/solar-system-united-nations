@@ -28,6 +28,7 @@ M.public_planet_reset_max_hours = 2.5
 M.public_planet_reset_exponent = 2
 M.public_planet_foreign_warning_early_minutes = 5
 M.public_planet_foreign_warning_final_minutes = 1
+M.planet_reset_messages_global = false
 M.public_planet_check_ticks = 60 * 60
 M.public_planet_solar_factors = {0.75, 1, 1.25}
 M.public_planet_day_factors = {0.75, 1, 1.5}

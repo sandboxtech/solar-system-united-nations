@@ -12,6 +12,15 @@ local surfaces = require('scripts.surfaces')
 
 local M = {}
 
+local function print_reset_message(planet_name, message)
+    if settings.get('planet_reset_messages_global') then
+        game.print(message)
+        return
+    end
+    local force = factions.of_planet(planet_name)
+    if force and force.valid then force.print(message) end
+end
+
 local PLANET_TRAITS = {
     nauvis = {
         {id = 'nauvis-iron-rich', kind = 'control', controls = {'iron-ore'},
@@ -838,7 +847,10 @@ local function finish_reset(name, surface, record)
         record.paused_left_ticks = record.period_ticks
     end
     record.warned = {}
-    game.print({'un.planet-reset-finished', planet_label(name)})
+    print_reset_message(name, {
+        'un.planet-reset-finished',
+        planet_label(name),
+    })
     local changed, friendly = factions.update_diplomacy_after_reset(name)
     if changed then
         game.print({
@@ -1033,7 +1045,7 @@ local function check_resets()
                 if left <= threshold and left > 0 and not record.warned[key]
                         and surface and surface.valid then
                     record.warned[key] = true
-                    game.print({
+                    print_reset_message(name, {
                         'un.planet-reset-warning',
                         planet_label(name),
                         minutes,

@@ -162,6 +162,10 @@ local DEFINITIONS = {
         integer = true,
     },
     planet_resets_enabled = {default = true, boolean = true},
+    planet_reset_messages_global = {
+        default = config.planet_reset_messages_global,
+        boolean = true,
+    },
     tech_leak_enabled = {default = true, boolean = true},
     property_expansion_enabled = {default = true, boolean = true},
     property_salvage_enabled = {default = true, boolean = true},
