@@ -76,7 +76,7 @@ return function(M)
             initial_price_multiplier = 3,
             terrain_planet = 'nauvis',
             fixed_layout = {
-                fill_tile = 'grass-1',
+                fill_tile = 'tutorial-grid',
             },
             lower_half_out_of_map = true,
             special_areas = upper_band('water'),

@@ -2231,7 +2231,8 @@ local function render_help_page(player, frame, content, mode)
     if mode == 'admin' and not player.admin then mode = 'brief' end
     local title = content.add{
         type = 'label',
-        caption = mode == 'story' and {'un.help-story-title'}
+        caption = mode == 'faction' and {'un.help-faction-title'}
+            or mode == 'story' and {'un.help-story-title'}
             or mode == 'admin' and {'un.help-admin-title'}
             or mode == 'full' and {'un.help-full-title'}
             or mode == 'advanced' and {'un.help-advanced-title'}
@@ -2259,6 +2260,11 @@ local function render_help_page(player, frame, content, mode)
         name = HELP_STORY_NAME,
         caption = {'un.help-mode-story'},
     }
+    local faction = modes.add{
+        type = 'button',
+        name = 'un_help_faction',
+        caption = {'un.help-mode-faction'},
+    }
     local admin
     if player.admin then
         admin = modes.add{
@@ -2268,6 +2274,7 @@ local function render_help_page(player, frame, content, mode)
         }
     end
     story.enabled = mode ~= 'story'
+    faction.enabled = mode ~= 'faction'
     brief.enabled = mode ~= 'brief'
     advanced.enabled = mode ~= 'advanced'
     full.enabled = mode ~= 'full'
@@ -2280,25 +2287,33 @@ local function render_help_page(player, frame, content, mode)
     details.style.minimal_width = 740
     details.style.maximal_height = 620
 
-    if mode == 'advanced' or mode == 'full' then
-        local intro = details.add{
-            type = 'label',
-            caption = {'un.help-layer-' .. mode},
-        }
-        intro.style.single_line = false
-        intro.style.maximal_width = 700
-        intro.style.font_color = {0.72, 0.72, 0.72}
-        add_help_gap(details)
-    end
-
-    if mode == 'story' then
-        local background = add_help_card(details, {'un.help-card-story'})
+    if mode == 'faction' then
+        local background = add_help_card(
+            details,
+            {'un.help-card-story'},
+            {'un.help-story-background-detail'}
+        )
         add_help_line(background, {'un.help-story-background'})
         add_help_gap(details)
         local forces = add_help_card(
             details,
             {'un.help-card-factions'},
-            {'un.help-story-factions-detail'}
+            {
+                '',
+                {'un.help-story-factions-detail'},
+                '\n\n',
+                {
+                    'un.help-detail-tech-leak',
+                    settings.get('tech_leak_interval_hours'),
+                },
+                '\n\n',
+                {
+                    'un.help-detail-tech-leak-formula',
+                    settings.get('tech_leak_max_percent'),
+                    settings.get('tech_leak_max_affected'),
+                    config.tech_leak_chance_multiplier_by_planet.aquilo,
+                },
+            }
         )
         add_help_line(forces, {'un.help-story-factions'})
         add_help_gap(details)
@@ -2322,63 +2337,108 @@ local function render_help_page(player, frame, content, mode)
             {'un.help-story-faction-switch-detail'}
         )
         add_help_line(switching, {'un.help-story-faction-switch'})
-    elseif mode == 'brief' then
-        local travel = add_help_card(details, {'un.help-card-travel'})
-        add_help_line(travel, {'un.help-brief-travel'})
-        add_help_gap(details)
-        local income = add_help_card(details, {'un.help-card-income'})
-        add_help_line(income, {'un.help-brief-start'})
-        add_help_gap(details)
-        local property = add_help_card(details, {'un.help-card-property'})
-        add_help_line(property, {'un.help-brief-property'})
-        add_help_gap(details)
-        local storage_card = add_help_card(details, {'un.help-card-storage'})
-        add_help_line(storage_card, {'un.help-brief-storage'})
-        add_help_gap(details)
-        local advice = add_help_card(
+    elseif mode == 'story' then
+        local ownership = add_help_card(
             details,
-            {'un.help-card-advice'},
-            {
-                'un.help-brief-deconstruction',
-                settings.get('deconstruction_min_online_hours'),
-            }
+            {'un.help-property-card-ownership'},
+            {'un.help-property-ownership-detail'}
         )
-        add_help_line(advice, {'un.help-brief-advice'})
-        add_help_gap(details)
-        local features = add_help_card(details, {'un.help-card-features'})
-        add_help_line(features, {'un.help-brief-features'})
-        add_help_gap(details)
-        local project = add_help_card(details, {'un.help-card-project'})
-        add_help_line(project, {'un.help-brief-project'})
-    elseif mode == 'advanced' then
-        local travel_tooltip = {
-            '',
-            {
-            'un.help-detail-travel',
-            config.fast_respawn_stamina_cost,
-            config.fast_respawn_seconds,
-            config.normal_respawn_seconds,
-            },
-            '\n\n',
-            {'un.help-foreign-survival'},
-            '\n\n',
-            {'un.help-detail-resets'},
-        }
-        local travel = add_help_card(
-            details,
-            {'un.help-detail-ship-heading'},
-            travel_tooltip
-        )
-        add_help_line(travel, {'un.help-advanced-travel-summary'})
+        add_help_line(ownership, {'un.help-property-ownership-summary'})
         add_help_gap(details)
 
-        local linked_tooltip = {
-            '',
+        local trading = add_help_card(
+            details,
+            {'un.help-property-card-trading'},
             {
-                'un.help-detail-linked-chest',
+                '',
+                {
+                    'un.help-detail-property-price',
+                    config.property_price_cap,
+                    settings.get('property_price_factor'),
+                },
+                '\n\n',
+                {
+                    'un.help-detail-property-trade',
+                    settings.get('property_tax_percent'),
+                    settings.get('property_salvage_percent'),
+                    settings.get('property_self_purchase_tax_multiplier'),
+                },
+            }
+        )
+        add_help_line(trading, {'un.help-property-trading-summary'})
+        add_help_gap(details)
+
+        local lifecycle = add_help_card(
+            details,
+            {'un.help-property-card-lifecycle'},
+            {'un.help-detail-property-basic'}
+        )
+        add_help_line(lifecycle, {'un.help-property-lifecycle-summary'})
+        add_help_gap(details)
+
+        local access = add_help_card(
+            details,
+            {'un.help-property-card-access'},
+            {'un.help-property-access-detail'}
+        )
+        add_help_line(access, {'un.help-property-access-summary'})
+    elseif mode == 'brief' then
+        local travel = add_help_card(
+            details,
+            {'un.help-shift-card-travel'},
+            {
+                '',
+                {
+                    'un.help-shift-travel-detail',
+                    settings.get('planet_foreign_warning_early_minutes'),
+                    settings.get('planet_foreign_warning_final_minutes'),
+                },
+                '\n\n',
+                {
+                    'un.help-detail-reset-schedule',
+                    settings.get('planet_reset_min_hours'),
+                    settings.get('planet_reset_max_hours'),
+                },
+                '\n\n',
+                {
+                    'un.help-detail-world-randomization',
+                    config.public_planet_resource_base.frequency,
+                    config.public_planet_resource_base.size,
+                    config.public_planet_resource_base.richness,
+                    config.public_planet_resource_spread,
+                    config.public_planet_terrain_spread,
+                    config.public_planet_cliff_spread,
+                    config.public_planet_enemy_spread,
+                    config.public_planet_peaceful_chance * 100,
+                    settings.get('technology_price_multiplier'),
+                    settings.get('spoil_time_modifier'),
+                    settings.get('asteroid_spawning_rate'),
+                },
+            }
+        )
+        add_help_line(travel, {'un.help-shift-travel-summary'})
+        add_help_gap(details)
+
+        local logistics = add_help_card(
+            details,
+            {'un.help-shift-card-logistics'},
+            {
+                'un.help-shift-logistics-detail',
                 settings.get('personal_linked_chest_limit'),
-            },
-            '\n\n',
+            }
+        )
+        add_help_line(logistics, {'un.help-shift-logistics-summary'})
+        add_help_gap(details)
+
+        local advice = add_help_card(
+            details,
+            {'un.help-shift-card-advice'},
+            {'un.help-shift-advice-detail'}
+        )
+        add_help_line(advice, {'un.help-shift-advice-summary'})
+    elseif mode == 'advanced' then
+        local experience_tooltip = {
+            '',
             {
                 'un.help-detail-science',
                 config.science_conversion_ticks / config.ticks_per_minute,
@@ -2387,62 +2447,28 @@ local function render_help_page(player, frame, content, mode)
                 config.science_offline_conversion_max_hours,
             },
             '\n\n',
+            {'un.experience-tooltip'},
+            '\n\n',
             {
-                'un.help-detail-logistics-limits',
-                config.logistic_network_roboport_limit,
-                config.logistic_network_logistic_robot_limit,
+                'un.help-detail-experience-effects',
+                config.ship_base_width,
+                config.ship_width_per_level,
+                settings.get('ship_life_hours'),
+                settings.get('property_tax_percent'),
             },
         }
-        local beginner = add_help_card(
+        local experience_card = add_help_card(
             details,
-            {'un.help-section-beginner'},
-            linked_tooltip
+            {'un.help-factory-card-experience'},
+            experience_tooltip
         )
-        add_help_line(beginner, {'un.help-advanced-linked-summary'})
+        add_help_line(experience_card, {'un.help-factory-experience-summary'})
         add_help_gap(details)
 
-        local property_tooltip = {
+        local building_tooltip = {
             '',
             {'un.help-detail-property-build'},
             '\n\n',
-            {'un.help-detail-property-basic'},
-        }
-        local property = add_help_card(
-            details,
-            {'un.help-detail-property-heading'},
-            property_tooltip
-        )
-        add_help_line(property, {'un.help-advanced-property-summary'})
-        add_help_gap(details)
-
-        local technology_tooltip = {
-            'un.help-detail-tech-leak',
-            settings.get('tech_leak_interval_hours'),
-        }
-        local world = add_help_card(
-            details,
-            {'un.help-detail-world-heading'},
-            technology_tooltip
-        )
-        add_help_line(world, {'un.help-advanced-world-summary'})
-    elseif mode == 'full' then
-        local growth_tooltip = {
-            'un.help-detail-experience-effects',
-            config.ship_base_width,
-            config.ship_width_per_level,
-            settings.get('ship_life_hours'),
-            settings.get('property_tax_percent'),
-        }
-        local growth = add_help_card(
-            details,
-            {'un.help-detail-growth-heading'},
-            growth_tooltip
-        )
-        add_help_line(growth, {'un.help-full-growth-summary'})
-        add_help_gap(details)
-
-        local formulas_tooltip = {
-            '',
             {
                 'un.help-detail-property-build-formula',
                 config.property_build_experience_base,
@@ -2455,66 +2481,63 @@ local function render_help_page(player, frame, content, mode)
                 config.property_build_initial_price_multiplier,
             },
             '\n\n',
-            {
-                'un.help-detail-property-price',
-                config.property_price_cap,
-                settings.get('property_price_factor'),
-            },
-            '\n\n',
-            {
-                'un.help-detail-property-trade',
-                settings.get('property_tax_percent'),
-                settings.get('property_salvage_percent'),
-                settings.get('property_self_purchase_tax_multiplier'),
-            },
+            {'un.help-detail-property-basic'},
         }
-        local formulas = add_help_card(
+        local building = add_help_card(
             details,
-            {'un.help-detail-formulas-heading'},
-            formulas_tooltip
+            {'un.help-factory-card-building'},
+            building_tooltip
         )
-        add_help_line(formulas, {
-            'un.help-full-property-summary',
-            settings.get('property_price_factor'),
-        })
+        add_help_line(building, {'un.help-factory-building-summary'})
         add_help_gap(details)
 
-        local world_tooltip = {
-            '',
-            {
-                'un.help-detail-world-randomization',
-                config.public_planet_resource_base.frequency,
-                config.public_planet_resource_base.size,
-                config.public_planet_resource_base.richness,
-                config.public_planet_resource_spread,
-                config.public_planet_terrain_spread,
-                config.public_planet_cliff_spread,
-                config.public_planet_enemy_spread,
-                config.public_planet_peaceful_chance * 100,
-                settings.get('technology_price_multiplier'),
-                settings.get('spoil_time_modifier'),
-                settings.get('asteroid_spawning_rate'),
-            },
-            '\n\n',
-            {
-                'un.help-detail-reset-schedule',
-                settings.get('planet_reset_min_hours'),
-                settings.get('planet_reset_max_hours'),
-            },
-            '\n\n',
-            {
-                'un.help-detail-tech-leak-formula',
-                settings.get('tech_leak_max_percent'),
-                settings.get('tech_leak_max_affected'),
-                config.tech_leak_chance_multiplier_by_planet.aquilo,
-            },
-        }
-        local world = add_help_card(
+        local logistics = add_help_card(
             details,
-            {'un.help-detail-world-heading'},
-            world_tooltip
+            {'un.help-factory-card-logistics'},
+            {
+                'un.help-detail-linked-chest',
+                settings.get('personal_linked_chest_limit'),
+            }
         )
-        add_help_line(world, {'un.help-full-world-summary'})
+        add_help_line(logistics, {'un.help-factory-logistics-summary'})
+        add_help_gap(details)
+
+        local robots = add_help_card(
+            details,
+            {'un.help-factory-card-robots'},
+            {
+                'un.help-detail-logistics-limits',
+                config.logistic_network_roboport_limit,
+                config.logistic_network_logistic_robot_limit,
+            }
+        )
+        add_help_line(robots, {'un.help-factory-robots-summary'})
+    elseif mode == 'full' then
+        local manual = add_help_card(
+            details,
+            {'un.help-market-card-manual'},
+            {'un.market-tooltip'}
+        )
+        add_help_line(manual, {'un.help-market-manual-summary'})
+        add_help_gap(details)
+
+        local automatic = add_help_card(
+            details,
+            {'un.help-market-card-automatic'},
+            {
+                'un.property-auto-trade-balance-tooltip',
+                config.property_auto_trade_ticks / config.ticks_per_minute,
+            }
+        )
+        add_help_line(automatic, {'un.help-market-automatic-summary'})
+        add_help_gap(details)
+
+        local prices = add_help_card(
+            details,
+            {'un.help-market-card-prices'},
+            {'un.help-market-prices-detail'}
+        )
+        add_help_line(prices, {'un.help-market-prices-summary'})
     else
         local security = add_help_card(details, {
             'un.help-admin-security-heading',
@@ -3393,11 +3416,13 @@ events.on(defines.events.on_gui_click, function(event)
             or element.name == HELP_ADVANCED_NAME
             or element.name == HELP_FULL_NAME
             or element.name == HELP_ADMIN_NAME
-            or element.name == HELP_STORY_NAME then
+            or element.name == HELP_STORY_NAME
+            or element.name == 'un_help_faction' then
         local frame = player.gui.screen[FRAME_NAME]
         local content = frame and frame.valid and frame[CONTENT_NAME]
         if not (content and content.valid) then return end
-        local mode = element.name == HELP_STORY_NAME and 'story'
+        local mode = element.name == 'un_help_faction' and 'faction'
+            or element.name == HELP_STORY_NAME and 'story'
             or element.name == HELP_ADMIN_NAME and 'admin'
             or element.name == HELP_FULL_NAME and 'full'
             or element.name == HELP_ADVANCED_NAME and 'advanced' or 'brief'

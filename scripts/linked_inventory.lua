@@ -61,9 +61,9 @@ local function records(player_index)
     return value
 end
 
-local function give_wooden_chest(player, surface, position, quality)
+local function give_linked_chest(player, surface, position, quality)
     local stack = {
-        name = config.wooden_chest_name,
+        name = config.linked_chest_name,
         count = 1,
         quality = quality or 'normal',
     }
@@ -126,6 +126,7 @@ function M.ensure()
 end
 
 local function placement_allowed(player, surface)
+    if not (surface and surface.valid) or surface.platform then return false end
     local home_planet = factions.of_player(player)
     if not home_planet or player.force ~= factions.of_planet(home_planet) then
         return false
@@ -155,7 +156,7 @@ local function evict_oldest(player)
         local position = old.position
         local quality = old.quality.name
         old.destroy()
-        give_wooden_chest(player, surface, position, quality)
+        give_linked_chest(player, surface, position, quality)
         player.print({'un.dropoff-replaced'})
     end
     return old ~= nil
@@ -183,16 +184,32 @@ end
 local function on_player_built(event)
     local entity = event.entity
     if not (entity and entity.valid
-            and entity.name == config.wooden_chest_name) then
+            and entity.name == config.linked_chest_name) then
         return
     end
     local player = game.get_player(event.player_index)
-    if not (player and entity.force == player.force
-            and placement_allowed(player, entity.surface)) then
+    if not (player and entity.force == player.force) then return end
+    if not placement_allowed(player, entity.surface) then
+        local surface = entity.surface
+        local position = entity.position
+        local quality = entity.quality.name
+        local on_platform = surface.platform ~= nil
+        entity.destroy()
+        give_linked_chest(player, surface, position, quality)
+        player.print({on_platform and 'un.dropoff-space-forbidden'
+            or 'un.dropoff-placement-forbidden'})
         return
     end
     local limit = settings.get('personal_linked_chest_limit')
-    if limit <= 0 then return end
+    if limit <= 0 then
+        local surface = entity.surface
+        local position = entity.position
+        local quality = entity.quality.name
+        entity.destroy()
+        give_linked_chest(player, surface, position, quality)
+        player.print({'un.dropoff-limit-disabled'})
+        return
+    end
 
     local list = compact_records(player.index)
     while #list >= limit do
@@ -200,30 +217,12 @@ local function on_player_built(event)
         list = records(player.index)
     end
 
-    local surface = entity.surface
-    local position = entity.position
-    local force = entity.force
-    local quality = entity.quality.name
-    entity.destroy()
-    local chest = surface.create_entity{
-        name = config.linked_chest_name,
-        position = position,
-        force = force,
-        quality = quality,
-        player = player.index,
-        raise_built = false,
-    }
-    if not (chest and chest.valid) then
-        give_wooden_chest(player, surface, position, quality)
-        player.print({'un.dropoff-create-failed'})
-        return
-    end
-    chest.link_id = player.index
-    chest.operable = false
+    entity.link_id = player.index
+    entity.operable = false
     list[#list + 1] = {
-        surface = surface.name,
-        x = position.x,
-        y = position.y,
+        surface = entity.surface.name,
+        x = entity.position.x,
+        y = entity.position.y,
     }
     index_for_conversion(player.index)
     player.print({'un.dropoff-created-count', #list, limit})
@@ -251,17 +250,45 @@ local function on_mined(event)
             and entity.name == config.linked_chest_name) then
         return
     end
-    if not forget_chest(entity) then return end
-    local quality = entity.quality.name
-    event.buffer.remove{
+    forget_chest(entity)
+end
+
+local function on_player_crafted(event)
+    local stack = event.item_stack
+    if not (stack and stack.valid_for_read
+            and stack.name == config.wooden_chest_name) then
+        return
+    end
+    local replacement = {
         name = config.linked_chest_name,
-        count = 1,
-        quality = quality,
+        count = stack.count,
+        quality = stack.quality.name,
     }
-    event.buffer.insert{
-        name = config.wooden_chest_name,
-        count = 1,
-        quality = quality,
+    if not stack.set_stack(replacement) then
+        log('[un] failed to replace a hand-crafted wooden chest')
+    end
+end
+
+local function on_robot_built(event)
+    local entity = event.entity
+    if not (entity and entity.valid
+            and entity.name == config.linked_chest_name) then
+        return
+    end
+    local surface = entity.surface
+    local position = entity.position
+    local force = entity.force
+    local quality = entity.quality.name
+    entity.destroy()
+    surface.spill_item_stack{
+        position = position,
+        stack = {
+            name = config.linked_chest_name,
+            count = 1,
+            quality = quality,
+        },
+        enable_looted = true,
+        force = force,
     }
 end
 
@@ -354,7 +381,7 @@ function M.release_player_dropoff(player)
         if chest then
             local quality = chest.quality.name
             chest.destroy()
-            give_wooden_chest(
+            give_linked_chest(
                 player,
                 player.physical_surface,
                 player.physical_position,
@@ -427,7 +454,9 @@ local function notify_online_conversion(player, converted)
     }
 end
 
+events.on(defines.events.on_player_crafted_item, on_player_crafted)
 events.on(defines.events.on_built_entity, on_player_built)
+events.on(defines.events.on_robot_built_entity, on_robot_built)
 events.on(defines.events.on_player_mined_entity, on_mined)
 events.on(defines.events.on_robot_mined_entity, on_mined)
 events.on(defines.events.on_entity_died, function(event)

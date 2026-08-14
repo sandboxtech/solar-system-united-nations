@@ -11,7 +11,7 @@
 
 [font=default-bold][img=virtual-signal/signal-map-marker] 三步开始[/font]
 ① 前往本国星球，像普通游戏一样建设工厂。
-② 亲手放置 [img=item/wooden-chest] 木箱，用机械臂投入 [img=item/automation-science-pack] 科技瓶，积累个人经验。
+② 亲手合成 [img=item/wooden-chest] 木箱，得到 [img=item/linked-chest] 个人关联箱，再用机械臂投入 [img=item/automation-science-pack] 科技瓶。
 ③ 用经验建造房产，或领取 [img=item/coin] 低保金币购买廉租房。
 
 [font=default-bold][img=item/stone-brick] 把工厂带往下一颗星球[/font]
@@ -44,7 +44,7 @@
 # 当前玩法重点
 
 - 初次进入后，走进关联箱旁的教学网格门口，前往本国公共星球。
-- 木箱必须由玩家亲手放置，才会成为个人关联箱；关联箱不能直接打开，需要用机械臂存取。
+- 玩家亲手合成木箱会得到个人关联箱；普通木箱放到地上仍是普通木箱。关联箱不能直接打开，需要用机械臂存取。
 - 关联箱中的科技瓶会按种类分别累计经验；每瓶固定提供 1 点对应经验。
 - 房产页可以查看五国房产。本国房产可以购买和管理；角色站在本国难民营时才能进入。外国房产只读。
 - 本地货物市场只在本国星球、难民营和房产开放；各国价格独立。
