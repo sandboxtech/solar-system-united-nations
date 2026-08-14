@@ -153,7 +153,7 @@ local DEFINITIONS = {
     tech_leak_enabled = {default = true, boolean = true},
     property_expansion_enabled = {default = true, boolean = true},
     property_salvage_enabled = {default = true, boolean = true},
-    crime_enabled = {default = true, boolean = true},
+    crime_enabled = {default = false, boolean = true},
     science_conversion_notifications = {
         default = config.science_conversion_notifications,
         boolean = true,

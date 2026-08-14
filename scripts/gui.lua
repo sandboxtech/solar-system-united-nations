@@ -1169,14 +1169,11 @@ local function render_ubi_section(content)
         caption = {'un.personal-stamina-section'},
         tooltip = stamina_tooltip,
     }
-    local stamina_spacer = stamina_heading.add{type = 'empty-widget'}
-    stamina_spacer.style.horizontally_stretchable = true
-    local stamina_value = stamina_heading.add{
+    stamina_heading.add{
         type = 'label',
         name = STAMINA_NAME,
         tooltip = stamina_tooltip,
     }
-    stamina_value.style.horizontal_align = 'right'
     local stamina_progress = stamina_card.add{
         type = 'progressbar',
         name = 'un_stamina_progress',
@@ -1240,12 +1237,9 @@ local function render_ubi_section(content)
         caption = {'un.personal-coin-section'},
         tooltip = coin_tooltip,
     }
-    local coin_spacer = balance.add{type = 'empty-widget'}
-    coin_spacer.style.horizontally_stretchable = true
-    local coin_value = balance.add{
+    balance.add{
         type = 'label', name = BALANCE_NAME, tooltip = coin_tooltip,
     }
-    coin_value.style.horizontal_align = 'right'
     local progress = coin_card.add{
         type = 'progressbar',
         name = UBI_PROGRESS_NAME,
@@ -1316,15 +1310,14 @@ local function render_experience_section(content)
         tooltip = {'un.experience-tooltip'},
     }
     add_info_sprite(heading, {'un.experience-tooltip'})
-    local experience_spacer = heading.add{type = 'empty-widget'}
-    experience_spacer.style.horizontally_stretchable = true
-    local convert = heading.add{
+    local convert = card.add{
         type = 'button',
         name = 'un_experience_convert',
         caption = {'un.experience-convert-backpack'},
         tooltip = {'un.experience-convert-backpack-tooltip'},
     }
     convert.style.width = PERSONAL_ACTION_WIDTH
+    convert.style.top_margin = 8
     local grid = card.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
@@ -1437,17 +1430,18 @@ local function render_planets_page(player, frame, content)
     local header = content.add{
         type = 'flow',
         name = PLANET_HEADER_NAME,
-        direction = 'horizontal',
+        direction = 'vertical',
     }
-    header.style.vertical_align = 'center'
-    header.add{
+    local summary = header.add{type = 'flow', direction = 'horizontal'}
+    summary.style.vertical_align = 'center'
+    summary.add{
         type = 'label',
         caption = {
             'un.faction-current-summary',
             factions.display_name(factions.of_player(player) or 'nauvis'),
         },
     }
-    add_info_sprite(header, {
+    add_info_sprite(summary, {
         '',
         {
             'un.faction-page-tooltip',
@@ -1461,8 +1455,7 @@ local function render_planets_page(player, frame, content)
         '\n\n',
         {'un.faction-aquilo-neutral'},
     })
-    local header_spacer = header.add{type = 'empty-widget'}
-    header_spacer.style.horizontally_stretchable = true
+    add_info_sprite(summary, {'un.planet-page-note'})
     header.add{
         type = 'label',
         name = TECH_LEAK_COUNTDOWN_NAME,
@@ -1472,7 +1465,6 @@ local function render_planets_page(player, frame, content)
         } or {'un.tech-leak-paused'},
         tooltip = {'un.tech-leak-tooltip'},
     }
-    add_info_sprite(header, {'un.planet-page-note'})
     local actions = content.add{
         type = 'flow',
         name = PLANET_ACTIONS_NAME,
@@ -2544,6 +2536,9 @@ local function render_page(player, page)
     local content = frame[CONTENT_NAME]
     if not (content and content.valid) then return end
     if page == 'admin' and not player.admin then page = 'help' end
+    if page == 'crime' and not settings.get('crime_enabled') then
+        page = 'property'
+    end
     content.clear()
 
     if page == 'help' then
@@ -2577,7 +2572,10 @@ local function render_page(player, page)
     navigation.un_nav_market.enabled = page ~= 'market'
     navigation[NAV_PROPERTY_BUILD_NAME].enabled = page ~= 'property-build'
     navigation[NAV_PROPERTY_NAME].enabled = page ~= 'property'
-    navigation.un_nav_crime.enabled = page ~= 'crime'
+    local crime_navigation = navigation.un_nav_crime
+    if crime_navigation and crime_navigation.valid then
+        crime_navigation.enabled = page ~= 'crime'
+    end
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
     navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
@@ -3111,11 +3109,13 @@ local function open_frame(player, initial_page)
         caption = {'un.page-property-build'},
     }
     navigation.add{type = 'button', name = NAV_PROPERTY_NAME, caption = {'un.page-property'}}
-    navigation.add{
-        type = 'button',
-        name = 'un_nav_crime',
-        caption = {'un.page-crime'},
-    }
+    if settings.get('crime_enabled') then
+        navigation.add{
+            type = 'button',
+            name = 'un_nav_crime',
+            caption = {'un.page-crime'},
+        }
+    end
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
     navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
@@ -3265,7 +3265,7 @@ events.on(defines.events.on_gui_click, function(event)
         render_page(player, 'property')
         update_frame(player)
     elseif element.name == 'un_nav_crime' then
-        render_page(player, 'crime')
+        render_page(player, settings.get('crime_enabled') and 'crime' or 'property')
         update_frame(player)
     elseif element.name == NAV_PLANETS_NAME then
         render_page(player, 'planets')
@@ -3889,15 +3889,23 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
             factions.apply_all_surface_visibility()
             ships.ensure()
         end
-        if ok and (tags.setting == 'property_expansion_enabled'
-                or tags.setting == 'property_salvage_enabled'
-                or tags.setting == 'crime_enabled') then
+        if ok and tags.setting == 'crime_enabled' then
+            for _, connected in pairs(game.connected_players) do
+                local connected_frame = connected.gui.screen[FRAME_NAME]
+                if connected_frame and connected_frame.valid then
+                    local page = connected_frame.tags.page or 'help'
+                    if page == 'crime' and not enabled then page = 'property' end
+                    close_frame(connected)
+                    open_frame(connected, page)
+                end
+            end
+        elseif ok and (tags.setting == 'property_expansion_enabled'
+                or tags.setting == 'property_salvage_enabled') then
             for _, connected in pairs(game.connected_players) do
                 local connected_frame = connected.gui.screen[FRAME_NAME]
                 if connected_frame and connected_frame.valid
-                        and (connected_frame.tags.page == 'property'
-                            or connected_frame.tags.page == 'crime') then
-                    render_page(connected, connected_frame.tags.page)
+                        and connected_frame.tags.page == 'property' then
+                    render_page(connected, 'property')
                     update_frame(connected)
                 end
             end
