@@ -103,7 +103,14 @@ end
 
 function M.contribution(amount)
     if amount < 1 then return 0 end
-    return math.floor(math.log(amount, 10)) + 1
+    local level = 1
+    local threshold = 10
+    while amount >= threshold and threshold <= MAX_SAFE_INTEGER / 10 do
+        level = level + 1
+        threshold = threshold * 10
+    end
+    if amount >= threshold then level = level + 1 end
+    return level
 end
 
 function M.next_threshold(amount)
