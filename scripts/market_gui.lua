@@ -72,13 +72,6 @@ function M.render(player, frame, content, selected_amount, selected_group)
         allow_negative = false,
     }
     amount.style.width = 100
-    for _, value in ipairs{10, 100, 1000} do
-        controls.add{
-            type = 'button',
-            caption = tostring(value),
-            tags = {action = 'market-set-amount', amount = value},
-        }
-    end
     controls.add{
         type = 'button',
         caption = {'un.market-sell-all'},
@@ -196,13 +189,6 @@ end
 
 function M.handle_click(player, element, frame, content)
     local tags = element.tags
-    if tags.action == 'market-set-amount' then
-        local controls = content and content.valid and content[CONTROLS_NAME]
-        local field = controls and controls.valid and controls[AMOUNT_NAME]
-        if field and field.valid then field.text = tostring(tags.amount) end
-        refresh_quotes(player, content, tags.amount)
-        return true
-    end
     if tags.action == 'market-set-group' then
         local amount = M.amount(content) or 1
         content.clear()

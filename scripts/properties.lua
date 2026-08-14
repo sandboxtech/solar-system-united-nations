@@ -795,12 +795,11 @@ function M.build_requirements(player, planet_name, build_type_index, selected_le
     local experience_cost = math.ceil(
         base_experience_cost * config.property_build_experience_multiplier
     )
+    local pack_base_price = market.base_price(build_type.pack)
+    if not pack_base_price then return nil end
     local initial_price = math.min(
         config.property_price_cap,
-        math.ceil(base_experience_cost
-            * settings.get('property_build_price_multiplier')
-            * (build_type.initial_price_multiplier or 1)
-            * config.property_build_initial_price_multiplier)
+        math.ceil(experience_cost * pack_base_price)
     )
     return {
         planet_name = planet_name,

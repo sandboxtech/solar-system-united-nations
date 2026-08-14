@@ -158,7 +158,6 @@ local ADMIN_NUMBER_SETTINGS = {
     {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
     {'asteroid_spawning_rate', 'un.admin-setting-asteroid-rate'},
     {'property_limit_per_planet', 'un.admin-setting-property-limit'},
-    {'property_build_price_multiplier', 'un.admin-setting-property-build-price'},
     {'property_salvage_percent', 'un.admin-setting-property-salvage'},
     {'property_expansion_cost_multiplier',
         'un.admin-setting-property-expansion-cost'},
@@ -2079,7 +2078,6 @@ local function render_admin_page(player, frame, content)
                 or key == 'asteroid_spawning_rate'
                 or key == 'tech_leak_interval_hours'
                 or key == 'tech_leak_max_percent'
-                or key == 'property_build_price_multiplier'
                 or key == 'property_salvage_percent'
                 or key == 'property_expansion_cost_multiplier'
                 or key:match('^property_lifetime_') ~= nil
@@ -2517,11 +2515,9 @@ local function render_help_page(player, frame, content, mode)
                 config.property_build_experience_base,
                 config.property_build_experience_per_level,
                 config.property_build_stamina_cost,
-                settings.get('property_build_price_multiplier'),
                 settings.get('property_limit_per_planet'),
                 config.property_price_cap,
                 config.property_build_experience_multiplier,
-                config.property_build_initial_price_multiplier,
             },
             '\n\n',
             {'un.help-detail-property-basic'},

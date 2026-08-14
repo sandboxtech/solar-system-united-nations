@@ -118,11 +118,6 @@ local DEFINITIONS = {
         max = 10000,
         integer = true,
     },
-    property_build_price_multiplier = {
-        default = config.property_build_price_per_experience,
-        min = 0.001,
-        max = 1000000,
-    },
     property_salvage_percent = {
         default = config.property_salvage_percent,
         min = 0.01,

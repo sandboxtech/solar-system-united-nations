@@ -564,6 +564,12 @@ function M.is_tradable(item_name)
     return item_specs[item_name] ~= nil
 end
 
+function M.base_price(item_name)
+    local spec = item_specs[item_name]
+    if not spec then return nil end
+    return spec.base_price * base_price_multiplier
+end
+
 function M.buy_quote(player, item_name, count)
     if not valid_count(count) then return nil, 'invalid-count' end
     local spec = item_specs[item_name]

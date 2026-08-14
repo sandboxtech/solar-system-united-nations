@@ -230,8 +230,7 @@ return function(M)
                 price = math.min(
                     M.property_price_cap,
                     math.ceil(
-                        M.property_build_experience_base
-                        * M.property_build_price_per_experience
+                        M.permanent_property_base_price
                         * build_type.initial_price_multiplier
                         * M.permanent_property_initial_price_multiplier
                     )
