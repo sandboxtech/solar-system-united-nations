@@ -175,10 +175,11 @@ function M.ensure_planet(planet_name)
 end
 
 function M.ensure_hospice(planet_name)
-    local surface = surfaces.hospice_surface(planet_name)
-    if not (surface and surface.valid) then return false end
-    return M.ensure_on_surface(
-        surface,
+    local first = surfaces.hospice_surface(planet_name, 1)
+    local second = surfaces.hospice_surface(planet_name, 2)
+    if not (first and first.valid and second and second.valid) then return false end
+    local first_ok = M.ensure_on_surface(
+        first,
         planet_name,
         false,
         config.faction_logistics_hospice_chest_positions,
@@ -186,6 +187,16 @@ function M.ensure_hospice(planet_name)
         defines.direction.north,
         'output'
     )
+    local second_ok = M.ensure_on_surface(
+        second,
+        planet_name,
+        false,
+        config.faction_logistics_hospice_second_chest_positions,
+        config.faction_logistics_hospice_second_loader_offset,
+        defines.direction.south,
+        'output'
+    )
+    return first_ok and second_ok
 end
 
 function M.ensure_all()

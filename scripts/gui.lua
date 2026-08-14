@@ -21,9 +21,10 @@ local technology_decay = require('scripts.technology_decay')
 
 local M = {}
 M.market_gui = require('scripts.market_gui')
+M.hud_travel = require('scripts.hud_travel')
 
 local HUD_FLOW_NAME = 'un_hud_flow'
-local HUD_LAYOUT_VERSION = 16
+local HUD_LAYOUT_VERSION = 17
 local HUD_TITLE_NAME = 'un_hud_title'
 local HUD_RESET_COUNTDOWN_NAME = 'un_hud_reset_countdown'
 local HUD_MENU_NAME = 'un_hud_menu'
@@ -283,10 +284,12 @@ function M.ensure_button(player)
         local complete = hud.tags.layout_version == HUD_LAYOUT_VERSION
             and hud[HUD_TITLE_NAME]
             and hud[HUD_RESET_COUNTDOWN_NAME]
+            and hud[M.hud_travel.name]
             and hud[HUD_MENU_NAME]
         if complete then
             update_hud_title(player, hud)
             update_hud_reset_countdown(player, hud)
+            M.hud_travel.update(player, hud)
             return hud
         end
         hud.destroy()
@@ -324,6 +327,11 @@ function M.ensure_button(player)
     countdown.style.left_margin = 6
     countdown.style.right_margin = 6
     local buttons = {
+        {
+            M.hud_travel.name,
+            {'un.hud-property-cycle'},
+            {'un.hud-property-cycle-tooltip'},
+        },
         {HUD_MENU_NAME, {'un.hud-action-button'}, {'un.hud-menu-tooltip'}},
     }
     for _, spec in ipairs(buttons) do
@@ -338,6 +346,7 @@ function M.ensure_button(player)
     end
     update_hud_title(player, hud)
     update_hud_reset_countdown(player, hud)
+    M.hud_travel.update(player, hud)
     return hud
 end
 
@@ -3390,6 +3399,7 @@ events.on(
 events.on(defines.events.on_player_changed_surface, function(event)
     local player = game.get_player(event.player_index)
     if player then
+        M.hud_travel.update(player)
         local frame = player.gui.screen[FRAME_NAME]
         if frame and frame.valid
                 and (frame.tags.page == 'property'
@@ -3403,6 +3413,7 @@ events.on(defines.events.on_player_changed_force, function(event)
     if player then
         update_hud_title(player)
         update_hud_reset_countdown(player)
+        M.hud_travel.update(player)
         local frame = player.gui.screen[FRAME_NAME]
         if frame and frame.valid and frame.tags.page == 'property' then
             update_frame(player)
@@ -3435,6 +3446,10 @@ events.on(defines.events.on_gui_click, function(event)
         else
             open_frame(player, 'help')
         end
+    elseif element.name == M.hud_travel.name then
+        local ok, err = M.hud_travel.cycle(player)
+        if not ok then player.print(property_error(err)) end
+        M.hud_travel.update(player)
     elseif element.name == CLOSE_NAME then
         close_frame(player)
     elseif element.name == NAV_HELP_NAME then
@@ -4264,6 +4279,7 @@ end)
 scheduler.every(config.ticks_per_minute, function()
     for _, player in pairs(game.connected_players) do
         update_hud_reset_countdown(player)
+        M.hud_travel.update(player)
     end
 end)
 

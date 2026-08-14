@@ -95,8 +95,17 @@ M.science_offline_conversion_max_hours = 12
 M.logistic_network_roboport_limit = 16
 M.logistic_network_logistic_robot_limit = 512
 M.hospice_surface_prefix = 'un-hospice-'
-M.hospice_surface_width = 128
-M.hospice_surface_height = 128
+M.hospice_second_surface_prefix = 'un-hospice-2-'
+-- Each camp floor contains a 128x128 copy of the home planet. The surface is
+-- larger so the three-row entrances can sit just beyond the terrain edge.
+M.hospice_terrain_width = 128
+M.hospice_terrain_height = 128
+M.hospice_surface_width = 192
+M.hospice_surface_height = 192
+M.hospice_lower_entrance_top_y = 64
+M.hospice_upper_entrance_top_y = -67
+M.hospice_lower_arrival_position = {x = -0.5, y = 62}
+M.hospice_upper_arrival_position = {x = -0.5, y = -62}
 M.property_surface_prefix = 'un-property-'
 M.surface_hidden_from_foreign_factions = false
 M.surface_hidden_from_home_faction = false
@@ -143,12 +152,19 @@ M.faction_logistics_chest_positions = {
 }
 M.faction_logistics_loader_offset = {x = 0, y = 2}
 M.faction_logistics_hospice_chest_positions = {
-    {x = -2, y = 2},
-    {x = -1, y = 2},
-    {x = 0, y = 2},
-    {x = 1, y = 2},
+    {x = -2, y = 66},
+    {x = -1, y = 66},
+    {x = 0, y = 66},
+    {x = 1, y = 66},
 }
 M.faction_logistics_hospice_loader_offset = {x = 0, y = -1}
+M.faction_logistics_hospice_second_chest_positions = {
+    {x = -2, y = -66},
+    {x = -1, y = -66},
+    {x = 0, y = -66},
+    {x = 1, y = -66},
+}
+M.faction_logistics_hospice_second_loader_offset = {x = 0, y = 1}
 M.property_max_size = 1024
 M.property_name_max_characters = 64
 M.property_name_max_bytes = 256

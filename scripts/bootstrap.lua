@@ -21,7 +21,8 @@ local function run()
     market.ensure()
     linked_inventory.ensure()
     for _, name in ipairs(config.public_planets) do
-        surfaces.ensure_hospice(name)
+        surfaces.ensure_hospice(name, 1)
+        surfaces.ensure_hospice(name, 2)
     end
     disasters.ensure()
     faction_logistics.ensure_all()

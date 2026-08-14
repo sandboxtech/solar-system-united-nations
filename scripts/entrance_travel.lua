@@ -4,15 +4,27 @@ local factions = require('scripts.factions')
 local properties = require('scripts.properties')
 local surfaces = require('scripts.surfaces')
 
-local function entrance_context(player)
+local function entrance_context(player, position)
     local surface = player.physical_surface
     local planet_name = factions.of_player(player)
     if not (surface and surface.valid and planet_name) then return nil end
     if surface.name == planet_name then
         return 'planet', planet_name, 0
     end
-    if surfaces.hospice_planet(surface) == planet_name then
-        return 'hospice', planet_name, config.property_entrance_top_y
+    local floor, hospice_planet = surfaces.hospice_floor(surface)
+    if hospice_planet == planet_name then
+        if floor == 1 and surfaces.is_entrance_position(
+                position, config.hospice_lower_entrance_top_y) then
+            return 'hospice-planet', planet_name,
+                config.hospice_lower_entrance_top_y
+        end
+        if surfaces.is_entrance_position(
+                position, config.hospice_upper_entrance_top_y) then
+            return floor == 1 and 'hospice-second' or 'hospice-first',
+                planet_name,
+                config.hospice_upper_entrance_top_y
+        end
+        return nil
     end
     local property = properties.on_surface(surface)
     if property and property.sample_planet == planet_name then
@@ -41,14 +53,18 @@ local function changed_position(event)
         storage.entrance_travel_locks[player.index] = nil
     end
     if player.physical_vehicle and player.physical_vehicle.valid then return end
-    local context, planet_name, top_y = entrance_context(player)
+    local context, planet_name, top_y = entrance_context(player, position)
     if not context or not surfaces.is_entrance_position(position, top_y) then
         return
     end
     if context == 'planet' or context == 'property' then
         surfaces.to_hospice(player, planet_name)
-    else
+    elseif context == 'hospice-planet' then
         surfaces.to_planet_origin(player, planet_name)
+    elseif context == 'hospice-second' then
+        surfaces.to_hospice_entrance(player, planet_name, 2, 'upper')
+    else
+        surfaces.to_hospice_entrance(player, planet_name, 1, 'upper')
     end
 end
 

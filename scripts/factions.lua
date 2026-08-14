@@ -117,6 +117,12 @@ local function surface_home_planet(surface)
         local planet_name = surface.name:sub(#hospice_prefix + 1)
         if planet_set[planet_name] then return planet_name end
     end
+    local second_hospice_prefix = config.hospice_second_surface_prefix
+    if surface.name:sub(1, #second_hospice_prefix)
+            == second_hospice_prefix then
+        local planet_name = surface.name:sub(#second_hospice_prefix + 1)
+        if planet_set[planet_name] then return planet_name end
+    end
     local property_prefix = config.property_surface_prefix
     if surface.name:sub(1, #property_prefix) ~= property_prefix then return nil end
     local property_id = tonumber(surface.name:sub(#property_prefix + 1))

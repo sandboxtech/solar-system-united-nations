@@ -36,19 +36,15 @@ local function ensure_planet_surface(planet_name)
     return planet.create_surface()
 end
 
-local function clone_planet_tiles(destination, planet_name, width, height)
+local function clone_planet_tile_area(
+        destination, planet_name, source_area, destination_area, radius)
     local source = ensure_planet_surface(planet_name)
     if not (source and source.valid) then return false end
-    local left = -math.floor(width / 2)
-    local top = -math.floor(height / 2)
-    local right = left + width
-    local bottom = top + height
-    local radius = math.max(1, math.ceil(math.max(width, height) / 64) + 1)
-    source.request_to_generate_chunks({0, 0}, radius)
+    source.request_to_generate_chunks({0, 0}, radius or 1)
     source.force_generate_chunk_requests()
     source.clone_area{
-        source_area = {{left, top}, {right, bottom}},
-        destination_area = {{left, top}, {right, bottom}},
+        source_area = source_area,
+        destination_area = destination_area,
         destination_surface = destination,
         clone_tiles = true,
         clone_entities = false,
@@ -292,25 +288,90 @@ local function apply_fixed_property_tiles(surface, half_width, half_height, layo
     if #tiles > 0 then surface.set_tiles(tiles, true, false, true, false) end
 end
 
-local function apply_hospice_tiles(surface, planet_name)
-    return clone_planet_tiles(
+local function apply_hospice_tiles(surface, planet_name, floor)
+    local surface_left = -math.floor(config.hospice_surface_width / 2)
+    local surface_top = -math.floor(config.hospice_surface_height / 2)
+    fill_tile_area(
+        surface,
+        surface_left,
+        surface_top,
+        surface_left + config.hospice_surface_width,
+        surface_top + config.hospice_surface_height,
+        'out-of-map'
+    )
+
+    local terrain_left = -math.floor(config.hospice_terrain_width / 2)
+    local terrain_top = -math.floor(config.hospice_terrain_height / 2)
+    local terrain_area = {
+        {terrain_left, terrain_top},
+        {
+            terrain_left + config.hospice_terrain_width,
+            terrain_top + config.hospice_terrain_height,
+        },
+    }
+    local radius = math.max(1, math.ceil(math.max(
+        config.hospice_terrain_width,
+        config.hospice_terrain_height
+    ) / 64) + 1)
+    if not clone_planet_tile_area(
+        surface, planet_name, terrain_area, terrain_area, radius
+    ) then
+        return false
+    end
+
+    -- Copy a walkable patch around the home-planet origin to each doorway.
+    -- Only the three outer rows extend beyond the 128x128 main terrain.
+    local source_doorway = {{-2, -2}, {2, 3}}
+    local upper_top = config.hospice_upper_entrance_top_y
+    if not clone_planet_tile_area(
         surface,
         planet_name,
-        config.hospice_surface_width,
-        config.hospice_surface_height
-    )
+        source_doorway,
+        {{-2, upper_top}, {2, upper_top + 5}},
+        1
+    ) then
+        return false
+    end
+    if floor == 1 then
+        local lower_top = config.hospice_lower_entrance_top_y - 2
+        if not clone_planet_tile_area(
+            surface,
+            planet_name,
+            source_doorway,
+            {{-2, lower_top}, {2, lower_top + 5}},
+            1
+        ) then
+            return false
+        end
+    end
+    return true
 end
 
-function M.hospice_surface_name(planet_name)
-    return config.hospice_surface_prefix .. (planet_name or 'nauvis')
+function M.hospice_surface_name(planet_name, floor)
+    local prefix = floor == 2
+        and config.hospice_second_surface_prefix
+        or config.hospice_surface_prefix
+    return prefix .. (planet_name or 'nauvis')
+end
+
+function M.hospice_floor(surface)
+    if not (surface and surface.valid) then return nil end
+    local second_prefix = config.hospice_second_surface_prefix
+    if surface.name:sub(1, #second_prefix) == second_prefix then
+        local name = surface.name:sub(#second_prefix + 1)
+        if public_planets[name] then return 2, name end
+    end
+    local first_prefix = config.hospice_surface_prefix
+    if surface.name:sub(1, #first_prefix) == first_prefix then
+        local name = surface.name:sub(#first_prefix + 1)
+        if public_planets[name] then return 1, name end
+    end
+    return nil
 end
 
 function M.hospice_planet(surface)
-    if not (surface and surface.valid) then return nil end
-    local prefix = config.hospice_surface_prefix
-    if surface.name:sub(1, #prefix) ~= prefix then return nil end
-    local name = surface.name:sub(#prefix + 1)
-    return public_planets[name] and name or nil
+    local _, planet_name = M.hospice_floor(surface)
+    return planet_name
 end
 
 function M.property_planet(surface)
@@ -330,9 +391,10 @@ function M.context_planet(surface)
     return M.hospice_planet(surface) or M.property_planet(surface)
 end
 
-function M.ensure_hospice(planet_name)
+function M.ensure_hospice(planet_name, floor)
     planet_name = public_planets[planet_name] and planet_name or 'nauvis'
-    local surface_name = M.hospice_surface_name(planet_name)
+    floor = floor == 2 and 2 or 1
+    local surface_name = M.hospice_surface_name(planet_name, floor)
     local surface = game.surfaces[surface_name]
     local created = not (surface and surface.valid)
     if created then
@@ -356,28 +418,36 @@ function M.ensure_hospice(planet_name)
             config.hospice_surface_height
         ) / 64))
     )
-    if created and not apply_hospice_tiles(surface, planet_name) then
+    if created and not apply_hospice_tiles(surface, planet_name, floor) then
         log('[un] failed to copy home-planet tiles into refugee camp '
-            .. planet_name)
+            .. planet_name .. ' floor ' .. floor)
     end
     surface.localised_name = {
-        'un.hospice-name-planet',
+        'un.hospice-name-planet-floor',
         {'space-location-name.' .. planet_name},
+        floor,
     }
     M.sync_property_environment(surface, nil, planet_name, true)
     local force = factions.of_planet(planet_name)
-    if force and force.valid then force.set_spawn_position({0, -4}, surface) end
+    if force and force.valid then
+        force.set_spawn_position(
+            floor == 1 and config.hospice_lower_arrival_position
+                or config.hospice_upper_arrival_position,
+            surface
+        )
+    end
     return surface
 end
 
 -- Travel and respawn only need an existing destination. Re-running
 -- ensure_hospice for every click would rewrite map-gen settings, force chunk
 -- generation, and resynchronise every surface property on the main thread.
-function M.hospice_surface(planet_name)
+function M.hospice_surface(planet_name, floor)
     planet_name = public_planets[planet_name] and planet_name or 'nauvis'
-    local surface = game.surfaces[M.hospice_surface_name(planet_name)]
+    floor = floor == 2 and 2 or 1
+    local surface = game.surfaces[M.hospice_surface_name(planet_name, floor)]
     if surface and surface.valid then return surface end
-    return M.ensure_hospice(planet_name)
+    return M.ensure_hospice(planet_name, floor)
 end
 
 function M.sync_property_environment(
@@ -440,9 +510,17 @@ end
 
 function M.sync_hospice_environment(planet_name)
     planet_name = public_planets[planet_name] and planet_name or 'nauvis'
-    local surface = game.surfaces[M.hospice_surface_name(planet_name)]
-    if not (surface and surface.valid) then return false end
-    return M.sync_property_environment(surface, nil, planet_name, true)
+    local complete = true
+    for floor = 1, 2 do
+        local surface = game.surfaces[M.hospice_surface_name(planet_name, floor)]
+        if not (surface and surface.valid)
+                or not M.sync_property_environment(
+                    surface, nil, planet_name, true
+                ) then
+            complete = false
+        end
+    end
+    return complete
 end
 
 function M.sync_all_hospice_environments()
@@ -705,20 +783,30 @@ function M.to_property(player, surface)
     )
 end
 
-function M.to_hospice(player, planet_name)
+function M.to_hospice_entrance(player, planet_name, floor, entrance)
     planet_name = planet_name or M.context_planet(player.physical_surface) or 'nauvis'
-    local surface = M.hospice_surface(planet_name)
+    floor = floor == 2 and 2 or 1
+    entrance = entrance == 'upper' and 'upper' or 'lower'
+    local surface = M.hospice_surface(planet_name, floor)
     if not M.can_start_public_travel(player.physical_surface) then
         return false, 'travel-restricted'
     end
-    -- Arrive one row inside the hospice. Entering the three-tile doorway then
-    -- sends the player back to the public planet without a loader blocking it.
+    local top_y = entrance == 'upper'
+        and config.hospice_upper_entrance_top_y
+        or config.hospice_lower_entrance_top_y
+    local center = entrance == 'upper'
+        and config.hospice_upper_arrival_position
+        or config.hospice_lower_arrival_position
     return teleport_to_entrance(
         player,
         surface,
-        config.property_entrance_top_y,
-        {x = -0.5, y = -1.5}
+        top_y,
+        center
     )
+end
+
+function M.to_hospice(player, planet_name)
+    return M.to_hospice_entrance(player, planet_name, 1, 'lower')
 end
 
 function M.to_planet_origin(player, planet_name)
@@ -746,8 +834,8 @@ local function respawn_destination(player)
     else
         planet_name = factions.of_player(player) or 'nauvis'
     end
-    -- Spawn inside the hospice, above its doorway and entrance trigger.
-    return M.hospice_surface(planet_name), {0, -4}
+    return M.hospice_surface(planet_name, 1),
+        config.hospice_lower_arrival_position
 end
 
 events.on(defines.events.on_player_created, function(event)
