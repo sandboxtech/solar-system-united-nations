@@ -3336,6 +3336,7 @@ local function open_frame(player, initial_page)
     local spacer = title.add{type = 'empty-widget', style = 'draggable_space_header'}
     spacer.style.horizontally_stretchable = true
     spacer.style.height = 24
+    spacer.drag_target = frame
     title.add{
         type = 'sprite-button',
         name = CLOSE_NAME,

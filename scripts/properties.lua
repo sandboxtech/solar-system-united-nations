@@ -294,6 +294,10 @@ local function ensure_linked_chests(property)
     local force = factions.of_planet(property.sample_planet)
     if not (force and force.valid) then return false end
     local link_id = property.owner_index or config.property_link_id_unowned
+    local complete = true
+
+    -- Bind every chest before touching loaders. A missing or obstructed loader
+    -- must not leave only the first chest linked to the new owner.
     for _, position in ipairs(property.linked_chest_positions) do
         local chest = surface.find_entity(config.linked_chest_name, position)
         if not (chest and chest.valid) then
@@ -304,14 +308,19 @@ local function ensure_linked_chests(property)
                 raise_built = false,
             }
         end
-        if not (chest and chest.valid) then return false end
-        chest.link_id = link_id
-        chest.operable = false
-        chest.destructible = false
-        -- LuaEntity::minable became read-only in Factorio 2.1. The mutable
-        -- script flag is available in both 2.0 and 2.1.
-        chest.minable_flag = false
+        if chest and chest.valid then
+            chest.link_id = link_id
+            chest.operable = false
+            chest.destructible = false
+            -- LuaEntity::minable became read-only in Factorio 2.1. The mutable
+            -- script flag is available in both 2.0 and 2.1.
+            chest.minable_flag = false
+        else
+            complete = false
+        end
+    end
 
+    for _, position in ipairs(property.linked_chest_positions) do
         local offset = property.permanent
             and config.permanent_property_linked_loader_offset
             or config.property_linked_loader_offset
@@ -324,6 +333,15 @@ local function ensure_linked_chests(property)
             loader_position
         )
         if not (loader and loader.valid) then
+            local nearby = surface.find_entities_filtered{
+                name = config.property_linked_loader_name,
+                position = loader_position,
+                radius = 0.75,
+                limit = 1,
+            }
+            loader = nearby[1]
+        end
+        if not (loader and loader.valid) then
             loader = surface.create_entity{
                 name = config.property_linked_loader_name,
                 position = loader_position,
@@ -332,14 +350,17 @@ local function ensure_linked_chests(property)
                 raise_built = false,
             }
         end
-        if not (loader and loader.valid) then return false end
-        loader.direction = defines.direction.north
-        loader.loader_type = 'output'
-        loader.rotatable = true
-        loader.destructible = false
-        loader.minable_flag = false
+        if loader and loader.valid then
+            loader.direction = defines.direction.north
+            loader.loader_type = 'output'
+            loader.rotatable = true
+            loader.destructible = false
+            loader.minable_flag = false
+        else
+            complete = false
+        end
     end
-    return true
+    return complete
 end
 
 local function find_trade_entity(surface, name, position)
