@@ -542,12 +542,29 @@ local function property_construction_caption(property)
     }
 end
 
+local function automatic_trade_tooltip(construction_type)
+    local key = construction_type == 'shelter' and 'sell'
+        or construction_type == 'cottage' and 'buy' or nil
+    if not key then return nil end
+    return {
+        'un.property-auto-trade-' .. key .. '-tooltip',
+        math.max(1, math.floor(
+            config.property_auto_trade_ticks / config.ticks_per_minute
+        )),
+        config.property_auto_trade_max_items,
+    }
+end
+
 local function property_name_tooltip(property)
     local construction = property_construction_caption(property)
+    local automatic_trade = automatic_trade_tooltip(
+        property.construction_type
+    )
     local hours = tostring(property.decay_ticks / config.ticks_per_hour)
     return {
         '',
         construction,
+        automatic_trade and {'', '\n\n', automatic_trade} or '',
         construction ~= '' and {'', '\n\n'} or '',
         properties.feature_description(property),
         '\n\n',
@@ -986,6 +1003,11 @@ local function update_property_build_page(player, content)
             and total_life and price_label and cost_label
             and available_label and stamina_cost_label and stamina_available_label
             and button) then return end
+    local selected_build_type = config.property_build_types[
+        build_type.selected_index
+    ]
+    build_type.tooltip = selected_build_type
+        and automatic_trade_tooltip(selected_build_type.key) or nil
     local current_level = experience.total_level(player.index)
     local selected_level = math.min(
         current_level,
