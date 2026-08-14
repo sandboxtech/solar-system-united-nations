@@ -78,6 +78,11 @@ local DEFINITIONS = {
         min = 0,
         max = 1,
     },
+    market_tax_share_percent = {
+        default = config.market_tax_share * 100,
+        min = 0,
+        max = 100,
+    },
     property_price_factor = {
         default = config.property_price_factor,
         min = 1,

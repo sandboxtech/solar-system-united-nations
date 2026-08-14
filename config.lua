@@ -56,7 +56,6 @@ M.property_self_purchase_tax_multiplier = 0.5
 M.initial_credit = 10000
 M.ubi_credit_per_second = 1
 M.ubi_max_seconds = 108000
-M.ledger_record_limit = 2000
 M.transfer_min_amount = 1000
 M.transfer_fee_rate = 0.001
 M.transfer_min_fee = 100

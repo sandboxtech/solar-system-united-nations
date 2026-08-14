@@ -10,6 +10,7 @@ local AMOUNT_NAME = 'un_market_amount'
 local BUY_BUTTON_PREFIX = 'un_market_buy_'
 local SCROLL_NAME = 'un_market_scroll'
 local LIST_NAME = 'un_market_list'
+local BUY_BUTTON_WIDTH = 190
 
 local function format_integer(value)
     local raw = string.format('%.0f', value)
@@ -35,6 +36,7 @@ function M.render(player, frame, content, selected_amount, selected_group)
     selected_amount = math.max(1, math.floor(tonumber(selected_amount) or 1))
     selected_group = selected_group or frame.tags.market_group or 'raw'
     local planet_name = factions.of_player(player)
+    local market_cash = market.cash(player) or 0
     local heading = content.add{type = 'flow', direction = 'horizontal'}
     heading.style.vertical_align = 'center'
     heading.add{
@@ -43,6 +45,7 @@ function M.render(player, frame, content, selected_amount, selected_group)
             'un.market-heading',
             factions.display_name(planet_name),
             format_integer(economy.get_balance(player.index)),
+            format_integer(market_cash),
         },
     }
     local info = heading.add{
@@ -151,6 +154,7 @@ function M.render(player, frame, content, selected_amount, selected_group)
                     } or M.error_caption(quote_error),
                     tags = {action = 'market-buy-item', item_name = item.name},
                 }
+                buy.style.width = BUY_BUTTON_WIDTH
                 buy.enabled = quote ~= nil
             end
         end

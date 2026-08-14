@@ -1,5 +1,7 @@
 local config = require('config')
 local economy = require('scripts.economy')
+local factions = require('scripts.factions')
+local market = require('scripts.market')
 local settings = require('scripts.settings')
 
 local M = {}
@@ -127,6 +129,13 @@ local function transfer_command(command)
         return
     end
     local payout = result
+    local planet_name = factions.of_player(player)
+    if planet_name then
+        local deposited, deposit_err = market.deposit_tax(planet_name, fee)
+        if not deposited then
+            log('[un] failed to deposit transfer fee: ' .. tostring(deposit_err))
+        end
+    end
     player.print({'un.transfer-sent', amount, target.name, fee, payout})
     if target.connected then
         target.print({'un.transfer-received', amount, player.name, fee, payout})

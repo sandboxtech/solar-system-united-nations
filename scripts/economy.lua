@@ -15,25 +15,6 @@ local function is_finite_integer(value)
         and value == math.floor(value)
 end
 
-local function append_ledger(player_index, amount, reason, balance)
-    local ledger = storage.ledger
-    local id = ledger.next_id
-    ledger.next_id = id + 1
-    ledger.records[id] = {
-        id = id,
-        tick = game.tick,
-        player_index = player_index,
-        amount = amount,
-        reason = reason,
-        balance = balance,
-    }
-
-    while ledger.next_id - ledger.first_id > config.ledger_record_limit do
-        ledger.records[ledger.first_id] = nil
-        ledger.first_id = ledger.first_id + 1
-    end
-end
-
 local function notify_balance_changed(player_index, balance)
     storage.player_data_revision = (storage.player_data_revision or 0) + 1
     for _, handler in ipairs(balance_handlers) do
@@ -102,7 +83,6 @@ function M.change(player_index, amount, reason)
     end
 
     account.credit = next_balance
-    append_ledger(player_index, amount, reason, next_balance)
     notify_balance_changed(player_index, next_balance)
     return true, next_balance
 end
@@ -132,10 +112,6 @@ function M.transfer(from_index, to_index, amount, fee, reason)
     -- Validate both results before mutating either account, then commit the pair.
     from.credit = from.credit - amount
     to.credit = next_to
-    append_ledger(from_index, -amount, reason or 'transfer-out', from.credit)
-    if payout > 0 then
-        append_ledger(to_index, payout, reason or 'transfer-in', to.credit)
-    end
     notify_balance_changed(from_index, from.credit)
     notify_balance_changed(to_index, to.credit)
     return true, payout
@@ -159,7 +135,6 @@ function M.taxed_transfer(from_index, to_index, price, payout, reason)
         if buyer.credit < tax then return false, 'insufficient-credit' end
         if tax > 0 then
             buyer.credit = buyer.credit - tax
-            append_ledger(from_index, -tax, reason, buyer.credit)
             notify_balance_changed(from_index, buyer.credit)
         end
         return true
@@ -182,10 +157,6 @@ function M.taxed_transfer(from_index, to_index, price, payout, reason)
 
     buyer.credit = buyer.credit - price
     if seller then seller.credit = next_seller end
-    append_ledger(from_index, -price, reason, buyer.credit)
-    if seller and payout > 0 then
-        append_ledger(to_index, payout, reason, seller.credit)
-    end
     notify_balance_changed(from_index, buyer.credit)
     if seller then notify_balance_changed(to_index, seller.credit) end
     return true

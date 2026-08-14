@@ -40,7 +40,6 @@ local NAV_PROPERTY_BUILD_NAME = 'un_nav_property_build'
 local NAV_PROPERTY_NAME = 'un_nav_property'
 local NAV_PLANETS_NAME = 'un_nav_planets'
 local NAV_SHIPS_NAME = 'un_nav_ships'
-local NAV_PLAYERS_NAME = 'un_nav_players'
 local NAV_ADMIN_NAME = 'un_nav_admin'
 local HELP_STORY_NAME = 'un_help_story'
 local HELP_BRIEF_NAME = 'un_help_brief'
@@ -93,6 +92,9 @@ local EXPERIENCE_TABLE_NAME = 'un_experience_table'
 local PLAYER_ACTIONS_NAME = 'un_player_actions'
 local PLAYER_SCROLL_NAME = 'un_player_scroll'
 local PLAYER_TABLE_NAME = 'un_player_table'
+local PLAYER_BROWSE_NAME = 'un_player_browse'
+local PLAYER_PROFILE_BACK_NAME = 'un_player_profile_back'
+local PLAYER_PROFILE_PERSONAL_NAME = 'un_player_profile_personal'
 local PLANET_HEADER_NAME = 'un_planet_header'
 local PLANET_ACTIONS_NAME = 'un_planet_actions'
 local PLANET_ACCELERATE_NAME = 'un_planet_accelerate'
@@ -105,6 +107,14 @@ local FACTION_SWITCH_PREFIX = 'un_faction_switch_'
 local ADMIN_SCROLL_NAME = 'un_admin_scroll'
 local ADMIN_SETTINGS_TABLE_NAME = 'un_admin_settings_table'
 local ADMIN_RENTAL_TABLE_NAME = 'un_admin_rental_table'
+local DANGEROUS_ADMIN_ACTIONS = {
+    ['admin-fill-stamina'] = true,
+    ['admin-grant-experience'] = true,
+    ['admin-grant-credit'] = true,
+    ['admin-diplomacy-friendly'] = true,
+    ['admin-diplomacy-hostile'] = true,
+    ['admin-run-automatic-trades'] = true,
+}
 
 local ADMIN_NUMBER_SETTINGS = {
     {'personal_linked_chest_limit',
@@ -131,6 +141,7 @@ local ADMIN_NUMBER_SETTINGS = {
     {'property_tax_percent', 'un.admin-setting-property-tax'},
     {'property_self_purchase_tax_multiplier',
         'un.admin-setting-property-self-purchase-tax'},
+    {'market_tax_share_percent', 'un.admin-setting-market-tax-share'},
     {'property_price_factor', 'un.admin-setting-property-factor'},
     {'technology_price_multiplier', 'un.admin-setting-technology-price'},
     {'spoil_time_modifier', 'un.admin-setting-spoil-time'},
@@ -1295,7 +1306,7 @@ local function render_ship_actions(player, content)
     content.add{type = 'label', name = SHIP_STATUS_NAME}
 end
 
-local function render_experience_section(content)
+local function render_experience_section(content, allow_conversion)
     local card = content.add{
         type = 'frame', name = 'un_experience_card', direction = 'vertical',
     }
@@ -1310,14 +1321,16 @@ local function render_experience_section(content)
         tooltip = {'un.experience-tooltip'},
     }
     add_info_sprite(heading, {'un.experience-tooltip'})
-    local convert = card.add{
-        type = 'button',
-        name = 'un_experience_convert',
-        caption = {'un.experience-convert-backpack'},
-        tooltip = {'un.experience-convert-backpack-tooltip'},
-    }
-    convert.style.width = PERSONAL_ACTION_WIDTH
-    convert.style.top_margin = 8
+    if allow_conversion ~= false then
+        local convert = card.add{
+            type = 'button',
+            name = 'un_experience_convert',
+            caption = {'un.experience-convert-backpack'},
+            tooltip = {'un.experience-convert-backpack-tooltip'},
+        }
+        convert.style.width = PERSONAL_ACTION_WIDTH
+        convert.style.top_margin = 8
+    end
     local grid = card.add{
         type = 'table',
         name = EXPERIENCE_TABLE_NAME,
@@ -1343,9 +1356,47 @@ local function render_experience_section(content)
     card.add{type = 'label', name = EXPERIENCE_SUMMARY_NAME}
 end
 
+local function update_experience_section(subject, content)
+    local card = content and content.valid and content.un_experience_card
+    local grid = card and card.valid and card[EXPERIENCE_TABLE_NAME]
+    if not (subject and subject.valid and grid and grid.valid) then return end
+    local data = experience.get(subject.index)
+    for index, name in ipairs(config.science_pack_order) do
+        local amount = data[name] or 0
+        local threshold = experience.next_threshold(amount)
+        local progress = grid[experience_progress_name(index)]
+        local label = grid[experience_amount_name(index)]
+        if progress and progress.valid then
+            progress.value = math.max(0, math.min(1, amount / threshold))
+        end
+        if label and label.valid then
+            label.caption = {
+                'un.experience-amount',
+                format_integer(amount),
+                format_integer(threshold),
+                experience.contribution(amount),
+            }
+        end
+    end
+    local summary = card[EXPERIENCE_SUMMARY_NAME]
+    if summary and summary.valid then
+        summary.caption = {
+            'un.experience-summary',
+            experience.total_level(subject.index),
+        }
+    end
+end
+
 local function render_overview_page(player, frame, content)
+    local actions = content.add{type = 'flow', direction = 'horizontal'}
+    actions.add{
+        type = 'button',
+        name = PLAYER_BROWSE_NAME,
+        caption = {'un.player-browse'},
+        tooltip = {'un.player-browse-tooltip'},
+    }
     render_ubi_section(content)
-    render_experience_section(content)
+    render_experience_section(content, true)
     set_frame_state(frame, 'overview')
     local tags = frame.tags
     tags.list_refresh_experience = nil
@@ -1796,42 +1847,61 @@ local function render_admin_page(player, frame, content)
     summary.add{type = 'label', caption = #ships.list()}
     summary.add{type = 'label', caption = {'un.admin-summary-dropoffs'}}
     summary.add{type = 'label', caption = linked_inventory.active_count()}
-    summary.add{type = 'label', caption = {'un.admin-summary-ledger'}}
-    summary.add{type = 'label', caption = count_pairs(storage.ledger.records)}
 
-    local actions = scroll.add{type = 'flow', direction = 'horizontal'}
-    actions.style.top_margin = 8
-    actions.add{
-        type = 'button',
-        caption = {'un.admin-fill-stamina'},
-        tooltip = {'un.admin-fill-stamina-tooltip', config.stamina_max},
-        tags = {action = 'admin-fill-stamina'},
+    local dangerous_actions_enabled
+        = frame.tags.admin_dangerous_actions == true
+    local dangerous_switch = scroll.add{
+        type = 'switch',
+        left_label_caption = {'un.admin-dangerous-actions-hidden'},
+        right_label_caption = {'un.admin-dangerous-actions-visible'},
+        left_label_tooltip = {'un.admin-dangerous-actions-tooltip'},
+        right_label_tooltip = {'un.admin-dangerous-actions-tooltip'},
+        switch_state = dangerous_actions_enabled and 'right' or 'left',
+        allow_none_state = false,
+        tags = {action = 'admin-dangerous-actions'},
     }
-    actions.add{
-        type = 'button',
-        caption = {'un.admin-grant-experience'},
-        tooltip = {'un.admin-grant-experience-tooltip',
-            config.admin_experience_grant},
-        tags = {action = 'admin-grant-experience'},
-    }
-    actions.add{
-        type = 'button',
-        caption = {'un.admin-grant-credit'},
-        tooltip = {'un.admin-grant-credit-tooltip', config.admin_credit_grant},
-        tags = {action = 'admin-grant-credit'},
-    }
-    actions.add{
-        type = 'button',
-        caption = {'un.admin-diplomacy-friendly'},
-        tooltip = {'un.admin-diplomacy-friendly-tooltip'},
-        tags = {action = 'admin-diplomacy-friendly'},
-    }
-    actions.add{
-        type = 'button',
-        caption = {'un.admin-diplomacy-hostile'},
-        tooltip = {'un.admin-diplomacy-hostile-tooltip'},
-        tags = {action = 'admin-diplomacy-hostile'},
-    }
+    dangerous_switch.style.top_margin = 8
+    if dangerous_actions_enabled then
+        local actions = scroll.add{type = 'flow', direction = 'horizontal'}
+        actions.style.top_margin = 8
+        actions.add{
+            type = 'button',
+            caption = {'un.admin-fill-stamina'},
+            tooltip = {'un.admin-fill-stamina-tooltip', config.stamina_max},
+            tags = {action = 'admin-fill-stamina'},
+        }
+        actions.add{
+            type = 'button',
+            caption = {'un.admin-grant-experience'},
+            tooltip = {'un.admin-grant-experience-tooltip',
+                config.admin_experience_grant},
+            tags = {action = 'admin-grant-experience'},
+        }
+        actions.add{
+            type = 'button',
+            caption = {'un.admin-grant-credit'},
+            tooltip = {'un.admin-grant-credit-tooltip', config.admin_credit_grant},
+            tags = {action = 'admin-grant-credit'},
+        }
+        actions.add{
+            type = 'button',
+            caption = {'un.admin-diplomacy-friendly'},
+            tooltip = {'un.admin-diplomacy-friendly-tooltip'},
+            tags = {action = 'admin-diplomacy-friendly'},
+        }
+        actions.add{
+            type = 'button',
+            caption = {'un.admin-diplomacy-hostile'},
+            tooltip = {'un.admin-diplomacy-hostile-tooltip'},
+            tags = {action = 'admin-diplomacy-hostile'},
+        }
+        actions.add{
+            type = 'button',
+            caption = {'un.admin-run-automatic-trades'},
+            tooltip = {'un.admin-run-automatic-trades-tooltip'},
+            tags = {action = 'admin-run-automatic-trades'},
+        }
+    end
 
     scroll.add{type = 'line'}
     scroll.add{
@@ -1916,6 +1986,7 @@ local function render_admin_page(player, frame, content)
                 or key == 'faction_hostile_to_friendly_percent'
                 or key == 'property_tax_percent'
                 or key == 'property_self_purchase_tax_multiplier'
+                or key == 'market_tax_share_percent'
                 or key == 'property_price_factor'
                 or key == 'technology_price_multiplier'
                 or key == 'spoil_time_modifier'
@@ -2473,6 +2544,11 @@ local function render_players_page(viewer, frame, content)
     }
     actions.add{
         type = 'button',
+        name = PLAYER_PROFILE_PERSONAL_NAME,
+        caption = {'un.player-back-personal'},
+    }
+    actions.add{
+        type = 'button',
         caption = {'un.friend-remove-offline'},
         tags = {action = 'friend-remove-offline'},
     }
@@ -2499,7 +2575,12 @@ local function render_players_page(viewer, frame, content)
     list.add{type = 'label', caption = {'un.player-column-friend'}}
 
     for _, player in ipairs(sorted_players(viewer.index)) do
-        list.add{type = 'label', caption = player.name}
+        list.add{
+            type = 'button',
+            caption = player.name,
+            tooltip = {'un.player-view-profile-tooltip'},
+            tags = {action = 'player-view-profile', target_index = player.index},
+        }
         list.add{
             type = 'label',
             name = player_element_name('faction', player.index),
@@ -2528,6 +2609,58 @@ local function render_players_page(viewer, frame, content)
     local tags = frame.tags
     tags.player_signature = player_signature()
     frame.tags = tags
+end
+
+local function render_player_profile(viewer, frame, content)
+    local target = game.get_player(tonumber(frame.tags.profile_player_index))
+    if not (target and target.valid) then
+        render_overview_page(viewer, frame, content)
+        return
+    end
+    local actions = content.add{type = 'flow', direction = 'horizontal'}
+    actions.add{
+        type = 'button',
+        name = PLAYER_PROFILE_BACK_NAME,
+        caption = {'un.player-back-list'},
+    }
+    actions.add{
+        type = 'button',
+        name = PLAYER_PROFILE_PERSONAL_NAME,
+        caption = {'un.player-back-personal'},
+    }
+    local heading = content.add{
+        type = 'label',
+        caption = {'un.player-profile-title', target.name},
+    }
+    heading.style.font = 'default-large-bold'
+    local summary = content.add{
+        type = 'table',
+        column_count = 2,
+        style = 'bordered_table',
+    }
+    summary.add{type = 'label', caption = {'un.player-column-faction'}}
+    summary.add{
+        type = 'label',
+        caption = player_faction_icon(target),
+        tooltip = factions.display_name(factions.of_player(target)),
+    }
+    summary.add{type = 'label', caption = {'un.player-column-online-hours'}}
+    summary.add{type = 'label', caption = format_hours(playtime.ticks(target))}
+    summary.add{type = 'label', caption = {'un.player-column-locale'}}
+    summary.add{type = 'label', caption = target.locale}
+    summary.add{type = 'label', caption = {'un.player-column-coins'}}
+    summary.add{
+        type = 'label',
+        caption = format_integer(economy.get_balance(target.index)),
+    }
+    summary.add{type = 'label', caption = {'un.player-column-total-level'}}
+    summary.add{
+        type = 'label',
+        caption = format_integer(experience.total_level(target.index)),
+    }
+    render_experience_section(content, false)
+    update_experience_section(target, content)
+    set_frame_state(frame, 'player-profile')
 end
 
 local function render_page(player, page)
@@ -2559,6 +2692,8 @@ local function render_page(player, page)
         render_ships_page(player, frame, content)
     elseif page == 'players' then
         render_players_page(player, frame, content)
+    elseif page == 'player-profile' then
+        render_player_profile(player, frame, content)
     elseif page == 'admin' then
         render_admin_page(player, frame, content)
     else
@@ -2578,7 +2713,6 @@ local function render_page(player, page)
     end
     navigation[NAV_PLANETS_NAME].enabled = page ~= 'planets'
     navigation[NAV_SHIPS_NAME].enabled = page ~= 'ships'
-    navigation[NAV_PLAYERS_NAME].enabled = page ~= 'players'
     local admin = navigation[NAV_ADMIN_NAME]
     if admin and admin.valid then admin.enabled = page ~= 'admin' end
 end
@@ -2860,34 +2994,7 @@ local function update_frame(player)
             end
         end
         if list_refresh_due(frame, 'experience') then
-            local data = experience.get(player.index)
-            local grid = experience_card and experience_card.valid
-                and experience_card[EXPERIENCE_TABLE_NAME]
-            for index, name in ipairs(config.science_pack_order) do
-                local amount = data[name] or 0
-                local threshold = experience.next_threshold(amount)
-                local progress = grid[experience_progress_name(index)]
-                local label = grid[experience_amount_name(index)]
-                if progress and progress.valid then
-                    progress.value = math.max(0, math.min(1, amount / threshold))
-                end
-                if label and label.valid then
-                    label.caption = {
-                        'un.experience-amount',
-                        format_integer(amount),
-                        format_integer(threshold),
-                        experience.contribution(amount),
-                    }
-                end
-            end
-            local summary = experience_card and experience_card.valid
-                and experience_card[EXPERIENCE_SUMMARY_NAME]
-            if summary and summary.valid then
-                summary.caption = {
-                    'un.experience-summary',
-                    experience.total_level(player.index),
-                }
-            end
+            update_experience_section(player, content)
         end
     elseif page == 'market' then
         if list_refresh_due(frame, 'market') then
@@ -3043,6 +3150,11 @@ local function update_frame(player)
                 end
             end
         end
+    elseif page == 'player-profile' then
+        if list_refresh_due(frame, 'player-profile') then
+            content.clear()
+            render_player_profile(player, frame, content)
+        end
     end
     if not frame.tags.drag_ready then
         make_frame_draggable(frame, frame)
@@ -3118,7 +3230,6 @@ local function open_frame(player, initial_page)
     end
     navigation.add{type = 'button', name = NAV_PLANETS_NAME, caption = {'un.page-planets'}}
     navigation.add{type = 'button', name = NAV_SHIPS_NAME, caption = {'un.page-ships'}}
-    navigation.add{type = 'button', name = NAV_PLAYERS_NAME, caption = {'un.page-players'}}
     if player.admin then
         navigation.add{type = 'button', name = NAV_ADMIN_NAME, caption = {'un.page-admin'}}
     end
@@ -3294,8 +3405,25 @@ events.on(defines.events.on_gui_click, function(event)
     elseif element.name == NAV_SHIPS_NAME then
         render_page(player, 'ships')
         update_frame(player)
-    elseif element.name == NAV_PLAYERS_NAME then
+    elseif element.name == PLAYER_BROWSE_NAME
+            or element.name == PLAYER_PROFILE_BACK_NAME then
         render_page(player, 'players')
+        update_frame(player)
+    elseif element.name == PLAYER_PROFILE_PERSONAL_NAME then
+        render_page(player, 'overview')
+        update_frame(player)
+    elseif element.tags.action == 'player-view-profile' then
+        local target = game.get_player(tonumber(element.tags.target_index))
+        if not (target and target.valid) then
+            player.print({'un.player-not-found'})
+            return
+        end
+        local frame = player.gui.screen[FRAME_NAME]
+        if not (frame and frame.valid) then return end
+        local tags = frame.tags
+        tags.profile_player_index = target.index
+        frame.tags = tags
+        render_page(player, 'player-profile')
         update_frame(player)
     elseif element.name == NAV_ADMIN_NAME then
         if player.admin then
@@ -3490,6 +3618,10 @@ events.on(defines.events.on_gui_click, function(event)
                 render_page(player, 'help')
                 return
             end
+            if DANGEROUS_ADMIN_ACTIONS[tags.action]
+                    and frame.tags.admin_dangerous_actions ~= true then
+                return
+            end
             if tags.action == 'admin-setting-apply' then
                 local input = element.parent[admin_setting_input_name(tags.setting)]
                 local ok = input and input.valid
@@ -3542,6 +3674,15 @@ events.on(defines.events.on_gui_click, function(event)
                 } or {'un.admin-invalid-value'})
                 render_page(player, 'admin')
                 update_frame(player)
+            elseif tags.action == 'admin-run-automatic-trades' then
+                local cottages, trades, items
+                    = properties.process_automatic_trades()
+                player.print({
+                    'un.admin-automatic-trades-ran',
+                    cottages,
+                    trades,
+                    format_integer(items),
+                })
             elseif tags.action == 'admin-diplomacy-friendly'
                     or tags.action == 'admin-diplomacy-hostile' then
                 local friendly = tags.action == 'admin-diplomacy-friendly'
@@ -3868,6 +4009,23 @@ events.on(defines.events.on_gui_switch_state_changed, function(event)
         ships.set_public(player.index, element.switch_state == 'right')
         return
     end
+    if tags.action == 'admin-dangerous-actions' then
+        if not player.admin then
+            player.print({'un.admin-only'})
+            return
+        end
+        local frame = player.gui.screen[FRAME_NAME]
+        if not (frame and frame.valid and frame.tags.page == 'admin') then
+            return
+        end
+        local frame_tags = frame.tags
+        frame_tags.admin_dangerous_actions
+            = element.switch_state == 'right'
+        frame.tags = frame_tags
+        render_page(player, 'admin')
+        update_frame(player)
+        return
+    end
     if tags.action == 'admin-setting-switch' then
         if not player.admin then
             player.print({'un.admin-only'})
@@ -3963,6 +4121,7 @@ local PERIODIC_LIST_PAGES = {
     property = true,
     crime = true,
     players = true,
+    ['player-profile'] = true,
     market = true,
 }
 

@@ -1,5 +1,7 @@
 return function(M)
-    M.market_curve_version = 4
+    M.market_curve_version = 5
+    M.market_initial_cash = 10000000
+    M.market_tax_share = 0.50
     -- A net purchase with this base-price value moves the spot price by the
     -- configured multiplier. Individual items still need only a base price.
     M.market_depth_value = 1000000

@@ -11,24 +11,6 @@ local state = require('scripts.state')
 
 local M = {}
 
-local function clean_ledger(player_index)
-    local ledger = storage.ledger
-    if not (ledger and ledger.records) then return end
-    for id = ledger.first_id, ledger.next_id - 1 do
-        local record = ledger.records[id]
-        if record then
-            local from, to = (record.reason or ''):match(
-                '^credit%-transfer:(%d+):(%d+)$'
-            )
-            if record.player_index == player_index
-                    or tonumber(from) == player_index
-                    or tonumber(to) == player_index then
-                ledger.records[id] = nil
-            end
-        end
-    end
-end
-
 local function release_assets(player_index, player_name)
     state.ensure()
     experience.preserve(player_index, player_name)
@@ -41,7 +23,6 @@ end
 
 local function erase_scenario_account(player_index)
     state.ensure()
-    clean_ledger(player_index)
     storage.pending_faction_switches[player_index] = nil
     storage.respawn_hospice_planets[player_index] = nil
     storage.suppress_foreign_join_notifications[player_index] = nil

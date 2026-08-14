@@ -384,7 +384,7 @@ local function trade_selection(selector)
         local filter = section.get_slot(slot)
         local value = filter and filter.value
         local item_name = value and value.name
-        if value.type == 'item' and item_name
+        if value and value.type == 'item' and item_name
                 and market.is_tradable(item_name) then
             return item_name, section, slot, filter
         end
@@ -394,18 +394,20 @@ end
 
 local function process_automatic_trade(property)
     local player = property.owner_index and game.get_player(property.owner_index)
-    if not (player and player.valid and player.connected) then return end
+    if not (player and player.valid and player.connected) then return false end
     local surface = game.surfaces[property.surface_name]
-    if not (surface and surface.valid) then return end
+    if not (surface and surface.valid) then return false end
     local selector = surface.find_entity(
         'constant-combinator', property.trade_selector_position
     )
     local chest = surface.find_entity('steel-chest', property.trade_chest_position)
-    if not (selector and selector.valid and chest and chest.valid) then return end
+    if not (selector and selector.valid and chest and chest.valid) then
+        return false
+    end
     local item_name, section, slot, filter = trade_selection(selector)
-    if not item_name then return end
+    if not item_name then return false end
     local price = market.price(player.index, item_name)
-    if not price then return end
+    if not price then return false end
     local displayed_price = math.min(MAX_CIRCUIT_SIGNAL, price)
     if filter.min ~= displayed_price then
         section.set_slot(slot, {
@@ -419,26 +421,40 @@ local function process_automatic_trade(property)
     end
     local inventory = chest.get_inventory(defines.inventory.chest)
     if property.automatic_trade == 'sell' then
-        market.sell_from_inventory(
+        local ok, count = market.sell_from_inventory(
             player.index,
             item_name,
             inventory,
             config.property_auto_trade_max_items
         )
+        return ok, ok and count or 0
     elseif property.automatic_trade == 'buy' then
-        market.buy_into_inventory(
+        local ok, count = market.buy_into_inventory(
             player.index,
             item_name,
             config.property_auto_trade_max_items,
             inventory
         )
+        return ok, ok and count or 0
     end
+    return false
 end
 
-local function process_automatic_trades()
+function M.process_automatic_trades()
+    local cottages = 0
+    local trades = 0
+    local items = 0
     for _, property in ipairs(M.list()) do
-        if property.automatic_trade then process_automatic_trade(property) end
+        if property.automatic_trade then
+            cottages = cottages + 1
+            local traded, count = process_automatic_trade(property)
+            if traded then
+                trades = trades + 1
+                items = items + (count or 0)
+            end
+        end
     end
+    return cottages, trades, items
 end
 
 local function sync_surface_visibility(property)
@@ -1025,6 +1041,13 @@ function M.buy(player, property_id, quoted_price)
         'property-purchase'
     )
     if not ok then return false, err end
+    local deposited, deposit_err = market.deposit_tax(
+        property.sample_planet,
+        tax
+    )
+    if not deposited then
+        log('[un] failed to deposit property tax: ' .. tostring(deposit_err))
+    end
 
     assign_owner(property, player.index)
     sync_surface_visibility(property)
@@ -1742,6 +1765,6 @@ factions.on_switch_cleanup(function(player, source_planet)
 end)
 
 scheduler.every(config.property_lifecycle_ticks, expire_due_properties)
-scheduler.every(config.property_auto_trade_ticks, process_automatic_trades)
+scheduler.every(config.property_auto_trade_ticks, M.process_automatic_trades)
 
 return M

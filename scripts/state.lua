@@ -64,9 +64,6 @@ function M.ensure()
     if storage.tech_leak_unlocked_forces == nil then
         storage.tech_leak_unlocked_forces = {}
     end
-    if storage.ledger == nil then
-        storage.ledger = {first_id = 1, next_id = 1, records = {}}
-    end
     if storage.local_markets == nil then storage.local_markets = {} end
     if storage.market_revisions == nil then storage.market_revisions = {} end
     return storage

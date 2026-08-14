@@ -134,6 +134,7 @@ return function(M)
                 middle_size = 16,
                 core_tile = 'tutorial-grid',
                 core_size = 8,
+                feature_anchor_up = true,
             },
             surface_property_overrides = {
                 gravity = 0,
@@ -185,6 +186,13 @@ return function(M)
                     tile = 'natural-jellynut-soil',
                     direction = 'right',
                     start = 0,
+                    top = -2,
+                    thickness = 3,
+                },
+                {
+                    tile = 'wetland-light-green-slime',
+                    left = -8,
+                    right = 8,
                     top = -2,
                     thickness = 3,
                 },
@@ -261,7 +269,6 @@ return function(M)
 
     M.property_permanent_defaults_by_planet = {
         nauvis = permanent_prototypes{
-            'secure-cottage',
             'secure-cottage',
             'shore-cottage',
             'rail-estate',
