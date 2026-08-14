@@ -38,7 +38,7 @@ end
 
 local function clone_planet_tile_area(
         destination, planet_name, source_area, destination_area, radius,
-        source_center)
+        source_center, clone_natural_entities)
     local source = ensure_planet_surface(planet_name)
     if not (source and source.valid) then return false end
     source.request_to_generate_chunks(source_center or {0, 0}, radius or 1)
@@ -54,6 +54,51 @@ local function clone_planet_tile_area(
         clear_destination_decoratives = true,
         expand_map = false,
     }
+    if clone_natural_entities then
+        local source_left = source_area[1][1]
+        local source_top = source_area[1][2]
+        local source_right = source_area[2][1]
+        local source_bottom = source_area[2][2]
+        local destination_left = destination_area[1][1]
+        local destination_top = destination_area[1][2]
+        local entities = source.find_entities_filtered{
+            area = source_area,
+            type = {'resource', 'simple-entity'},
+        }
+        table.sort(entities, function(a, b)
+            if a.position.y ~= b.position.y then
+                return a.position.y < b.position.y
+            end
+            if a.position.x ~= b.position.x then
+                return a.position.x < b.position.x
+            end
+            if a.name ~= b.name then return a.name < b.name end
+            return (a.unit_number or 0) < (b.unit_number or 0)
+        end)
+        local failed = 0
+        for _, entity in ipairs(entities) do
+            local position = entity.position
+            -- The area filter also returns large entities whose collision box
+            -- merely crosses the edge. Clone only centres inside the sample.
+            if position.x >= source_left and position.x < source_right
+                    and position.y >= source_top
+                    and position.y < source_bottom then
+                local cloned = entity.clone{
+                    position = {
+                        x = destination_left + position.x - source_left,
+                        y = destination_top + position.y - source_top,
+                    },
+                    surface = destination,
+                    create_build_effect_smoke = false,
+                }
+                if not cloned then failed = failed + 1 end
+            end
+        end
+        if failed > 0 then
+            log('[un] failed to clone ' .. failed
+                .. ' natural entities into ' .. destination.name)
+        end
+    end
     return true
 end
 
@@ -332,7 +377,8 @@ local function apply_hospice_tiles(surface, planet_name, floor)
         source_terrain_area,
         destination_terrain_area,
         radius,
-        sample_offset
+        sample_offset,
+        true
     ) then
         return false
     end
@@ -445,10 +491,12 @@ function M.ensure_hospice(planet_name, floor)
         log('[un] failed to copy home-planet tiles into refugee camp '
             .. planet_name .. ' floor ' .. floor)
     end
-    surface.localised_name = {
-        'un.hospice-name-planet-floor',
+    surface.localised_name = floor == 2 and {
+        'un.hospice-name-planet-basement',
         {'space-location-name.' .. planet_name},
-        floor,
+    } or {
+        'un.hospice-name-planet',
+        {'space-location-name.' .. planet_name},
     }
     M.sync_property_environment(surface, nil, planet_name, true)
     local force = factions.of_planet(planet_name)

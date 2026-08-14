@@ -1011,6 +1011,38 @@ events.on(defines.events.on_surface_cleared, function(event)
     finish_reset(surface.name, surface, record)
 end)
 
+events.on(defines.events.on_chunk_generated, function(event)
+    local surface = event.surface
+    if not (surface and surface.valid and surface.name == 'fulgora') then return end
+    local source_force = game.forces.player
+    local target_force = factions.of_planet('fulgora')
+    if not (source_force and source_force.valid
+            and target_force and target_force.valid
+            and source_force ~= target_force) then
+        return
+    end
+    local area = event.area
+    local left_top = area.left_top or area[1]
+    local right_bottom = area.right_bottom or area[2]
+    local left = left_top.x or left_top[1]
+    local top = left_top.y or left_top[2]
+    local right = right_bottom.x or right_bottom[1]
+    local bottom = right_bottom.y or right_bottom[2]
+    for _, entity in ipairs(surface.find_entities_filtered{
+        area = area,
+        force = source_force,
+    }) do
+        local position = entity.position
+        -- The area filter includes large entities crossing a chunk edge.
+        -- Only claim entities whose centre was generated in this chunk.
+        if entity.valid
+                and position.x >= left and position.x < right
+                and position.y >= top and position.y < bottom then
+            entity.force = target_force
+        end
+    end
+end)
+
 events.on(defines.events.on_player_changed_surface, function(event)
     local player = game.get_player(event.player_index)
     if not player then return end

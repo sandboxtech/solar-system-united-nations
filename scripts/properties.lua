@@ -147,6 +147,12 @@ end
 function M.display_name(property)
     if property.custom_name then return property.custom_name end
     if not property.owner_index then
+        if property.permanent and type(property.construction_type) == 'string' then
+            return {
+                'un.property-model-home',
+                {'un.property-type-name-' .. property.construction_type},
+            }
+        end
         return {
             'un.property-surface-vacant',
             property.planet_property_number or property.id,
