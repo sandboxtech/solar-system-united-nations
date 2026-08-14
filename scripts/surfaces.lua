@@ -37,10 +37,11 @@ local function ensure_planet_surface(planet_name)
 end
 
 local function clone_planet_tile_area(
-        destination, planet_name, source_area, destination_area, radius)
+        destination, planet_name, source_area, destination_area, radius,
+        source_center)
     local source = ensure_planet_surface(planet_name)
     if not (source and source.valid) then return false end
-    source.request_to_generate_chunks({0, 0}, radius or 1)
+    source.request_to_generate_chunks(source_center or {0, 0}, radius or 1)
     source.force_generate_chunk_requests()
     source.clone_area{
         source_area = source_area,
@@ -302,11 +303,23 @@ local function apply_hospice_tiles(surface, planet_name, floor)
 
     local terrain_left = -math.floor(config.hospice_terrain_width / 2)
     local terrain_top = -math.floor(config.hospice_terrain_height / 2)
-    local terrain_area = {
+    local destination_terrain_area = {
         {terrain_left, terrain_top},
         {
             terrain_left + config.hospice_terrain_width,
             terrain_top + config.hospice_terrain_height,
+        },
+    }
+    local sample_offset = floor == 2
+        and config.hospice_second_floor_sample_offset or {x = 0, y = 0}
+    local source_terrain_area = {
+        {
+            terrain_left + sample_offset.x,
+            terrain_top + sample_offset.y,
+        },
+        {
+            terrain_left + config.hospice_terrain_width + sample_offset.x,
+            terrain_top + config.hospice_terrain_height + sample_offset.y,
         },
     }
     local radius = math.max(1, math.ceil(math.max(
@@ -314,21 +327,30 @@ local function apply_hospice_tiles(surface, planet_name, floor)
         config.hospice_terrain_height
     ) / 64) + 1)
     if not clone_planet_tile_area(
-        surface, planet_name, terrain_area, terrain_area, radius
+        surface,
+        planet_name,
+        source_terrain_area,
+        destination_terrain_area,
+        radius,
+        sample_offset
     ) then
         return false
     end
 
-    -- Copy a walkable patch around the home-planet origin to each doorway.
+    -- Copy a walkable patch around the floor's sample point to each doorway.
     -- Only the three outer rows extend beyond the 128x128 main terrain.
-    local source_doorway = {{-2, -2}, {2, 3}}
+    local source_doorway = {
+        {sample_offset.x - 2, sample_offset.y - 2},
+        {sample_offset.x + 2, sample_offset.y + 3},
+    }
     local upper_top = config.hospice_upper_entrance_top_y
     if not clone_planet_tile_area(
         surface,
         planet_name,
         source_doorway,
         {{-2, upper_top}, {2, upper_top + 5}},
-        1
+        1,
+        sample_offset
     ) then
         return false
     end
@@ -339,7 +361,8 @@ local function apply_hospice_tiles(surface, planet_name, floor)
             planet_name,
             source_doorway,
             {{-2, lower_top}, {2, lower_top + 5}},
-            1
+            1,
+            sample_offset
         ) then
             return false
         end

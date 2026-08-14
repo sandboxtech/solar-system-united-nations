@@ -106,6 +106,7 @@ M.hospice_lower_entrance_top_y = 64
 M.hospice_upper_entrance_top_y = -67
 M.hospice_lower_arrival_position = {x = -0.5, y = 62}
 M.hospice_upper_arrival_position = {x = -0.5, y = -62}
+M.hospice_second_floor_sample_offset = {x = 512, y = 0}
 M.property_surface_prefix = 'un-property-'
 M.surface_hidden_from_foreign_factions = false
 M.surface_hidden_from_home_faction = false
@@ -151,6 +152,7 @@ M.faction_logistics_chest_positions = {
     {x = 1, y = 0},
 }
 M.faction_logistics_loader_offset = {x = 0, y = 2}
+-- Link slots 1-4 connect the public planet to the first floor's lower door.
 M.faction_logistics_hospice_chest_positions = {
     {x = -2, y = 66},
     {x = -1, y = 66},
@@ -158,13 +160,14 @@ M.faction_logistics_hospice_chest_positions = {
     {x = 1, y = 66},
 }
 M.faction_logistics_hospice_loader_offset = {x = 0, y = -1}
-M.faction_logistics_hospice_second_chest_positions = {
-    {x = -2, y = -66},
-    {x = -1, y = -66},
-    {x = 0, y = -66},
-    {x = 1, y = -66},
+-- Link slots 5-8 connect the upper doors of the first and second floors.
+M.faction_logistics_hospice_upper_chest_positions = {
+    {x = -2, y = -67},
+    {x = -1, y = -67},
+    {x = 0, y = -67},
+    {x = 1, y = -67},
 }
-M.faction_logistics_hospice_second_loader_offset = {x = 0, y = 1}
+M.faction_logistics_hospice_upper_loader_offset = {x = 0, y = 1}
 M.property_max_size = 1024
 M.property_name_max_characters = 64
 M.property_name_max_bytes = 256

@@ -14,9 +14,12 @@ local function legacy_link_id(planet_name)
 end
 
 local function link_id(planet_name, slot)
+    local group_offset = slot <= 4 and 0 or #config.public_planets * 4
+    local group_slot = (slot - 1) % 4 + 1
     return config.faction_logistics_link_id_base
         + #config.public_planets
-        + (planet_indexes[planet_name] - 1) * 4 + slot
+        + group_offset
+        + (planet_indexes[planet_name] - 1) * 4 + group_slot
 end
 
 local function snapshot_inventory(source)
@@ -125,7 +128,7 @@ local function ensure_loader(surface, force, chest_position, offset,
 end
 
 function M.ensure_on_surface(surface, planet_name, with_station, chest_positions,
-        loader_offset, loader_direction, loader_type)
+        loader_offset, loader_direction, loader_type, link_slot_offset)
     local force = factions.of_planet(planet_name)
     if not (surface and surface.valid and force and force.valid) then return false end
     chest_positions = chest_positions or config.faction_logistics_chest_positions
@@ -140,7 +143,7 @@ function M.ensure_on_surface(surface, planet_name, with_station, chest_positions
             }
         end
         if not (chest and chest.valid) then return false end
-        chest.link_id = link_id(planet_name, slot)
+        chest.link_id = link_id(planet_name, (link_slot_offset or 0) + slot)
         chest.operable = false
         protect(chest)
         if loader_offset
@@ -178,7 +181,7 @@ function M.ensure_hospice(planet_name)
     local first = surfaces.hospice_surface(planet_name, 1)
     local second = surfaces.hospice_surface(planet_name, 2)
     if not (first and first.valid and second and second.valid) then return false end
-    local first_ok = M.ensure_on_surface(
+    local first_lower_ok = M.ensure_on_surface(
         first,
         planet_name,
         false,
@@ -187,16 +190,27 @@ function M.ensure_hospice(planet_name)
         defines.direction.north,
         'output'
     )
-    local second_ok = M.ensure_on_surface(
+    local first_upper_ok = M.ensure_on_surface(
+        first,
+        planet_name,
+        false,
+        config.faction_logistics_hospice_upper_chest_positions,
+        config.faction_logistics_hospice_upper_loader_offset,
+        defines.direction.south,
+        'output',
+        4
+    )
+    local second_upper_ok = M.ensure_on_surface(
         second,
         planet_name,
         false,
-        config.faction_logistics_hospice_second_chest_positions,
-        config.faction_logistics_hospice_second_loader_offset,
+        config.faction_logistics_hospice_upper_chest_positions,
+        config.faction_logistics_hospice_upper_loader_offset,
         defines.direction.south,
-        'output'
+        'output',
+        4
     )
-    return first_ok and second_ok
+    return first_lower_ok and first_upper_ok and second_upper_ok
 end
 
 function M.ensure_all()
