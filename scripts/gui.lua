@@ -543,11 +543,9 @@ local function property_construction_caption(property)
 end
 
 local function automatic_trade_tooltip(construction_type)
-    local key = construction_type == 'shelter' and 'sell'
-        or construction_type == 'cottage' and 'buy' or nil
-    if not key then return nil end
+    if construction_type ~= 'cottage' then return nil end
     return {
-        'un.property-auto-trade-' .. key .. '-tooltip',
+        'un.property-auto-trade-balance-tooltip',
         math.max(1, math.floor(
             config.property_auto_trade_ticks / config.ticks_per_minute
         )),

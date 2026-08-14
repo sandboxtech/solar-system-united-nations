@@ -123,8 +123,8 @@ M.property_linked_chest_positions = {
 }
 M.property_linked_loader_name = 'turbo-loader'
 M.property_linked_loader_offset = {x = 0, y = -1}
-M.property_trade_selector_position = {x = -4, y = -4}
-M.property_trade_chest_position = {x = -6, y = -4}
+M.property_trade_target_position = {x = -1, y = -4}
+M.property_trade_stock_position = {x = 0, y = -4}
 M.permanent_property_linked_chest_positions = {
     {x = 0, y = 2},
     {x = 1, y = 2},

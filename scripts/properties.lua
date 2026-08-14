@@ -12,7 +12,6 @@ local stamina = require('scripts.stamina')
 local surfaces = require('scripts.surfaces')
 
 local M = {}
-local MAX_CIRCUIT_SIGNAL = 2147483647
 
 local build_planets = {}
 for _, name in ipairs(config.public_planets) do build_planets[name] = true end
@@ -340,108 +339,114 @@ end
 
 local function ensure_trade_entities(property, build_type, force, surface)
     if not build_type or not build_type.automatic_trade then return true end
-    local selector_position = config.property_trade_selector_position
-    local selector = surface.find_entity('constant-combinator', selector_position)
-    if not (selector and selector.valid) then
-        selector = surface.create_entity{
-            name = 'constant-combinator',
-            position = selector_position,
+    local target_position = config.property_trade_target_position
+    local target = surface.find_entity('iron-chest', target_position)
+    if not (target and target.valid) then
+        target = surface.create_entity{
+            name = 'iron-chest',
+            position = target_position,
             force = force,
             raise_built = false,
         }
     end
-    local chest_position = config.property_trade_chest_position
-    local chest = surface.find_entity('steel-chest', chest_position)
-    if not (chest and chest.valid) then
-        chest = surface.create_entity{
+    local stock_position = config.property_trade_stock_position
+    local stock = surface.find_entity('steel-chest', stock_position)
+    if not (stock and stock.valid) then
+        stock = surface.create_entity{
             name = 'steel-chest',
-            position = chest_position,
+            position = stock_position,
             force = force,
             raise_built = false,
         }
     end
-    if not (selector and selector.valid and chest and chest.valid) then
+    if not (target and target.valid and stock and stock.valid) then
         return false
     end
-    selector.destructible = false
-    selector.minable_flag = false
-    chest.destructible = false
-    chest.minable_flag = false
+    target.destructible = false
+    target.minable_flag = false
+    stock.destructible = false
+    stock.minable_flag = false
     property.automatic_trade = build_type.automatic_trade
-    property.trade_selector_position = selector_position
-    property.trade_chest_position = chest_position
+    property.trade_target_position = target_position
+    property.trade_stock_position = stock_position
     return true
 end
 
-local function trade_selection(selector)
-    local behavior = selector and selector.valid
-        and selector.get_or_create_control_behavior()
-    if not (behavior and behavior.valid) then return nil end
-    local section = behavior.sections_count > 0 and behavior.get_section(1)
-        or behavior.add_section()
-    if not (section and section.valid and section.is_manual) then return nil end
-    for slot = 1, section.filters_count do
-        local filter = section.get_slot(slot)
-        local value = filter and filter.value
-        local item_name = type(value) == 'table' and value.name
-            or type(value) == 'string' and value or nil
-        if item_name and market.is_tradable(item_name) then
-            return item_name, section, slot, filter
+local function normal_tradable_contents(inventory)
+    local result = {}
+    for _, item in ipairs(inventory.get_contents()) do
+        if item.quality == 'normal' and market.is_tradable(item.name) then
+            result[item.name] = item.count
         end
     end
-    return nil, section
+    return result
 end
 
 local function process_automatic_trade(property)
+    if property.automatic_trade ~= 'balance'
+            or type(property.trade_target_position) ~= 'table'
+            or type(property.trade_stock_position) ~= 'table' then
+        return false
+    end
     local player = property.owner_index and game.get_player(property.owner_index)
     if not (player and player.valid and player.connected) then return false end
     local surface = game.surfaces[property.surface_name]
     if not (surface and surface.valid) then return false end
-    local selector = surface.find_entity(
-        'constant-combinator', property.trade_selector_position
+    local target = surface.find_entity(
+        'iron-chest', property.trade_target_position
     )
-    local chest = surface.find_entity('steel-chest', property.trade_chest_position)
-    if not (selector and selector.valid and chest and chest.valid) then
+    local stock = surface.find_entity(
+        'steel-chest', property.trade_stock_position
+    )
+    if not (target and target.valid and stock and stock.valid) then
         return false
     end
-    local item_name, section, slot, filter = trade_selection(selector)
-    if not item_name then return false end
-    local price = market.price(player.index, item_name)
-    if not price then return false end
-    local displayed_price = math.min(MAX_CIRCUIT_SIGNAL, price)
-    if filter.min ~= displayed_price then
-        section.set_slot(slot, {
-            value = {
-                type = 'item',
-                name = item_name,
-                quality = 'normal',
-            },
-            min = displayed_price,
-        })
+    local target_inventory = target.get_inventory(defines.inventory.chest)
+    local stock_inventory = stock.get_inventory(defines.inventory.chest)
+    if not (target_inventory and target_inventory.valid
+            and stock_inventory and stock_inventory.valid) then
+        return false
     end
-    local inventory = chest.get_inventory(defines.inventory.chest)
-    if property.automatic_trade == 'sell' then
-        local ok, count = market.sell_from_inventory(
-            player.index,
-            item_name,
-            inventory
-        )
-        return ok, ok and count or 0
-    elseif property.automatic_trade == 'buy' then
-        local requested = inventory.get_insertable_count{
-            name = item_name,
-            quality = 'normal',
-        }
-        if requested <= 0 then return false end
-        local ok, count = market.buy_into_inventory(
-            player.index,
-            item_name,
-            requested,
-            inventory
-        )
-        return ok, ok and count or 0
+    local targets = normal_tradable_contents(target_inventory)
+    local stocks = normal_tradable_contents(stock_inventory)
+    local names = {}
+    for item_name in pairs(targets) do names[item_name] = true end
+    for item_name in pairs(stocks) do names[item_name] = true end
+    local sorted_names = {}
+    for item_name in pairs(names) do
+        sorted_names[#sorted_names + 1] = item_name
     end
-    return false
+    table.sort(sorted_names)
+
+    local trades = 0
+    local moved = 0
+    -- Sell surpluses first so their proceeds can fund purchases in this pass.
+    for _, item_name in ipairs(sorted_names) do
+        local surplus = (stocks[item_name] or 0) - (targets[item_name] or 0)
+        if surplus > 0 then
+            local ok, count = market.sell_from_inventory(
+                player.index, item_name, stock_inventory, surplus
+            )
+            if ok then
+                trades = trades + 1
+                moved = moved + (count or 0)
+                stocks[item_name] = (stocks[item_name] or 0) - (count or 0)
+            end
+        end
+    end
+    for _, item_name in ipairs(sorted_names) do
+        local shortage = (targets[item_name] or 0) - (stocks[item_name] or 0)
+        if shortage > 0 then
+            local ok, count = market.buy_into_inventory(
+                player.index, item_name, shortage, stock_inventory
+            )
+            if ok then
+                trades = trades + 1
+                moved = moved + (count or 0)
+            end
+        end
+    end
+    return trades > 0, moved, trades
 end
 
 function M.process_automatic_trades()
@@ -449,11 +454,11 @@ function M.process_automatic_trades()
     local trades = 0
     local items = 0
     for _, property in ipairs(M.list()) do
-        if property.automatic_trade then
+        if property.automatic_trade == 'balance' then
             cottages = cottages + 1
-            local traded, count = process_automatic_trade(property)
+            local traded, count, trade_count = process_automatic_trade(property)
             if traded then
-                trades = trades + 1
+                trades = trades + (trade_count or 1)
                 items = items + (count or 0)
             end
         end

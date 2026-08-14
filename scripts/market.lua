@@ -443,18 +443,6 @@ function M.is_tradable(item_name)
     return item_specs[item_name] ~= nil
 end
 
-function M.price(player_index, item_name)
-    local spec = item_specs[item_name]
-    if not spec then return nil end
-    local market = market_for_player_index(player_index)
-    if not market then return nil end
-    return math.max(1, math.ceil(spot_price(
-        market,
-        spec,
-        market.stock[item_name]
-    )))
-end
-
 function M.buy_quote(player, item_name, count)
     if not valid_count(count) then return nil, 'invalid-count' end
     local spec = item_specs[item_name]
@@ -513,7 +501,7 @@ function M.buy_into_inventory(player_index, item_name, count, inventory)
     return true, count, settlement.cost
 end
 
-function M.sell_from_inventory(player_index, item_name, inventory)
+function M.sell_from_inventory(player_index, item_name, inventory, requested)
     if not (inventory and inventory.valid) then return false, 'no-inventory' end
     local spec = item_specs[item_name]
     if not spec then return false, 'invalid-item' end
@@ -522,9 +510,17 @@ function M.sell_from_inventory(player_index, item_name, inventory)
     local carried = inventory.get_item_count{
         name = item_name, quality = 'normal',
     }
-    local count = carried
+    local count = requested == nil and carried
+        or valid_count(requested) and math.min(carried, requested) or 0
     if count <= 0 then return false, 'nothing-to-sell' end
     local settlement, err = sell_settlement(market, spec, count)
+    while count > 0 and not settlement
+            and err == 'insufficient-market-credit' do
+        count = math.floor(count / 2)
+        if count > 0 then
+            settlement, err = sell_settlement(market, spec, count)
+        end
+    end
     if not settlement then return false, err end
     local removed = inventory.remove{
         name = item_name, count = count, quality = 'normal',

@@ -30,7 +30,6 @@ return function(M)
         property_build_type{
             pack = 'automation-science-pack',
             key = 'shelter',
-            automatic_trade = 'sell',
             base_width = 32,
             width_per_level = 0.5,
             height = 32,
@@ -46,7 +45,7 @@ return function(M)
         property_build_type{
             pack = 'logistic-science-pack',
             key = 'cottage',
-            automatic_trade = 'buy',
+            automatic_trade = 'balance',
             base_width = 32,
             width_per_level = 0.5,
             height = 32,
