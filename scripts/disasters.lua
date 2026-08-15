@@ -53,7 +53,8 @@ local PLANET_TRAITS = {
             group = 'nauvis-climate', weight = 1, moisture = -1, aux = 1},
         {id = 'nauvis-swarm', kind = 'category', category = 'enemy',
             group = 'nauvis-enemies', weight = 4,
-            frequency = 4, size = 4, richness = 1},
+            frequency = 4, size = 4, richness = 1,
+            minimum_frequency = 4, minimum_size = 4},
         {id = 'nauvis-quiet-wilds', kind = 'category', category = 'enemy',
             group = 'nauvis-enemies', weight = 4,
             frequency = 0.125, size = 0.25, richness = 1},
@@ -179,7 +180,8 @@ local PLANET_TRAITS = {
             group = 'gleba-temperature', weight = 1, temperature = -50},
         {id = 'gleba-enemies', kind = 'category', category = 'enemy',
             group = 'gleba-enemies', weight = 4,
-            frequency = 4, size = 4, richness = 1},
+            frequency = 4, size = 4, richness = 1,
+            minimum_frequency = 4, minimum_size = 4},
         {id = 'gleba-quiet', kind = 'category', category = 'enemy',
             group = 'gleba-enemies', weight = 4,
             frequency = 0.125, size = 0.25, richness = 1},
@@ -494,7 +496,6 @@ end
 
 local function randomize_autoplace(map_settings, record)
     local enemy_control = false
-    record.autoplace = {}
     for _, name in ipairs(sorted_control_names(map_settings)) do
         local prototype = prototypes.autoplace_control[name]
         local control = map_settings.autoplace_controls[name]
@@ -519,11 +520,6 @@ local function randomize_autoplace(map_settings, record)
             control.richness = (control.richness or 1)
                 * power_of_two(config.public_planet_terrain_spread)
         end
-        record.autoplace[name] = {
-            frequency = control.frequency,
-            size = control.size,
-            richness = control.richness,
-        }
     end
 
     if enemy_control then
@@ -582,9 +578,20 @@ local function randomize_territories(map_settings)
 end
 
 local function multiply_control(control, trait)
-    control.frequency = (control.frequency or 1) * (trait.frequency or 1)
-    control.size = (control.size or 1) * (trait.size or 1)
+    control.frequency = math.max(
+        (control.frequency or 1) * (trait.frequency or 1),
+        trait.minimum_frequency or 0
+    )
+    control.size = math.max(
+        (control.size or 1) * (trait.size or 1),
+        trait.minimum_size or 0
+    )
     control.richness = (control.richness or 1) * (trait.richness or 1)
+end
+
+local function is_enemy_pressure_trait(trait)
+    return trait.kind == 'starting-area'
+        or trait.kind == 'category' and trait.category == 'enemy'
 end
 
 local function apply_trait(map_settings, record, trait)
@@ -707,14 +714,34 @@ local function roll_traits(name, map_settings, record)
     local target_count = math.random(0, 5)
     if target_count == 0 then return end
     local selected_groups = {}
+    local selected_enemy_pressure = false
     for _, candidate in ipairs(order) do
         local trait = pool[candidate.index]
-        if (not trait.group or not selected_groups[trait.group])
+        local peaceful_conflict = trait.kind == 'peaceful'
+            and selected_enemy_pressure
+            or is_enemy_pressure_trait(trait) and record.peaceful
+        if not peaceful_conflict
+                and (not trait.group or not selected_groups[trait.group])
                 and apply_trait(map_settings, record, trait) then
             record.traits[#record.traits + 1] = trait.id
             if trait.group then selected_groups[trait.group] = true end
+            if is_enemy_pressure_trait(trait) then
+                selected_enemy_pressure = true
+            end
             if #record.traits == target_count then break end
         end
+    end
+end
+
+local function record_final_autoplace(map_settings, record)
+    record.autoplace = {}
+    for _, name in ipairs(sorted_control_names(map_settings)) do
+        local control = map_settings.autoplace_controls[name]
+        record.autoplace[name] = {
+            frequency = control.frequency,
+            size = control.size,
+            richness = control.richness,
+        }
     end
 end
 
@@ -736,6 +763,9 @@ local function prepare_new_round(name, surface, record)
     randomize_climate(name, map_settings, record)
     randomize_territories(map_settings)
     roll_traits(name, map_settings, record)
+    map_settings.no_enemies_mode = false
+    map_settings.peaceful_mode = record.peaceful == true
+    record_final_autoplace(map_settings, record)
     surface.map_gen_settings = map_settings
 
     record.round = record.round + 1
@@ -763,10 +793,11 @@ local function apply_round_environment(name, surface, record)
                 * (record.day_factor or 1))
         )
     end)
+    pcall(function() surface.daytime_parameters = record.daytime_parameters end)
+    pcall(function() surface.min_brightness = record.min_brightness end)
+    pcall(function() surface.no_enemies_mode = false end)
+    pcall(function() surface.peaceful_mode = record.peaceful == true end)
     pcall(function()
-        surface.daytime_parameters = record.daytime_parameters
-        surface.min_brightness = record.min_brightness
-        surface.peaceful_mode = record.peaceful == true
         surface.freeze_daytime = record.freeze_daytime == true
         if record.freeze_daytime then surface.daytime = record.daytime end
     end)

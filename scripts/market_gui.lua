@@ -12,12 +12,19 @@ local SCROLL_NAME = 'un_market_scroll'
 local LIST_NAME = 'un_market_list'
 local BUY_BUTTON_WIDTH = 190
 
-local function format_integer(value)
-    local raw = string.format('%.0f', value)
-    local sign, digits = raw:match('^([%-]?)(%d+)$')
+local function format_number(value, decimal_places)
+    local raw = string.format('%.' .. decimal_places .. 'f', value)
+    local sign, digits, fraction = raw:match(
+        '^([%-]?)(%d+)[%.]?(%d*)$'
+    )
     if not digits then return raw end
     local reversed = digits:reverse():gsub('(%d%d%d)', '%1,')
-    return sign .. reversed:reverse():gsub('^,', '')
+    local result = sign .. reversed:reverse():gsub('^,', '')
+    return fraction ~= '' and result .. '.' .. fraction or result
+end
+
+local function format_integer(value)
+    return format_number(value, 0)
 end
 
 function M.error_caption(err)
@@ -123,7 +130,7 @@ function M.render(player, frame, content, selected_amount, selected_group)
                     type = 'label',
                     caption = {
                         'un.market-price',
-                        format_integer(math.ceil(item.price)),
+                        format_number(item.price, 1),
                     },
                 }
                 local sell = list.add{

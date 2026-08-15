@@ -497,8 +497,32 @@ local function bump_revision(force_name)
 end
 
 local function main_inventory(player)
-    local inventory = player and player.get_main_inventory()
-    return inventory and inventory.valid and inventory or nil
+    if not (player and player.valid) then return nil end
+    local inventory = player.get_main_inventory()
+    if inventory and inventory.valid then return inventory end
+
+    -- A remote controller has no inventory of its own. Resolve the character
+    -- at the physical controller position without moving or closing the view.
+    if player.physical_controller_type ~= defines.controllers.character then
+        return nil
+    end
+    local physical_surface = player.physical_surface
+    local physical_position = player.physical_position
+    local character = player.character
+    if character and character.valid
+            and character.surface == physical_surface then
+        inventory = character.get_main_inventory()
+        if inventory and inventory.valid then return inventory end
+    end
+    for _, candidate in pairs(player.get_associated_characters()) do
+        if candidate.valid and candidate.surface == physical_surface
+                and math.abs(candidate.position.x - physical_position.x) < 0.01
+                and math.abs(candidate.position.y - physical_position.y) < 0.01 then
+            inventory = candidate.get_main_inventory()
+            if inventory and inventory.valid then return inventory end
+        end
+    end
+    return nil
 end
 
 function M.ensure()
